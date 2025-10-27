@@ -17,7 +17,4 @@ export interface LoadedDictionary {
 export interface WordProgress {
   srsStage: number;
   nextReviewDate: string; // ISO 8601 date string
-  dictionaryName: string; // For querying in Firestore
-  originalSetIndex: number; // For querying in Firestore
-  isUnknown: boolean;
 }

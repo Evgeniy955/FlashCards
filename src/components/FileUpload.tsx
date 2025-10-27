@@ -41,11 +41,6 @@ export const FileUpload: React.FC<FileUploadProps> = ({ onFileUpload, isLoading 
         </div>
         <input id="file-upload" type="file" className="hidden" onChange={handleFileChange} accept=".xlsx" disabled={isLoading} />
       </label>
-       <p className="mt-4 text-xs text-slate-500 text-left">
-        <span className='font-bold'>Supported formats:</span><br/>
-        1. Simple: Column A (RU/UA), Column B (EN).<br/>
-        2. Complex: Column A (RU/UA), Column C (EN).
-      </p>
       {isLoading && <p className="mt-4 text-indigo-400 animate-pulse">Processing file...</p>}
     </div>
   );

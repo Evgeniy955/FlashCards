@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import { BookText, UploadCloud } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
@@ -17,6 +17,7 @@ export const SentenceUpload: React.FC<SentenceUploadProps> = ({ onSentencesLoade
     if (file) {
       parseFile(file);
     }
+    // Reset the input value to allow uploading the same file again
     event.target.value = '';
   };
 
@@ -36,6 +37,7 @@ export const SentenceUpload: React.FC<SentenceUploadProps> = ({ onSentencesLoade
           }
           for (const key in jsonObj) {
             if (typeof jsonObj[key] === 'string') {
+              // Store keys in lowercase for case-insensitive matching
               sentenceMap.set(key.trim().toLowerCase(), jsonObj[key]);
             }
           }

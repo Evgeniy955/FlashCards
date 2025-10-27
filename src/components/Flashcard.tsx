@@ -1,7 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { Volume2 } from 'lucide-react';
 import type { Word } from '../types';
-import { GoogleGenAI, Modality } from '@google/genai';
 
 // --- Audio Helper Functions ---
 
@@ -70,15 +69,18 @@ export const Flashcard: React.FC<FlashcardProps> = ({ word, isFlipped, onFlip, e
 
     setLoading(true);
 
-    const apiKey = (import.meta as any).env?.VITE_FIREBASE_API_KEY;
+    const hasApiKey = typeof process !== 'undefined' && process.env?.API_KEY;
 
-    if (apiKey) {
+    if (hasApiKey) {
       try {
-        const ai = new GoogleGenAI({ apiKey });
+        const { GoogleGenAI, Modality } = await import('@google/genai');
+        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY! });
 
         const response = await ai.models.generateContent({
           model: "gemini-2.5-flash-preview-tts",
           contents: [{ parts: [{ text }] }],
+          // Fix: The 'speakingRate' property is not supported in the SpeechConfig and was removed to fix a type error.
+          // The rate is adjusted in the native speech synthesis fallback.
           config: {
             responseModalities: [Modality.AUDIO],
             speechConfig: {

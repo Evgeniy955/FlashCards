@@ -6,7 +6,7 @@ interface BuiltInDictionariesProps {
 }
 
 // This list is configured to load the user's specific files.
-// It assumes the word files are in /public/dictionaries and the sentence file in /public/sentences
+// It assumes the word files are in /dictionaries and the sentence file in /sentences
 const dictionaries = [
     { name: 'Food', wordsPath: '/dictionaries/Food.xlsx', sentencesPath: null },
     { name: 'List 1', wordsPath: '/dictionaries/List1.xlsx', sentencesPath: '/sentences/phrases1.json' },
