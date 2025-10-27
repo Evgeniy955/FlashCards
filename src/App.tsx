@@ -13,7 +13,7 @@ import { Auth } from './components/Auth';
 import type { Word, WordSet, LoadedDictionary, WordProgress } from './types';
 import { onAuthStateChanged, User } from 'firebase/auth';
 import { auth, db } from './lib/firebase-client';
-import { doc, getDoc, setDoc, deleteDoc, writeBatch } from 'firebase/firestore';
+import { doc, getDoc, setDoc, deleteDoc, writeBatch, collection, getDocs } from 'firebase/firestore';
 
 
 const MAX_WORDS_PER_BLOCK = 30;
@@ -68,7 +68,7 @@ const App: React.FC = () => {
     const getSrsDocRef = (userId: string, dictName: string, originalSetIdx: number) => doc(db, 'users', userId, 'srs_progress', `${dictName}_${originalSetIdx}`);
     const getUnknownWordsDocRef = (userId: string, dictName: string, originalSetIdx: number) => doc(db, 'users', userId, 'unknown_words', `${dictName}_${originalSetIdx}`);
     const getSentencesDocRef = (userId: string) => doc(db, 'users', userId, 'sentences', 'global');
-
+    
     // --- Data Persistence ---
     useEffect(() => {
         if (loadedDictionary) {
@@ -77,7 +77,7 @@ const App: React.FC = () => {
             localStorage.removeItem(DICTIONARY_STORAGE_KEY);
         }
     }, [loadedDictionary]);
-
+    
     useEffect(() => {
         localStorage.setItem(SENTENCES_STORAGE_KEY, JSON.stringify(Array.from(sentences.entries())));
     }, [sentences]);
@@ -193,7 +193,7 @@ const App: React.FC = () => {
         const workbook = XLSX.read(data, { type: 'array' });
         const allSets: WordSet[] = [];
         let originalSetCounter = 0;
-
+  
         workbook.SheetNames.forEach(sheetName => {
           const worksheet = workbook.Sheets[sheetName];
           const jsonData: any[][] = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
@@ -223,7 +223,7 @@ const App: React.FC = () => {
         });
         return allSets;
     };
-
+    
     const processSentenceFile = async (file: File): Promise<Map<string, string>> => {
       const sentenceMap = new Map<string, string>();
       if (file.name.endsWith('.json')) {
@@ -273,7 +273,7 @@ const App: React.FC = () => {
             setIsFileModalOpen(false);
         }
     };
-
+    
     const handleSentencesLoaded = async (newSentences: Map<string, string>, overwrite = false) => {
       const merged = overwrite ? newSentences : new Map([...sentences, ...newSentences]);
       setSentences(merged);
@@ -302,11 +302,11 @@ const App: React.FC = () => {
         const nextReviewDate = new Date();
         nextReviewDate.setDate(nextReviewDate.getDate() + intervalDays);
         const updatedProgress: WordProgress = { srsStage: newStage, nextReviewDate: nextReviewDate.toISOString() };
-
+        
         const newProgressMap = new Map(srsProgress);
         newProgressMap.set(currentWord.en, updatedProgress);
         updateSrsProgress(newProgressMap);
-
+        
         setHistory(prev => [...prev, currentWordIndex]);
         setIsFlipped(false);
         setTimeout(() => {
@@ -314,7 +314,7 @@ const App: React.FC = () => {
               const updatedUnknown = unknownWords.filter(w => w.en !== currentWord.en || w.ru !== currentWord.ru);
               updateUnknownWords(updatedUnknown);
               setSessionWords(prev => prev.filter(w => w.en !== currentWord.en || w.ru !== currentWord.ru));
-
+              
               if (updatedUnknown.length === 0) setIsSetFinished(true);
           } else {
               setCurrentWordIndex(prev => prev + 1);
@@ -351,7 +351,7 @@ const App: React.FC = () => {
     const handleSelectSet = useCallback(async (index: number, dict = loadedDictionary) => {
         if (!dict) return;
         const set = dict.sets[index];
-
+        
         let progressMap: Map<string, WordProgress> = new Map();
         let loadedUnknowns: Word[] = [];
 
@@ -381,7 +381,7 @@ const App: React.FC = () => {
             const reviewDate = new Date(progress.nextReviewDate);
             return reviewDate <= today;
         });
-
+        
         const shuffledWords = wordsForReview.sort(() => Math.random() - 0.5);
 
         setSelectedSetIndex(index);
@@ -407,9 +407,9 @@ const App: React.FC = () => {
         const key = getUnknownWordsStorageKey(loadedDictionary.name, set.originalSetIndex);
         wordsToTrain = JSON.parse(localStorage.getItem(key) || '[]');
       }
-
+      
       const shuffledWords = [...wordsToTrain].sort(() => Math.random() - 0.5);
-
+      
       setUnknownWords(wordsToTrain);
       setSessionWords(shuffledWords);
       setIsTraining(true);
@@ -417,7 +417,7 @@ const App: React.FC = () => {
       setIsSetFinished(false);
       setHistory([]);
     };
-
+    
     const handleResetAllProgress = async () => {
         if (!loadedDictionary || !window.confirm("Are you sure? This will delete all learning progress for this dictionary.")) return;
 
@@ -431,7 +431,7 @@ const App: React.FC = () => {
             }
             await batch.commit();
         }
-
+        
         for (const index of uniqueOriginalIndexes) {
             localStorage.removeItem(getSrsStorageKey(loadedDictionary.name, index));
             localStorage.removeItem(getUnknownWordsStorageKey(loadedDictionary.name, index));
@@ -440,7 +440,7 @@ const App: React.FC = () => {
         setAllLearnedWords([]);
         if (isLearnedWordsModalOpen) setIsLearnedWordsModalOpen(false);
         if (selectedSetIndex !== null) handleSelectSet(selectedSetIndex); // Reload current set
-
+        
         alert("Learning progress has been reset.");
     };
 
@@ -469,7 +469,7 @@ const App: React.FC = () => {
                 }
             }
         }
-
+        
         const sortedLearnedWords = Array.from(learnedWordsMap.values()).sort((a, b) => a.ru.localeCompare(b.ru));
         setAllLearnedWords(sortedLearnedWords);
         setIsLearnedWordsModalOpen(true);
@@ -487,7 +487,7 @@ const App: React.FC = () => {
         }
         setIsProcessing(false);
       };
-
+      
       const handleShuffle = () => {
         if (sessionWords.length < 2) return;
         const shuffledWords = [...sessionWords].sort(() => Math.random() - 0.5);
@@ -497,18 +497,18 @@ const App: React.FC = () => {
         setIsSetFinished(false);
         setHistory([]);
       };
-
+  
       const handleReturnToSetSelection = () => {
-        setSelectedSetIndex(null);
-        setIsSetFinished(false);
-        setCurrentWordIndex(0);
-        setIsTraining(false);
+        setSelectedSetIndex(null); 
+        setIsSetFinished(false);   
+        setCurrentWordIndex(0);    
+        setIsTraining(false);      
       };
 
     // --- Render Logic ---
     const renderContent = () => {
       if (authLoading) return <Loader2 className="h-12 w-12 animate-spin text-indigo-400" />;
-
+      
       if (!loadedDictionary) {
         return (
           <div className="text-center">
@@ -523,14 +523,14 @@ const App: React.FC = () => {
           </div>
         );
       }
-
+      
       if (isSetFinished) {
         return (
           <div className="text-center">
             <h1 className="text-2xl font-bold text-slate-200 text-center mb-6">{loadedDictionary.name}</h1>
             <h2 className="text-3xl font-bold mb-4">{isTraining ? "Practice Round Finished!" : "Set Finished!"}</h2>
             {isTraining && unknownWords.length > 0 && <p className="text-slate-400 mb-6">{unknownWords.length} word(s) still to learn.</p>}
-
+            
             {unknownWords.length > 0 ? (
                <button
                   onClick={startTraining}
@@ -550,7 +550,7 @@ const App: React.FC = () => {
           </div>
         );
       }
-
+  
       if (selectedSetIndex === null) {
         return (
           <div className="w-full max-w-2xl">
@@ -580,11 +580,11 @@ const App: React.FC = () => {
                       <button onClick={() => setIsFileModalOpen(true)} className="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm font-semibold"><Upload size={16} /></button>
                    </div>
               </header>
-
+  
               <main className="flex flex-col items-center">
                   {!isTraining && ( <SetSelector sets={loadedDictionary.sets} selectedSetIndex={selectedSetIndex} onSelectSet={handleSelectSet} /> )}
                   {isTraining && <h2 className="text-xl font-semibold text-rose-400 mb-6">Training Mode</h2>}
-
+                  
                   {currentSet && currentWord ? (
                       <>
                           <Flashcard word={currentWord} isFlipped={isFlipped} onFlip={() => setIsFlipped(!isFlipped)} exampleSentence={sentences.get(currentWord.en.toLowerCase().trim())} />
@@ -598,13 +598,13 @@ const App: React.FC = () => {
                                   </div>
                               </div>
                           </div>
-
+  
                           <div className="flex items-center gap-4 mt-6 w-full max-w-md">
                              <button onClick={handlePrevious} disabled={history.length === 0 || isProcessing} className="p-4 rounded-full bg-slate-700 hover:bg-slate-600 transition-colors disabled:opacity-50 disabled:cursor-wait" aria-label="Previous card"><ArrowLeft size={24} /></button>
                              <button onClick={handleDontKnow} disabled={isProcessing} className="flex-1 px-6 py-3 bg-rose-800 hover:bg-rose-700 rounded-lg font-semibold transition-colors text-center disabled:opacity-50 disabled:cursor-wait">Don't know</button>
                              <button onClick={handleKnow} disabled={isProcessing} className="flex-1 px-6 py-3 bg-emerald-800 hover:bg-emerald-700 rounded-lg font-semibold transition-colors text-center disabled:opacity-50 disabled:cursor-wait">Know</button>
                           </div>
-
+  
                           <div className="w-full max-w-md mt-8"><WordList words={currentSet.words} isVisible={showWordList && !isTraining} /></div>
                           <div className="w-full max-w-md mt-8 p-4 bg-slate-800 rounded-lg"><SentenceUpload onSentencesLoaded={handleSentencesLoaded} onClearSentences={handleClearSentences} hasSentences={sentences.size > 0} /></div>
                       </>
@@ -621,7 +621,7 @@ const App: React.FC = () => {
         <FileSourceModal isOpen={isFileModalOpen} onClose={() => setIsFileModalOpen(false)} onFilesSelect={handleFilesSelect} isLoading={isLoading} />
         <LearnedWordsModal isOpen={isLearnedWordsModalOpen} onClose={() => setIsLearnedWordsModalOpen(false)} learnedWords={allLearnedWords} />
         <InstructionsModal isOpen={isInstructionsModalOpen} onClose={() => setIsInstructionsModalOpen(false)} />
-
+        
         <header className="absolute top-4 right-4 z-10">
           {!authLoading && <Auth user={user} />}
         </header>
