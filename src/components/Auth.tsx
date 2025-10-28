@@ -17,7 +17,7 @@ interface AuthProps {
 }
 
 export const Auth: React.FC<AuthProps> = ({ user }) => {
-
+    
     const handleSignIn = async () => {
         const provider = new GoogleAuthProvider();
         try {

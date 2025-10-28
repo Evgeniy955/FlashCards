@@ -1,11 +1,21 @@
-// Firebase configuration object.
-// These values are taken from your Firebase project settings.
+// FIX: Add a triple-slash directive to include Vite's client types and resolve errors with `import.meta.env`.
+/// <reference types="vite/client" />
+
+import { initializeApp, getApp, getApps } from 'firebase/app';
+
+// This configuration securely loads your credentials from environment variables.
+// Ensure these variables are set in your Vercel project settings.
 export const firebaseConfig = {
-  apiKey: "AIzaSyDmP-WQl1j34D1s2wblb6o7BLfgUbAiniE",
-  authDomain: "flashcard-755b8.firebaseapp.com",
-  projectId: "flashcard-755b8",
-  storageBucket: "flashcard-755b8.appspot.com",
-  messagingSenderId: "332227815303",
-  appId: "1:332227815303:web:2fb14f869f4dbdca9a9522",
-  measurementId: "G-TF5VXRSHLE"
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID,
+  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID
 };
+
+// Initialize Firebase
+const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
+
+export default app;

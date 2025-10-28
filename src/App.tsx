@@ -12,7 +12,7 @@ import { WordList } from './components/WordList';
 import { SentenceUpload } from './components/SentenceUpload';
 import { Auth } from './components/Auth';
 import { Word, WordSet, LoadedDictionary, WordProgress } from './types';
-import { Shuffle as ShuffleIcon, ChevronsUpDown, Info, BookUser, Trash2, Repeat, Library } from 'lucide-react';
+import { Shuffle, ChevronsUpDown, Info, BookUser, Trash2, Repeat, Library } from 'lucide-react';
 
 // --- Constants ---
 const MAX_SET_SIZE = 30;
@@ -20,7 +20,7 @@ const SRS_INTERVALS = [1, 2, 4, 8, 16, 32, 64]; // in days
 
 // --- Helper Functions ---
 const shuffleArray = <T,>(array: T[]): T[] => {
-    return [...array].sort(() => Math.random() - 0.5);
+  return [...array].sort(() => Math.random() - 0.5);
 };
 
 // Helper to extract words from a specific column pair
@@ -41,7 +41,7 @@ const splitIntoSubsets = (words: Word[], baseSetName: string, originalSetIndex: 
     if (words.length <= MAX_SET_SIZE) {
         return [{ name: baseSetName, words, originalSetIndex }];
     }
-
+    
     const subsets: WordSet[] = [];
     for (let i = 0; i < words.length; i += MAX_SET_SIZE) {
         const chunk = words.slice(i, i + MAX_SET_SIZE);
@@ -84,7 +84,7 @@ const parseDictionaryFile = (file: File): Promise<LoadedDictionary> => {
                         originalSetIndexCounter++;
                     }
                 }
-
+                
                 if (allSets.length === 0) {
                     throw new Error("No valid word sets found. Ensure columns A/C, E/G, etc., contain words.");
                 }
@@ -108,7 +108,7 @@ const App: React.FC = () => {
     const [currentWordIndex, setCurrentWordIndex] = useState(0);
     const [isFlipped, setIsFlipped] = useState(false);
     const [reviewWords, setReviewWords] = useState<Word[]>([]);
-
+    
     const [learnedWords, setLearnedWords] = useState<Map<string, WordProgress>>(new Map());
     const [dontKnowWords, setDontKnowWords] = useState<Map<number, Word[]>>(new Map());
     const [sentences, setSentences] = useState<Map<string, string>>(new Map());
@@ -116,13 +116,13 @@ const App: React.FC = () => {
     const [isLoading, setIsLoading] = useState(false);
     const [isWordListVisible, setIsWordListVisible] = useState(false);
     const [isDontKnowMode, setIsDontKnowMode] = useState(false);
-
+    
     const [isFileSourceModalOpen, setFileSourceModalOpen] = useState(true);
     const [isInstructionsModalOpen, setInstructionsModalOpen] = useState(false);
     const [isLearnedWordsModalOpen, setLearnedWordsModalOpen] = useState(false);
 
     const storageKey = useMemo(() => loadedDictionary ? `flashcard-progress-${loadedDictionary.name}` : null, [loadedDictionary]);
-
+    
     // Load progress from localStorage
     useEffect(() => {
         if (!storageKey) return;
@@ -173,12 +173,12 @@ const App: React.FC = () => {
             startReviewSession(selectedSetIndex);
         }
     }, [selectedSetIndex, learnedWords, startReviewSession]);
-
+    
     const handleFilesSelect = async (name: string, wordsFile: File, sentencesFile?: File) => {
         setIsLoading(true);
         try {
             const dictionary = await parseDictionaryFile(wordsFile);
-            dictionary.name = name;
+            dictionary.name = name; 
             setLoadedDictionary(dictionary);
             setSelectedSetIndex(0);
             setFileSourceModalOpen(false);
@@ -201,7 +201,7 @@ const App: React.FC = () => {
             setIsLoading(false);
         }
     };
-
+    
     const currentSet = useMemo(() => selectedSetIndex !== null ? loadedDictionary?.sets[selectedSetIndex] : null, [selectedSetIndex, loadedDictionary]);
     const currentWord = useMemo(() => reviewWords[currentWordIndex], [reviewWords, currentWordIndex]);
     const exampleSentence = useMemo(() => currentWord ? sentences.get(currentWord.en.toLowerCase()) : undefined, [currentWord, sentences]);
@@ -219,7 +219,7 @@ const App: React.FC = () => {
             .filter((item): item is Word & { progress: WordProgress } => item !== null)
             .sort((a, b) => a.en.localeCompare(b.en));
     }, [learnedWords, loadedDictionary]);
-
+    
     const goToNextWord = () => {
         setIsFlipped(false);
         if (currentWordIndex < reviewWords.length - 1) {
@@ -314,12 +314,12 @@ const App: React.FC = () => {
             </main>
         );
     }
-
+    
     return (
         <main className="min-h-screen bg-slate-900 text-white flex flex-col items-center p-4 sm:p-6">
             <header className="w-full max-w-5xl flex justify-between items-center mb-6">
                 <div className="flex items-center gap-4">
-                    <button onClick={handleChangeDictionary} className="flex items-center gap-2 text-sm text-slate-400 hover:text-white transition-colors">
+                     <button onClick={handleChangeDictionary} className="flex items-center gap-2 text-sm text-slate-400 hover:text-white transition-colors">
                         <Library size={18} />
                         <span className="hidden sm:inline">Change</span>
                     </button>
@@ -334,7 +334,7 @@ const App: React.FC = () => {
             </header>
 
             <div className="w-full max-w-md flex flex-col items-center">
-                <div className="w-full flex items-center justify-center gap-4 text-sm mb-4">
+                 <div className="w-full flex items-center justify-center gap-4 text-sm mb-4">
                     <button onClick={() => setLearnedWordsModalOpen(true)} className="flex items-center gap-2 py-1 px-3 bg-slate-800 rounded-full hover:bg-slate-700 transition-colors">
                         <BookUser size={16} /> Learned: {totalLearnedCount}
                     </button>
@@ -344,11 +344,11 @@ const App: React.FC = () => {
                 </div>
 
                 <SetSelector sets={loadedDictionary.sets} selectedSetIndex={selectedSetIndex} onSelectSet={handleSelectSet} />
-
+                
                 {currentWord ? (
                     <div className="w-full flex flex-col items-center">
-                        <div className="w-full text-center mb-2">
-                            <p className="text-slate-400">{isDontKnowMode ? "Reviewing Mistakes" : "Learning"}: {currentWordIndex + 1} / {reviewWords.length}</p>
+                         <div className="w-full text-center mb-2">
+                             <p className="text-slate-400">{isDontKnowMode ? "Reviewing Mistakes" : "Learning"}: {currentWordIndex + 1} / {reviewWords.length}</p>
                         </div>
                         <ProgressBar current={currentWordIndex + 1} total={reviewWords.length} />
                         <Flashcard word={currentWord} isFlipped={isFlipped} onFlip={handleFlip} exampleSentence={exampleSentence} />
@@ -362,29 +362,29 @@ const App: React.FC = () => {
                         <h2 className="text-2xl font-semibold mb-4 text-slate-300">Session Complete!</h2>
                         <p className="text-slate-400">You've reviewed all available cards for this set.</p>
                         {dontKnowWords.get(selectedSetIndex!) && dontKnowWords.get(selectedSetIndex!)!.length > 0 && (
-                            <button onClick={startDontKnowSession} className="mt-6 px-5 py-2.5 bg-amber-600 hover:bg-amber-700 rounded-lg font-semibold transition-colors flex items-center gap-2 mx-auto">
+                             <button onClick={startDontKnowSession} className="mt-6 px-5 py-2.5 bg-amber-600 hover:bg-amber-700 rounded-lg font-semibold transition-colors flex items-center gap-2 mx-auto">
                                 <Repeat size={18} />
                                 Review {dontKnowWords.get(selectedSetIndex!)?.length} Mistake(s)
                             </button>
                         )}
                     </div>
                 )}
-
+                
                 <div className="w-full mt-8 p-3 bg-slate-800/50 rounded-lg">
                     <SentenceUpload onSentencesLoaded={setSentences} onClearSentences={() => setSentences(new Map())} hasSentences={sentences.size > 0}/>
                 </div>
 
                 {currentSet && (
-                    <div className="flex items-center justify-center gap-6 mt-6">
+                     <div className="flex items-center justify-center gap-6 mt-6">
                         <button onClick={handleShuffle} disabled={reviewWords.length <= 1} className="flex items-center gap-2 text-slate-400 hover:text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
-                            <ShuffleIcon size={18} /> Shuffle
+                            <Shuffle size={18} /> Shuffle
                         </button>
                         <button onClick={() => setIsWordListVisible(v => !v)} className="flex items-center gap-2 text-slate-400 hover:text-white transition-colors">
                             <ChevronsUpDown size={18} /> Word List
                         </button>
                     </div>
                 )}
-
+                
                 {currentSet && <WordList words={currentSet.words} isVisible={isWordListVisible} />}
             </div>
 
