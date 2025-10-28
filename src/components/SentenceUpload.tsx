@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useState } from 'react';
 import { BookText, UploadCloud } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
@@ -47,7 +47,7 @@ export const SentenceUpload: React.FC<SentenceUploadProps> = ({ onSentencesLoade
           const sheetName = workbook.SheetNames[0];
           const worksheet = workbook.Sheets[sheetName];
           const jsonData: (string | null)[][] = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
-          
+
           jsonData.forEach(row => {
             if (row && row[0] && row[1]) {
               const enWord = String(row[0]).trim().toLowerCase();
@@ -58,11 +58,11 @@ export const SentenceUpload: React.FC<SentenceUploadProps> = ({ onSentencesLoade
             }
           });
         } else {
-            throw new Error('Unsupported file type. Please use .json or .xlsx');
+          throw new Error('Unsupported file type. Please use .json or .xlsx');
         }
 
         if(sentenceMap.size === 0) {
-            throw new Error('No sentences found in the file.');
+          throw new Error('No sentences found in the file.');
         }
 
         onSentencesLoaded(sentenceMap);
@@ -74,8 +74,8 @@ export const SentenceUpload: React.FC<SentenceUploadProps> = ({ onSentencesLoade
     };
 
     reader.onerror = () => {
-        setError('Failed to read the file.');
-        setIsLoading(false);
+      setError('Failed to read the file.');
+      setIsLoading(false);
     };
 
     if (file.name.endsWith('.json')) {
@@ -86,28 +86,28 @@ export const SentenceUpload: React.FC<SentenceUploadProps> = ({ onSentencesLoade
   };
 
   return (
-    <div className="w-full">
-      {hasSentences ? (
-        <div className="flex items-center justify-between">
+      <div className="w-full">
+        {hasSentences ? (
+            <div className="flex items-center justify-between">
           <span className="text-emerald-400 flex items-center gap-2">
             <BookText size={16} /> Sentences loaded
           </span>
-          <div className="flex items-center gap-4">
-            <label htmlFor="sentence-upload" className="text-sm text-slate-400 hover:text-white transition-colors cursor-pointer">
-              {isLoading ? 'Loading...' : 'Update'}
+              <div className="flex items-center gap-4">
+                <label htmlFor="sentence-upload" className="text-sm text-slate-400 hover:text-white transition-colors cursor-pointer">
+                  {isLoading ? 'Loading...' : 'Update'}
+                </label>
+                <button onClick={onClearSentences} className="text-sm text-slate-400 hover:text-white transition-colors">
+                  Clear
+                </button>
+              </div>
+            </div>
+        ) : (
+            <label htmlFor="sentence-upload" className="w-full flex justify-center items-center gap-2 py-2 text-slate-400 hover:text-white transition-colors cursor-pointer">
+              <UploadCloud size={16}/> {isLoading ? 'Loading...' : 'Upload Sentences (Optional)'}
             </label>
-            <button onClick={onClearSentences} className="text-sm text-slate-400 hover:text-white transition-colors">
-              Clear
-            </button>
-          </div>
-        </div>
-      ) : (
-        <label htmlFor="sentence-upload" className="w-full flex justify-center items-center gap-2 py-2 text-slate-400 hover:text-white transition-colors cursor-pointer">
-          <UploadCloud size={16}/> {isLoading ? 'Loading...' : 'Upload Sentences (Optional)'}
-        </label>
-      )}
-      <input id="sentence-upload" type="file" className="hidden" onChange={handleFileChange} accept=".xlsx,.json" disabled={isLoading} />
-      {error && <p className="mt-2 text-xs text-red-400 text-center">{error}</p>}
-    </div>
+        )}
+        <input id="sentence-upload" type="file" className="hidden" onChange={handleFileChange} accept=".xlsx,.json" disabled={isLoading} />
+        {error && <p className="mt-2 text-xs text-red-400 text-center">{error}</p>}
+      </div>
   );
 };
