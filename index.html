@@ -5,20 +5,21 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Flashcard Word Trainer</title>
     <script type="importmap">
-    {
-      "imports": {
-        "react": "https://aistudiocdn.com/react@^19.2.0",
-        "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
-        "react/": "https://aistudiocdn.com/react@^19.2.0/",
-        "vite": "https://aistudiocdn.com/vite@^7.1.12",
-        "@vitejs/plugin-react": "https://aistudiocdn.com/@vitejs/plugin-react@^5.1.0",
-        "lucide-react": "https://aistudiocdn.com/lucide-react@^0.548.0",
-        "xlsx": "https://aistudiocdn.com/xlsx@^0.18.5",
-        "firebase/": "https://aistudiocdn.com/firebase@^12.4.0/",
-        "@google/genai": "https://aistudiocdn.com/@google/genai@^1.27.0"
-      }
-    }
-    </script>
+{
+  "imports": {
+    "react": "https://aistudiocdn.com/react@^19.2.0",
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
+    "react/": "https://aistudiocdn.com/react@^19.2.0/",
+    "vite": "https://aistudiocdn.com/vite@^7.1.12",
+    "@vitejs/plugin-react": "https://aistudiocdn.com/@vitejs/plugin-react@^5.1.0",
+    "lucide-react": "https://aistudiocdn.com/lucide-react@^0.548.0",
+    "xlsx": "https://aistudiocdn.com/xlsx@^0.18.5",
+    "firebase/": "https://aistudiocdn.com/firebase@^12.4.0/",
+    "@google/genai": "https://aistudiocdn.com/@google/genai@^1.27.0",
+    "react-firebase-hooks/": "https://aistudiocdn.com/react-firebase-hooks@^5.1.1/"
+  }
+}
+</script>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -32,6 +33,14 @@
             background-color: #0f172a;
             color: #e2e8f0;
             margin: 0;
+        }
+        /* Card flip animation styles */
+        .perspective { perspective: 1000px; }
+        .preserve-3d { transform-style: preserve-3d; }
+        .rotate-y-180 { transform: rotateY(180deg); }
+        .backface-hidden {
+            backface-visibility: hidden;
+            -webkit-backface-visibility: hidden; /* Safari support */
         }
     </style>
   <link rel="stylesheet" href="/index.css">

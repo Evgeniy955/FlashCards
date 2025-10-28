@@ -13,11 +13,11 @@ const GoogleIcon = () => (
 );
 
 interface AuthProps {
-    user: User | null;
+    user: User | null | undefined;
 }
 
 export const Auth: React.FC<AuthProps> = ({ user }) => {
-    
+
     const handleSignIn = async () => {
         const provider = new GoogleAuthProvider();
         try {
