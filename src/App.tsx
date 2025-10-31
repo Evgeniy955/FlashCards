@@ -15,32 +15,23 @@ import { Auth } from './components/Auth';
 import { auth } from './lib/firebase-client';
 import { parseDictionaryFile, shuffleArray } from './utils/dictionaryUtils';
 import type { Word, WordSet, LoadedDictionary, WordProgress } from './types';
-import defaultSentencesData from '../public/sentences/phrases1.json';
-
-// Create the initial map from the imported JSON data
-const initialSentencesMap = new Map<string, string>();
-Object.keys(defaultSentencesData).forEach(key => {
-    // The JSON file has typed keys, but iterating with Object.keys loses that. Cast is safe here.
-    const sentence = defaultSentencesData[key as keyof typeof defaultSentencesData];
-    initialSentencesMap.set(key.toLowerCase(), sentence);
-});
 
 // SRS Intervals in milliseconds
 const srsIntervals: number[] = [
-  0,                            // Stage 0 (New): Review immediately or in the next session
-  4 * 3600 * 1000,              // Stage 1: 4 hours
-  8 * 3600 * 1000,              // Stage 2: 8 hours
-  24 * 3600 * 1000,             // Stage 3: 1 day
-  3 * 24 * 3600 * 1000,         // Stage 4: 3 days
-  7 * 24 * 3600 * 1000,         // Stage 5: 1 week
-  2 * 7 * 24 * 3600 * 1000,     // Stage 6: 2 weeks
-  4 * 7 * 24 * 3600 * 1000,     // Stage 7: 1 month
-  16 * 7 * 24 * 3600 * 1000,    // Stage 8: 4 months
+    0,                            // Stage 0 (New): Review immediately or in the next session
+    4 * 3600 * 1000,              // Stage 1: 4 hours
+    8 * 3600 * 1000,              // Stage 2: 8 hours
+    24 * 3600 * 1000,             // Stage 3: 1 day
+    3 * 24 * 3600 * 1000,         // Stage 4: 3 days
+    7 * 24 * 3600 * 1000,         // Stage 5: 1 week
+    2 * 7 * 24 * 3600 * 1000,     // Stage 6: 2 weeks
+    4 * 7 * 24 * 3600 * 1000,     // Stage 7: 1 month
+    16 * 7 * 24 * 3600 * 1000,    // Stage 8: 4 months
 ];
 
 const getNextReviewDate = (stage: number): string => {
-  const interval = srsIntervals[Math.min(stage, srsIntervals.length - 1)];
-  return new Date(Date.now() + interval).toISOString();
+    const interval = srsIntervals[Math.min(stage, srsIntervals.length - 1)];
+    return new Date(Date.now() + interval).toISOString();
 };
 
 
@@ -52,7 +43,7 @@ const App: React.FC = () => {
     const [loadedDictionary, setLoadedDictionary] = useState<LoadedDictionary | null>(null);
     const [selectedSetIndex, setSelectedSetIndex] = useState<number | null>(null);
     const [wordProgress, setWordProgress] = useState<Record<string, WordProgress>>({});
-    const [sentences, setSentences] = useState<Map<string, string>>(initialSentencesMap);
+    const [sentences, setSentences] = useState<Map<string, string>>(new Map());
     const [wordsForSession, setWordsForSession] = useState<Word[]>([]);
     const [currentWordIndex, setCurrentWordIndex] = useState(0);
     const [isFlipped, setIsFlipped] = useState(false);
@@ -143,34 +134,34 @@ const App: React.FC = () => {
             setCurrentWordIndex(0);
 
         } catch (err) {
-             setError(err instanceof Error ? err.message : 'An unknown error occurred.');
-             setLoadedDictionary(null);
+            setError(err instanceof Error ? err.message : 'An unknown error occurred.');
+            setLoadedDictionary(null);
         } finally {
             setIsLoading(false);
         }
     }, []);
 
     const handleSentencesLoadFromPath = async (path: string) => {
-      try {
-        const res = await fetch(path);
-        if (!res.ok) return;
-        const sentenceMap = new Map<string, string>();
-        if (path.endsWith('.json')) {
-            const data = await res.json();
-            Object.keys(data).forEach(key => sentenceMap.set(key.toLowerCase(), data[key]));
-        } else if (path.endsWith('.xlsx')) {
-            const buffer = await res.arrayBuffer();
-            const workbook = XLSX.read(buffer, { type: 'array' });
-            const worksheet = workbook.Sheets[workbook.SheetNames[0]];
-            const jsonData: any[][] = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
-            jsonData.forEach(row => {
-                if (row[0] && row[1]) sentenceMap.set(String(row[0]).toLowerCase(), String(row[1]));
-            });
+        try {
+            const res = await fetch(path);
+            if (!res.ok) return;
+            const sentenceMap = new Map<string, string>();
+            if (path.endsWith('.json')) {
+                const data = await res.json();
+                Object.keys(data).forEach(key => sentenceMap.set(key.toLowerCase(), data[key]));
+            } else if (path.endsWith('.xlsx')) {
+                const buffer = await res.arrayBuffer();
+                const workbook = XLSX.read(buffer, { type: 'array' });
+                const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+                const jsonData: any[][] = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+                jsonData.forEach(row => {
+                    if (row[0] && row[1]) sentenceMap.set(String(row[0]).toLowerCase(), String(row[1]));
+                });
+            }
+            setSentences(sentenceMap);
+        } catch (e) {
+            console.error("Failed to load sentences from path:", e);
         }
-        setSentences(sentenceMap);
-      } catch (e) {
-        console.error("Failed to load sentences from path:", e);
-      }
     };
 
     // Session Management
@@ -327,7 +318,7 @@ const App: React.FC = () => {
                     <h2 className="text-2xl font-bold text-center text-white mb-2">
                         {loadedDictionary.name}
                     </h2>
-                     <p className="text-slate-400 text-center mb-6">Select a set to begin.</p>
+                    <p className="text-slate-400 text-center mb-6">Select a set to begin.</p>
                     <SetSelector sets={loadedDictionary.sets} selectedSetIndex={selectedSetIndex} onSelectSet={startSession} />
                 </div>
             );
@@ -338,8 +329,8 @@ const App: React.FC = () => {
                 <div className="w-full max-w-xl mx-auto flex flex-col items-center">
                     <div className="w-full mb-4">
                         <div className="flex justify-between items-center text-sm text-slate-400 mb-1">
-                           <span>{isTrainingDontKnow ? "Reviewing Mistakes" : `Studying: ${currentSet.name}`}</span>
-                           <span>{currentWordIndex + 1} / {wordsForSession.length}</span>
+                            <span>{isTrainingDontKnow ? "Reviewing Mistakes" : `Studying: ${currentSet.name}`}</span>
+                            <span>{currentWordIndex + 1} / {wordsForSession.length}</span>
                         </div>
                         <ProgressBar current={currentWordIndex + 1} total={wordsForSession.length} />
                     </div>
@@ -356,12 +347,12 @@ const App: React.FC = () => {
                         <button onClick={handleKnow} className="px-8 py-3 w-1/2 bg-emerald-600 hover:bg-emerald-700 rounded-lg text-white font-semibold transition-colors">Know</button>
                     </div>
 
-                     <div className="flex items-center justify-center gap-6 mt-6">
+                    <div className="flex items-center justify-center gap-6 mt-6">
                         <button onClick={handleShuffle} className="p-2 text-slate-400 hover:text-white transition-colors" title="Shuffle Words">
                             <Shuffle size={20} />
                         </button>
                         <button onClick={() => setIsWordListVisible(prev => !prev)} className="p-2 text-slate-400 hover:text-white transition-colors" title="Toggle Word List">
-                           <List size={20} />
+                            <List size={20} />
                         </button>
                     </div>
 
@@ -379,9 +370,9 @@ const App: React.FC = () => {
                     <button onClick={() => startSession(selectedSetIndex)} className="px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-lg transition-colors">
                         Practice Again
                     </button>
-                     {dontKnowCountForSet > 0 && (
+                    {dontKnowCountForSet > 0 && (
                         <button onClick={startDontKnowSession} className="px-6 py-3 bg-rose-600 hover:bg-rose-700 text-white font-semibold rounded-lg transition-colors flex items-center justify-center gap-2">
-                           <BrainCircuit size={18} /> Review {dontKnowCountForSet} Mistake(s)
+                            <BrainCircuit size={18} /> Review {dontKnowCountForSet} Mistake(s)
                         </button>
                     )}
                 </div>
@@ -398,10 +389,10 @@ const App: React.FC = () => {
                 <div className="flex items-center gap-4">
                     {loadedDictionary && selectedSetIndex !== null && (
                         <div className="hidden sm:flex items-center gap-4">
-                             <button onClick={() => setIsLearnedWordsModalOpen(true)} className="text-sm font-semibold text-slate-300 hover:text-white transition-colors flex items-center gap-1.5" title="View Learned Words">
+                            <button onClick={() => setIsLearnedWordsModalOpen(true)} className="text-sm font-semibold text-slate-300 hover:text-white transition-colors flex items-center gap-1.5" title="View Learned Words">
                                 <BookCheck size={16} /> Learned
                             </button>
-                             <button onClick={resetProgress} className="text-sm font-semibold text-slate-300 hover:text-white transition-colors flex items-center gap-1.5" title="Reset Progress">
+                            <button onClick={resetProgress} className="text-sm font-semibold text-slate-300 hover:text-white transition-colors flex items-center gap-1.5" title="Reset Progress">
                                 <RefreshCw size={16} /> Reset
                             </button>
                             <button onClick={changeDictionary} className="text-sm font-semibold text-slate-300 hover:text-white transition-colors flex items-center gap-1.5" title="Change Dictionary">
@@ -409,7 +400,7 @@ const App: React.FC = () => {
                             </button>
                         </div>
                     )}
-                     <button onClick={() => setIsInstructionsModalOpen(true)} className="text-slate-400 hover:text-white" title="How to use">
+                    <button onClick={() => setIsInstructionsModalOpen(true)} className="text-slate-400 hover:text-white" title="How to use">
                         <HelpCircle size={22} />
                     </button>
                     <Auth user={user} />
@@ -422,7 +413,7 @@ const App: React.FC = () => {
 
             <footer className="w-full p-4">
                 {loadedDictionary && selectedSetIndex !== null && (
-                     <div className="w-full max-w-xl mx-auto border-t border-slate-700 pt-4">
+                    <div className="w-full max-w-xl mx-auto border-t border-slate-700 pt-4">
                         <SentenceUpload
                             onSentencesLoaded={setSentences}
                             onClearSentences={() => setSentences(new Map())}
