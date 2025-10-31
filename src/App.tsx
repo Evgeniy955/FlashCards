@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useAuthState } from 'react-firebase-hooks/auth';
 import * as XLSX from 'xlsx';
 import { Shuffle, List, ArrowLeft, BrainCircuit, HelpCircle, BookCheck, RefreshCw } from 'lucide-react';
@@ -12,32 +12,34 @@ import { LearnedWordsModal } from './components/LearnedWordsModal';
 import { SentenceUpload } from './components/SentenceUpload';
 import { WordList } from './components/WordList';
 import { Auth } from './components/Auth';
-import { auth } from './lib/firebase-client';
+import { auth, db } from './lib/firebase-client';
+import { doc, getDoc, setDoc, deleteDoc } from 'firebase/firestore';
 import { parseDictionaryFile, shuffleArray } from './utils/dictionaryUtils';
 import type { Word, WordSet, LoadedDictionary, WordProgress } from './types';
 
 // SRS Intervals in milliseconds
 const srsIntervals: number[] = [
-    0,                            // Stage 0 (New): Review immediately or in the next session
-    4 * 3600 * 1000,              // Stage 1: 4 hours
-    8 * 3600 * 1000,              // Stage 2: 8 hours
-    24 * 3600 * 1000,             // Stage 3: 1 day
-    3 * 24 * 3600 * 1000,         // Stage 4: 3 days
-    7 * 24 * 3600 * 1000,         // Stage 5: 1 week
-    2 * 7 * 24 * 3600 * 1000,     // Stage 6: 2 weeks
-    4 * 7 * 24 * 3600 * 1000,     // Stage 7: 1 month
-    16 * 7 * 24 * 3600 * 1000,    // Stage 8: 4 months
+  0,                            // Stage 0 (New): Review immediately or in the next session
+  4 * 3600 * 1000,              // Stage 1: 4 hours
+  8 * 3600 * 1000,              // Stage 2: 8 hours
+  24 * 3600 * 1000,             // Stage 3: 1 day
+  3 * 24 * 3600 * 1000,         // Stage 4: 3 days
+  7 * 24 * 3600 * 1000,         // Stage 5: 1 week
+  2 * 7 * 24 * 3600 * 1000,     // Stage 6: 2 weeks
+  4 * 7 * 24 * 3600 * 1000,     // Stage 7: 1 month
+  16 * 7 * 24 * 3600 * 1000,    // Stage 8: 4 months
 ];
 
 const getNextReviewDate = (stage: number): string => {
-    const interval = srsIntervals[Math.min(stage, srsIntervals.length - 1)];
-    return new Date(Date.now() + interval).toISOString();
+  const interval = srsIntervals[Math.min(stage, srsIntervals.length - 1)];
+  return new Date(Date.now() + interval).toISOString();
 };
 
 
 const App: React.FC = () => {
     const [user] = useAuthState(auth);
     const [isLoading, setIsLoading] = useState(false);
+    const [isProgressLoading, setIsProgressLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
     const [loadedDictionary, setLoadedDictionary] = useState<LoadedDictionary | null>(null);
@@ -55,38 +57,78 @@ const App: React.FC = () => {
     const [isInstructionsModalOpen, setIsInstructionsModalOpen] = useState(false);
     const [isWordListVisible, setIsWordListVisible] = useState(false);
 
+    const isInitialMount = useRef(true);
     const dictionaryId = useMemo(() => loadedDictionary?.name.replace(/[^a-zA-Z0-9]/g, '_'), [loadedDictionary]);
-    const progressKey = useMemo(() => user && dictionaryId ? `flashcard_progress_${user.uid}_${dictionaryId}` : null, [user, dictionaryId]);
-    const dontKnowKey = useMemo(() => user && dictionaryId ? `flashcard_dont_know_${user.uid}_${dictionaryId}` : null, [user, dictionaryId]);
-
-    // Load/Save progress and don't-know words from localStorage
-    useEffect(() => {
-        if (!progressKey) return;
-        try {
-            const savedProgress = localStorage.getItem(progressKey);
-            setWordProgress(savedProgress ? JSON.parse(savedProgress) : {});
-        } catch (e) { console.error("Failed to load progress", e); }
-    }, [progressKey]);
-
-    useEffect(() => {
-        if (progressKey) {
-            localStorage.setItem(progressKey, JSON.stringify(wordProgress));
+    
+    const progressDocRef = useMemo(() => {
+        if (user && dictionaryId) {
+            return doc(db, 'users', user.uid, 'dictionaries', dictionaryId);
         }
-    }, [wordProgress, progressKey]);
+        return null;
+    }, [user, dictionaryId]);
 
+    // Load progress from Firestore
     useEffect(() => {
-        if (!dontKnowKey) return;
-        try {
-            const saved = localStorage.getItem(dontKnowKey);
-            setDontKnowWords(saved ? JSON.parse(saved) : {});
-        } catch (e) { console.error("Failed to load 'don't know' words", e); }
-    }, [dontKnowKey]);
-
-    useEffect(() => {
-        if (dontKnowKey) {
-            localStorage.setItem(dontKnowKey, JSON.stringify(dontKnowWords));
+        if (!progressDocRef) {
+            // If user logs out or there's no dictionary, reset progress in state
+            setWordProgress({});
+            setDontKnowWords({});
+            setSentences(new Map());
+            return;
         }
-    }, [dontKnowWords, dontKnowKey]);
+
+        const loadProgress = async () => {
+            setIsProgressLoading(true);
+            try {
+                const docSnap = await getDoc(progressDocRef);
+                if (docSnap.exists()) {
+                    const data = docSnap.data();
+                    setWordProgress(data.wordProgress || {});
+                    setDontKnowWords(data.dontKnowWords || {});
+                    const sentencesData = data.sentences || {};
+                    setSentences(new Map(Object.entries(sentencesData)));
+                } else {
+                    // No existing progress, start fresh for this dictionary
+                    setWordProgress({});
+                    setDontKnowWords({});
+                    setSentences(new Map());
+                }
+            } catch (e) {
+                console.error("Failed to load progress from Firestore", e);
+                setError("Could not load your progress from the cloud.");
+            } finally {
+                setIsProgressLoading(false);
+            }
+        };
+        loadProgress();
+    }, [progressDocRef]);
+
+    // Save progress to Firestore
+    useEffect(() => {
+        if (!progressDocRef || isProgressLoading) return;
+        
+        // Skip saving on initial mount/data load to prevent overwriting cloud data with empty state
+        if (isInitialMount.current) {
+            isInitialMount.current = false;
+            return;
+        }
+
+        const saveData = async () => {
+            try {
+                const sentencesObject = Object.fromEntries(sentences);
+                await setDoc(progressDocRef, { wordProgress, dontKnowWords, sentences: sentencesObject });
+            } catch (e) {
+                console.error("Failed to save progress to Firestore", e);
+            }
+        };
+        saveData();
+    }, [wordProgress, dontKnowWords, sentences, progressDocRef, isProgressLoading]);
+
+     // Reset the initial mount flag when dictionary changes to allow loading new progress
+    useEffect(() => {
+        isInitialMount.current = true;
+    }, [dictionaryId]);
+
 
     // Dictionary and Sentence Loading
     const handleFileLoad = useCallback(async (file: File) => {
@@ -99,6 +141,7 @@ const App: React.FC = () => {
             setSelectedSetIndex(null);
             setWordsForSession([]);
             setCurrentWordIndex(0);
+            // Reset local progress states, Firestore will load new ones
             setSentences(new Map());
             setWordProgress({});
             setDontKnowWords({});
@@ -119,49 +162,47 @@ const App: React.FC = () => {
             if (!response.ok) throw new Error(`Failed to fetch dictionary: ${response.statusText}`);
             const blob = await response.blob();
             const file = new File([blob], path.split('/').pop() || 'dictionary.xlsx');
-
-            // Temporarily set dictionary to show loading state correctly before parsing sentences
-            setLoadedDictionary({ name: file.name, sets: [] });
-
+            
+            const dictionary = await parseDictionaryFile(file);
+            setLoadedDictionary(dictionary); // This triggers progress loading from Firestore
+            
             if (sentencesPath) {
                 await handleSentencesLoadFromPath(sentencesPath);
             }
-            // Now parse the dictionary file itself
-            const dictionary = await parseDictionaryFile(file);
-            setLoadedDictionary(dictionary);
+
             setSelectedSetIndex(null);
             setWordsForSession([]);
             setCurrentWordIndex(0);
 
         } catch (err) {
-            setError(err instanceof Error ? err.message : 'An unknown error occurred.');
-            setLoadedDictionary(null);
+             setError(err instanceof Error ? err.message : 'An unknown error occurred.');
+             setLoadedDictionary(null);
         } finally {
             setIsLoading(false);
         }
     }, []);
 
     const handleSentencesLoadFromPath = async (path: string) => {
-        try {
-            const res = await fetch(path);
-            if (!res.ok) return;
-            const sentenceMap = new Map<string, string>();
-            if (path.endsWith('.json')) {
-                const data = await res.json();
-                Object.keys(data).forEach(key => sentenceMap.set(key.toLowerCase(), data[key]));
-            } else if (path.endsWith('.xlsx')) {
-                const buffer = await res.arrayBuffer();
-                const workbook = XLSX.read(buffer, { type: 'array' });
-                const worksheet = workbook.Sheets[workbook.SheetNames[0]];
-                const jsonData: any[][] = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
-                jsonData.forEach(row => {
-                    if (row[0] && row[1]) sentenceMap.set(String(row[0]).toLowerCase(), String(row[1]));
-                });
-            }
-            setSentences(sentenceMap);
-        } catch (e) {
-            console.error("Failed to load sentences from path:", e);
+      try {
+        const res = await fetch(path);
+        if (!res.ok) return;
+        const sentenceMap = new Map<string, string>();
+        if (path.endsWith('.json')) {
+            const data = await res.json();
+            Object.keys(data).forEach(key => sentenceMap.set(key.toLowerCase(), data[key]));
+        } else if (path.endsWith('.xlsx')) {
+            const buffer = await res.arrayBuffer();
+            const workbook = XLSX.read(buffer, { type: 'array' });
+            const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+            const jsonData: any[][] = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+            jsonData.forEach(row => {
+                if (row[0] && row[1]) sentenceMap.set(String(row[0]).toLowerCase(), String(row[1]));
+            });
         }
+        setSentences(sentenceMap);
+      } catch (e) {
+        console.error("Failed to load sentences from path:", e);
+      }
     };
 
     // Session Management
@@ -226,7 +267,7 @@ const App: React.FC = () => {
         }
         moveToNextWord();
     }, [wordsForSession, currentWordIndex, wordProgress, isTrainingDontKnow, selectedSetIndex, loadedDictionary, moveToNextWord]);
-
+    
     const handleDontKnow = useCallback(() => {
         if (!wordsForSession.length || selectedSetIndex === null || !loadedDictionary) return;
         const currentWord = wordsForSession[currentWordIndex];
@@ -235,7 +276,7 @@ const App: React.FC = () => {
             ...prev,
             [currentWord.en]: { srsStage: 0, nextReviewDate: getNextReviewDate(0) },
         }));
-
+        
         const setName = loadedDictionary.sets[selectedSetIndex].name;
         if (!dontKnowWords[setName]?.some(w => w.en === currentWord.en)) {
             setDontKnowWords(prev => ({
@@ -253,19 +294,23 @@ const App: React.FC = () => {
     };
 
     // General Controls
-    const resetProgress = () => {
-        if (!dictionaryId) return;
+    const resetProgress = async () => {
+        if (!dictionaryId || !progressDocRef) return;
         if (window.confirm("Are you sure you want to reset all progress for this dictionary? This cannot be undone.")) {
-            if (progressKey) localStorage.removeItem(progressKey);
-            if (dontKnowKey) localStorage.removeItem(dontKnowKey);
-            setWordProgress({});
-            setDontKnowWords({});
-            if (selectedSetIndex !== null) {
-                startSession(selectedSetIndex);
+            try {
+                await deleteDoc(progressDocRef);
+                setWordProgress({});
+                setDontKnowWords({});
+                if (selectedSetIndex !== null) {
+                    startSession(selectedSetIndex);
+                }
+            } catch (e) {
+                console.error("Failed to reset progress in Firestore", e);
+                setError("Could not reset your progress.");
             }
         }
     };
-
+    
     const changeDictionary = () => {
         setLoadedDictionary(null);
         setSelectedSetIndex(null);
@@ -275,7 +320,7 @@ const App: React.FC = () => {
     const currentSet = selectedSetIndex !== null ? loadedDictionary?.sets[selectedSetIndex] : null;
     const currentWord = wordsForSession[currentWordIndex];
     const dontKnowCountForSet = (currentSet && dontKnowWords[currentSet.name]?.length) || 0;
-
+    
     const learnedWordsForModal = useMemo(() => {
         if (!loadedDictionary) return [];
         const allWords = loadedDictionary.sets.flatMap(s => s.words);
@@ -287,8 +332,8 @@ const App: React.FC = () => {
 
     // Render Logic
     const renderContent = () => {
-        if (isLoading && !loadedDictionary?.name) {
-            return <div className="text-center text-indigo-400 animate-pulse">Loading dictionary...</div>;
+        if (isLoading || (user && isProgressLoading && dictionaryId)) {
+            return <div className="text-center text-indigo-400 animate-pulse">Loading...</div>;
         }
 
         if (error) {
@@ -311,26 +356,26 @@ const App: React.FC = () => {
                 </div>
             );
         }
-
+        
         if (selectedSetIndex === null || !currentSet) {
             return (
                 <div className="w-full max-w-2xl mx-auto">
                     <h2 className="text-2xl font-bold text-center text-white mb-2">
                         {loadedDictionary.name}
                     </h2>
-                    <p className="text-slate-400 text-center mb-6">Select a set to begin.</p>
+                     <p className="text-slate-400 text-center mb-6">Select a set to begin.</p>
                     <SetSelector sets={loadedDictionary.sets} selectedSetIndex={selectedSetIndex} onSelectSet={startSession} />
                 </div>
             );
         }
-
+        
         if (wordsForSession.length > 0) {
             return (
                 <div className="w-full max-w-xl mx-auto flex flex-col items-center">
                     <div className="w-full mb-4">
                         <div className="flex justify-between items-center text-sm text-slate-400 mb-1">
-                            <span>{isTrainingDontKnow ? "Reviewing Mistakes" : `Studying: ${currentSet.name}`}</span>
-                            <span>{currentWordIndex + 1} / {wordsForSession.length}</span>
+                           <span>{isTrainingDontKnow ? "Reviewing Mistakes" : `Studying: ${currentSet.name}`}</span>
+                           <span>{currentWordIndex + 1} / {wordsForSession.length}</span>
                         </div>
                         <ProgressBar current={currentWordIndex + 1} total={wordsForSession.length} />
                     </div>
@@ -347,20 +392,20 @@ const App: React.FC = () => {
                         <button onClick={handleKnow} className="px-8 py-3 w-1/2 bg-emerald-600 hover:bg-emerald-700 rounded-lg text-white font-semibold transition-colors">Know</button>
                     </div>
 
-                    <div className="flex items-center justify-center gap-6 mt-6">
+                     <div className="flex items-center justify-center gap-6 mt-6">
                         <button onClick={handleShuffle} className="p-2 text-slate-400 hover:text-white transition-colors" title="Shuffle Words">
                             <Shuffle size={20} />
                         </button>
                         <button onClick={() => setIsWordListVisible(prev => !prev)} className="p-2 text-slate-400 hover:text-white transition-colors" title="Toggle Word List">
-                            <List size={20} />
+                           <List size={20} />
                         </button>
                     </div>
-
+                    
                     <WordList words={currentSet.words} isVisible={isWordListVisible} />
                 </div>
             );
         }
-
+        
         // Session Complete
         return (
             <div className="text-center">
@@ -370,9 +415,9 @@ const App: React.FC = () => {
                     <button onClick={() => startSession(selectedSetIndex)} className="px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-lg transition-colors">
                         Practice Again
                     </button>
-                    {dontKnowCountForSet > 0 && (
+                     {dontKnowCountForSet > 0 && (
                         <button onClick={startDontKnowSession} className="px-6 py-3 bg-rose-600 hover:bg-rose-700 text-white font-semibold rounded-lg transition-colors flex items-center justify-center gap-2">
-                            <BrainCircuit size={18} /> Review {dontKnowCountForSet} Mistake(s)
+                           <BrainCircuit size={18} /> Review {dontKnowCountForSet} Mistake(s)
                         </button>
                     )}
                 </div>
@@ -389,10 +434,10 @@ const App: React.FC = () => {
                 <div className="flex items-center gap-4">
                     {loadedDictionary && selectedSetIndex !== null && (
                         <div className="hidden sm:flex items-center gap-4">
-                            <button onClick={() => setIsLearnedWordsModalOpen(true)} className="text-sm font-semibold text-slate-300 hover:text-white transition-colors flex items-center gap-1.5" title="View Learned Words">
+                             <button onClick={() => setIsLearnedWordsModalOpen(true)} className="text-sm font-semibold text-slate-300 hover:text-white transition-colors flex items-center gap-1.5" title="View Learned Words">
                                 <BookCheck size={16} /> Learned
                             </button>
-                            <button onClick={resetProgress} className="text-sm font-semibold text-slate-300 hover:text-white transition-colors flex items-center gap-1.5" title="Reset Progress">
+                             <button onClick={resetProgress} className="text-sm font-semibold text-slate-300 hover:text-white transition-colors flex items-center gap-1.5" title="Reset Progress">
                                 <RefreshCw size={16} /> Reset
                             </button>
                             <button onClick={changeDictionary} className="text-sm font-semibold text-slate-300 hover:text-white transition-colors flex items-center gap-1.5" title="Change Dictionary">
@@ -400,7 +445,7 @@ const App: React.FC = () => {
                             </button>
                         </div>
                     )}
-                    <button onClick={() => setIsInstructionsModalOpen(true)} className="text-slate-400 hover:text-white" title="How to use">
+                     <button onClick={() => setIsInstructionsModalOpen(true)} className="text-slate-400 hover:text-white" title="How to use">
                         <HelpCircle size={22} />
                     </button>
                     <Auth user={user} />
@@ -410,10 +455,10 @@ const App: React.FC = () => {
             <main className="flex-grow flex items-center justify-center p-4">
                 {renderContent()}
             </main>
-
+            
             <footer className="w-full p-4">
                 {loadedDictionary && selectedSetIndex !== null && (
-                    <div className="w-full max-w-xl mx-auto border-t border-slate-700 pt-4">
+                     <div className="w-full max-w-xl mx-auto border-t border-slate-700 pt-4">
                         <SentenceUpload
                             onSentencesLoaded={setSentences}
                             onClearSentences={() => setSentences(new Map())}
@@ -422,7 +467,7 @@ const App: React.FC = () => {
                     </div>
                 )}
             </footer>
-
+            
             <FileSourceModal
                 isOpen={isSourceModalOpen}
                 onClose={() => setIsSourceModalOpen(false)}

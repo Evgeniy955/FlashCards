@@ -20,13 +20,12 @@ const extractWordsFromColumns = (jsonData: (string | null)[][], ruCol: number, e
 };
 
 const splitIntoSubsets = (words: Word[], baseSetName: string, originalSetIndex: number): WordSet[] => {
+    // If the set is small enough, don't split it and use the base name.
     if (words.length <= MAX_SET_SIZE) {
-        // If there's only one set and it's small, don't add a range to the name.
-        if (words.length < MAX_SET_SIZE && words.length === jsonData.filter(row => row?.[originalSetIndex * 4] && row?.[originalSetIndex * 4 + 2]).length) {
-             return [{ name: baseSetName, words, originalSetIndex }];
-        }
+        return [{ name: baseSetName, words, originalSetIndex }];
     }
-    
+
+    // Otherwise, split into chunks and add range indicators to the names.
     const subsets: WordSet[] = [];
     for (let i = 0; i < words.length; i += MAX_SET_SIZE) {
         const chunk = words.slice(i, i + MAX_SET_SIZE);
@@ -36,17 +35,8 @@ const splitIntoSubsets = (words: Word[], baseSetName: string, originalSetIndex: 
             originalSetIndex,
         });
     }
-
-    // If splitting results in a single subset that contains all original words, just use the base name.
-    if (subsets.length === 1 && subsets[0].words.length === words.length) {
-        return [{ name: baseSetName, words, originalSetIndex }];
-    }
-
     return subsets;
 };
-
-
-let jsonData: (string | null)[][] = [];
 
 export const parseDictionaryFile = async (file: File): Promise<LoadedDictionary> => {
     try {
@@ -55,7 +45,7 @@ export const parseDictionaryFile = async (file: File): Promise<LoadedDictionary>
         const workbook = XLSX.read(data, { type: 'array' });
         const sheetName = workbook.SheetNames[0];
         const worksheet = workbook.Sheets[sheetName];
-        jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+        const jsonData: (string | null)[][] = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
 
         if (!jsonData || jsonData.length === 0) {
             throw new Error("The file is empty or in an incorrect format.");
