@@ -1,8 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useAuthState } from 'react-firebase-hooks/auth';
 import { auth, db } from './lib/firebase-client';
-// Fix: Use '-exp' suffix for firestore import to match the Firebase SDK version being used.
-import { doc, getDoc, setDoc } from 'firebase/firestore-exp';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { Flashcard } from './components/Flashcard';
 import { ProgressBar } from './components/ProgressBar';
 import { SetSelector } from './components/SetSelector';
@@ -111,7 +110,6 @@ const App: React.FC = () => {
                 const docSnap = await getDoc(docRef);
                 if (docSnap.exists()) {
                     const data = docSnap.data();
-                    // Fix: Explicitly type data from Firestore to prevent 'unknown' type errors downstream.
                     const learnedData = (data.learnedWords || {}) as { [key: string]: WordProgress };
                     setLearnedWords(new Map(Object.entries(learnedData)));
                     
@@ -292,7 +290,6 @@ const App: React.FC = () => {
             setLearnedWords(prev => new Map(prev).set(currentWord!.en, { srsStage: nextStage, nextReviewDate: nextReviewDate.toISOString() }));
             
             if (isDontKnowMode && selectedSetIndex !== null) {
-// Fix: Explicitly type `prev` to resolve TS errors with `.filter`
                 setDontKnowWords((prev: Map<number, Word[]>) => {
                     const newMap = new Map(prev);
                     const words = newMap.get(selectedSetIndex)?.filter(w => w.en !== currentWord!.en) || [];
@@ -317,7 +314,6 @@ const App: React.FC = () => {
                 });
             }
             if (!isDontKnowMode) {
-// Fix: Explicitly type `prev` to resolve TS errors with `.some` and spread operator
                 setDontKnowWords((prev: Map<number, Word[]>) => {
                     const newMap = new Map(prev);
                     const currentList = newMap.get(selectedSetIndex) || [];

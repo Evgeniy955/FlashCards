@@ -1,7 +1,7 @@
 import React from 'react';
 import { auth } from '../lib/firebase-client';
-// Fix: Use '-exp' suffix for auth import to match the Firebase SDK version being used.
-import { GoogleAuthProvider, signInWithPopup, signOut, User } from 'firebase/auth-exp';
+import { GoogleAuthProvider, signInWithPopup, signOut, User } from 'firebase/auth';
+
 
 const GoogleIcon = () => (
     <svg className="w-5 h-5" viewBox="0 0 48 48">
