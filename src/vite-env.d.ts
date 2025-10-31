@@ -1,4 +1,6 @@
-// Fix: Removed reference to "vite/client" to resolve a type definition error. This assumes the types are already included globally via tsconfig.json.
+// The /// <reference types="vite/client" /> directive is failing in this environment.
+// To resolve errors with `import.meta.env`, the necessary types are defined manually below.
+// This is a workaround; the root cause is likely a missing dependency or misconfiguration.
 
 interface ImportMetaEnv {
   readonly VITE_FIREBASE_API_KEY: string;
