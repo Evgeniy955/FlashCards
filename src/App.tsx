@@ -230,8 +230,7 @@ const App: React.FC = () => {
             .sort((a, b) => a.en.localeCompare(b.en));
     }, [learnedWords, loadedDictionary]);
     
-    const goToNextWord = () => {
-        setIsFlipped(false);
+    const updateWordIndex = () => {
         if (currentWordIndex < reviewWords.length - 1) {
             setCurrentWordIndex(prev => prev + 1);
         } else {
@@ -264,15 +263,23 @@ const App: React.FC = () => {
             });
         }
         
-        setIsTransitioning(true);
+        setIsTransitioning(true); // 1. Start transition (blur), disable buttons.
+        
+        // 2. Wait 400ms (user sees blur)
         setTimeout(() => {
-            goToNextWord();
-            setIsTransitioning(false);
+            setIsFlipped(false); // 3. Start flipping card back (500ms animation)
+
+            // 4. Halfway through the flip, when content is hidden, change the word.
+            setTimeout(() => {
+                updateWordIndex();
+                setIsTransitioning(false); // 5. End transition, enable buttons for the new card.
+            }, 250); // Half of 500ms animation duration.
         }, 400);
     };
 
     const handleDontKnow = () => {
-        if (!currentWord || selectedSetIndex === null) return;
+        if (!currentWord || selectedSetIndex === null || isTransitioning) return;
+
         if (learnedWords.has(currentWord.en)) {
             setLearnedWords(prev => {
                 const newMap = new Map(prev);
@@ -290,7 +297,15 @@ const App: React.FC = () => {
                 return newMap;
             });
         }
-        goToNextWord();
+        
+        setIsTransitioning(true); // 1. Start transition (disable buttons)
+        setIsFlipped(false); // 2. Start flipping card back (500ms animation)
+
+        // 3. Halfway through the flip, change the word.
+        setTimeout(() => {
+            updateWordIndex();
+            setIsTransitioning(false); // 4. End transition.
+        }, 250);
     };
 
     const handleFlip = () => setIsFlipped(prev => !prev);
