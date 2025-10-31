@@ -8,9 +8,10 @@ interface FlashcardProps {
   onFlip: () => void;
   exampleSentence?: string;
   isChanging?: boolean;
+  isInstantChange?: boolean;
 }
 
-export const Flashcard: React.FC<FlashcardProps> = ({ word, isFlipped, onFlip, exampleSentence, isChanging }) => {
+export const Flashcard: React.FC<FlashcardProps> = ({ word, isFlipped, onFlip, exampleSentence, isChanging, isInstantChange }) => {
   
   const handlePlayAudioSequence = (e: React.MouseEvent) => {
     e.stopPropagation(); // Prevent card from flipping when clicking the button
@@ -62,7 +63,7 @@ export const Flashcard: React.FC<FlashcardProps> = ({ word, isFlipped, onFlip, e
     >
       {/* The inner container that flips */}
       <div 
-        className="relative w-full h-full transition-transform duration-500"
+        className={`relative w-full h-full ${!isInstantChange ? 'transition-transform duration-500' : ''}`}
         style={{ transformStyle: 'preserve-3d', transform: isFlipped ? 'rotateY(180deg)' : 'rotateY(0deg)' }}
       >
         {/* Front of the card (Russian) */}
