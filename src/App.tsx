@@ -268,16 +268,21 @@ const App: React.FC = () => {
             .sort((a, b) => a.en.localeCompare(b.en));
     }, [learnedWords, loadedDictionary]);
     
-    const advanceToNextWord = (updateLogic: () => boolean) => {
+    const advanceToNextWord = (updateLogic: () => boolean, instant = false) => {
         if (!currentWord || isChangingWord) return;
         if (!updateLogic()) return;
         
-        setIsChangingWord(true);
-        setTimeout(() => {
-            updateWordIndex();
+        if (instant) {
             setIsFlipped(false);
-            setIsChangingWord(false);
-        }, 250);
+            updateWordIndex();
+        } else {
+            setIsChangingWord(true);
+            setTimeout(() => {
+                updateWordIndex();
+                setIsFlipped(false);
+                setIsChangingWord(false);
+            }, 250);
+        }
     };
 
     const handleKnow = () => {
@@ -299,7 +304,7 @@ const App: React.FC = () => {
                 });
             }
             return true;
-        });
+        }, isFlipped);
     };
 
     const handleDontKnow = () => {
