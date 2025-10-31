@@ -1,11 +1,11 @@
-// Fix: Use a namespace import as a workaround for potential build tool issues with named exports from 'firebase/app'.
-import * as firebaseApp from 'firebase/app';
+// Fix: Correctly import `initializeApp` as a named export to align with the Firebase v9+ modular SDK.
+import { initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 import { firebaseConfig } from '../firebase-config';
 
 // Initialize Firebase
-const app = firebaseApp.initializeApp(firebaseConfig);
+const app = initializeApp(firebaseConfig);
 
 // Get auth and firestore instances
 const auth = getAuth(app);

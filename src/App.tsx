@@ -27,9 +27,10 @@ const App: React.FC = () => {
     const [isFlipped, setIsFlipped] = useState(false);
     const [reviewWords, setReviewWords] = useState<Word[]>([]);
     
-    // States for session progress tracking to avoid UI jumps
+    // States for session progress tracking
     const [sessionProgress, setSessionProgress] = useState(0);
     const [sessionTotal, setSessionTotal] = useState(0);
+    const [sessionActive, setSessionActive] = useState(false);
     
     const [learnedWords, setLearnedWords] = useState<Map<string, WordProgress>>(new Map());
     const [dontKnowWords, setDontKnowWords] = useState<Map<number, Word[]>>(new Map());
@@ -159,6 +160,15 @@ const App: React.FC = () => {
         return () => clearTimeout(handler);
     }, [learnedWords, dontKnowWords, user, dictionaryId, isProgressLoading]);
 
+    const updateWordIndex = () => {
+        if (currentWordIndex < reviewWords.length - 1) {
+            setCurrentWordIndex(prev => prev + 1);
+            setSessionProgress(prev => prev + 1);
+        } else {
+            setReviewWords([]);
+            setSessionActive(false); // End session
+        }
+    };
 
     const startReviewSession = useCallback((setIndex: number) => {
         if (!loadedDictionary) return;
@@ -168,19 +178,28 @@ const App: React.FC = () => {
             const progress = learnedWords.get(word.en);
             return !progress || progress.nextReviewDate <= now;
         });
-        setReviewWords(wordsForReview);
-        setSessionTotal(wordsForReview.length);
-        setSessionProgress(wordsForReview.length > 0 ? 1 : 0);
-        setCurrentWordIndex(0);
-        setIsFlipped(false);
-        setIsDontKnowMode(false);
+
+        if (wordsForReview.length > 0) {
+            setReviewWords(wordsForReview);
+            setSessionTotal(wordsForReview.length);
+            setSessionProgress(1);
+            setCurrentWordIndex(0);
+            setIsFlipped(false);
+            setIsDontKnowMode(false);
+            setSessionActive(true);
+        } else {
+            setReviewWords([]);
+            setSessionTotal(0);
+            setSessionProgress(0);
+            setSessionActive(false);
+        }
     }, [loadedDictionary, learnedWords]);
 
     useEffect(() => {
-        if (selectedSetIndex !== null && !isProgressLoading) {
+        if (selectedSetIndex !== null && !isProgressLoading && !sessionActive) {
             startReviewSession(selectedSetIndex);
         }
-    }, [selectedSetIndex, isProgressLoading, loadedDictionary, startReviewSession]);
+    }, [selectedSetIndex, isProgressLoading, sessionActive, startReviewSession]);
     
     const handleFilesSelect = async (name: string, wordsFile: File, sentencesFile?: File) => {
         setIsLoading(true);
@@ -208,6 +227,7 @@ const App: React.FC = () => {
             setLoadedDictionary(dictionary);
             setSelectedSetIndex(0);
             setFileSourceModalOpen(false);
+            setSessionActive(false);
 
         } catch (error) {
             alert((error as Error).message);
@@ -249,15 +269,6 @@ const App: React.FC = () => {
             .sort((a, b) => a.en.localeCompare(b.en));
     }, [learnedWords, loadedDictionary]);
     
-    const updateWordIndex = () => {
-        if (currentWordIndex < reviewWords.length - 1) {
-            setCurrentWordIndex(prev => prev + 1);
-            setSessionProgress(prev => prev + 1);
-        } else {
-            setReviewWords([]);
-        }
-    };
-
     const advanceToNextWord = (updateLogic: () => boolean) => {
         if (!currentWord || isChangingWord) return;
         if (!updateLogic()) return;
@@ -322,7 +333,10 @@ const App: React.FC = () => {
     const handleFlip = () => setIsFlipped(prev => !prev);
     
     const handleSelectSet = (index: number) => {
-        setSelectedSetIndex(index);
+        if (index !== selectedSetIndex) {
+            setSessionActive(false); // Force session to reset for the new set
+            setSelectedSetIndex(index);
+        }
     };
 
     const handleShuffle = () => setReviewWords(shuffleArray(reviewWords));
@@ -337,6 +351,7 @@ const App: React.FC = () => {
             setCurrentWordIndex(0);
             setIsFlipped(false);
             setIsDontKnowMode(true);
+            setSessionActive(true);
         }
     };
 
@@ -344,13 +359,14 @@ const App: React.FC = () => {
         if (globalThis.confirm('Are you sure you want to reset learning progress for this dictionary? Your global sentence list will not be affected.')) {
             setLearnedWords(new Map());
             setDontKnowWords(new Map());
-            if (selectedSetIndex !== null) startReviewSession(selectedSetIndex);
+            setSessionActive(false); // Force session to restart with fresh progress
         }
     };
 
     const handleChangeDictionary = () => {
         setLoadedDictionary(null);
         setSelectedSetIndex(null);
+        setSessionActive(false);
         setFileSourceModalOpen(true);
     };
 
@@ -364,7 +380,7 @@ const App: React.FC = () => {
             );
         }
 
-        if (reviewWords.length > 0) {
+        if (reviewWords.length > 0 && currentWord) {
             return (
                 <div className="w-full flex flex-col items-center">
                     <div className="w-full text-center mb-2">
