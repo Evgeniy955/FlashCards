@@ -15,7 +15,7 @@ import { Auth } from './components/Auth';
 import { auth } from './lib/firebase-client';
 import { parseDictionaryFile, shuffleArray } from './utils/dictionaryUtils';
 import type { Word, WordSet, LoadedDictionary, WordProgress } from './types';
-import defaultSentencesData from '../../public/sentences/phrases1.json';
+import defaultSentencesData from '../public/sentences/phrases1.json';
 
 // Create the initial map from the imported JSON data
 const initialSentencesMap = new Map<string, string>();
@@ -128,10 +128,10 @@ const App: React.FC = () => {
             if (!response.ok) throw new Error(`Failed to fetch dictionary: ${response.statusText}`);
             const blob = await response.blob();
             const file = new File([blob], path.split('/').pop() || 'dictionary.xlsx');
-            
+
             // Temporarily set dictionary to show loading state correctly before parsing sentences
-            setLoadedDictionary({ name: file.name, sets: [] }); 
-            
+            setLoadedDictionary({ name: file.name, sets: [] });
+
             if (sentencesPath) {
                 await handleSentencesLoadFromPath(sentencesPath);
             }
@@ -235,7 +235,7 @@ const App: React.FC = () => {
         }
         moveToNextWord();
     }, [wordsForSession, currentWordIndex, wordProgress, isTrainingDontKnow, selectedSetIndex, loadedDictionary, moveToNextWord]);
-    
+
     const handleDontKnow = useCallback(() => {
         if (!wordsForSession.length || selectedSetIndex === null || !loadedDictionary) return;
         const currentWord = wordsForSession[currentWordIndex];
@@ -244,7 +244,7 @@ const App: React.FC = () => {
             ...prev,
             [currentWord.en]: { srsStage: 0, nextReviewDate: getNextReviewDate(0) },
         }));
-        
+
         const setName = loadedDictionary.sets[selectedSetIndex].name;
         if (!dontKnowWords[setName]?.some(w => w.en === currentWord.en)) {
             setDontKnowWords(prev => ({
@@ -274,7 +274,7 @@ const App: React.FC = () => {
             }
         }
     };
-    
+
     const changeDictionary = () => {
         setLoadedDictionary(null);
         setSelectedSetIndex(null);
@@ -284,7 +284,7 @@ const App: React.FC = () => {
     const currentSet = selectedSetIndex !== null ? loadedDictionary?.sets[selectedSetIndex] : null;
     const currentWord = wordsForSession[currentWordIndex];
     const dontKnowCountForSet = (currentSet && dontKnowWords[currentSet.name]?.length) || 0;
-    
+
     const learnedWordsForModal = useMemo(() => {
         if (!loadedDictionary) return [];
         const allWords = loadedDictionary.sets.flatMap(s => s.words);
@@ -320,7 +320,7 @@ const App: React.FC = () => {
                 </div>
             );
         }
-        
+
         if (selectedSetIndex === null || !currentSet) {
             return (
                 <div className="w-full max-w-2xl mx-auto">
@@ -332,7 +332,7 @@ const App: React.FC = () => {
                 </div>
             );
         }
-        
+
         if (wordsForSession.length > 0) {
             return (
                 <div className="w-full max-w-xl mx-auto flex flex-col items-center">
@@ -364,12 +364,12 @@ const App: React.FC = () => {
                            <List size={20} />
                         </button>
                     </div>
-                    
+
                     <WordList words={currentSet.words} isVisible={isWordListVisible} />
                 </div>
             );
         }
-        
+
         // Session Complete
         return (
             <div className="text-center">
@@ -419,7 +419,7 @@ const App: React.FC = () => {
             <main className="flex-grow flex items-center justify-center p-4">
                 {renderContent()}
             </main>
-            
+
             <footer className="w-full p-4">
                 {loadedDictionary && selectedSetIndex !== null && (
                      <div className="w-full max-w-xl mx-auto border-t border-slate-700 pt-4">
@@ -431,7 +431,7 @@ const App: React.FC = () => {
                     </div>
                 )}
             </footer>
-            
+
             <FileSourceModal
                 isOpen={isSourceModalOpen}
                 onClose={() => setIsSourceModalOpen(false)}
