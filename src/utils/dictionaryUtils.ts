@@ -20,17 +20,15 @@ const extractWordsFromColumns = (jsonData: (string | null)[][], ruCol: number, e
 };
 
 const splitIntoSubsets = (words: Word[], baseSetName: string, originalSetIndex: number): WordSet[] => {
-    // If the set is small enough, don't split it and use the base name.
     if (words.length <= MAX_SET_SIZE) {
         return [{ name: baseSetName, words, originalSetIndex }];
     }
-
-    // Otherwise, split into chunks and add range indicators to the names.
+    
     const subsets: WordSet[] = [];
     for (let i = 0; i < words.length; i += MAX_SET_SIZE) {
         const chunk = words.slice(i, i + MAX_SET_SIZE);
         subsets.push({
-            name: `${baseSetName} (${i + 1}-${i + chunk.length})`,
+            name: `${baseSetName}.${Math.floor(i / MAX_SET_SIZE) + 1}`,
             words: chunk,
             originalSetIndex,
         });

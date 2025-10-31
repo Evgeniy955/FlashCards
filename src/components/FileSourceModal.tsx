@@ -1,64 +1,58 @@
 import React, { useState } from 'react';
 import { Modal } from './Modal';
+import { FileUpload } from './FileUpload';
 import { BuiltInDictionaries } from './BuiltInDictionaries';
-import { FileUp, BookMarked } from 'lucide-react';
+import { Library, Upload } from 'lucide-react';
 
 interface FileSourceModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onFileSelect: (file: File) => void;
-  onBuiltInSelect: (path: string, sentencesPath?: string) => void;
+  onFilesSelect: (name: string, wordsFile: File, sentencesFile?: File) => void;
   isLoading: boolean;
 }
 
-export const FileSourceModal: React.FC<FileSourceModalProps> = ({ isOpen, onClose, onFileSelect, onBuiltInSelect, isLoading }) => {
-  const [activeTab, setActiveTab] = useState<'builtin' | 'upload'>('builtin');
+type Tab = 'built-in' | 'computer';
 
-  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (file) {
-      onFileSelect(file);
-    }
-     // Reset input value to allow re-uploading the same file
-    if (event.target) {
-        event.target.value = '';
-    }
+// Moved TabButton outside the component to prevent re-creation on each render.
+const TabButton = ({ activeTab, tab, onClick, children }: React.PropsWithChildren<{ activeTab: Tab, tab: Tab, onClick: (tab: Tab) => void }>) => (
+  <button
+    onClick={() => onClick(tab)}
+    className={`flex-1 flex items-center justify-center gap-2 p-3 text-sm font-medium border-b-2 transition-colors ${
+      activeTab === tab
+        ? 'border-indigo-500 text-white'
+        : 'border-transparent text-slate-400 hover:text-white hover:border-slate-500'
+    }`}
+  >
+    {children}
+  </button>
+);
+
+
+export const FileSourceModal: React.FC<FileSourceModalProps> = ({ isOpen, onClose, onFilesSelect, isLoading }) => {
+  const [activeTab, setActiveTab] = useState<Tab>('built-in');
+
+  const handleLocalFileSelect = (file: File) => {
+    // Use filename as the dictionary name, removing the extension
+    const dictionaryName = file.name.endsWith('.xlsx') ? file.name.slice(0, -5) : file.name;
+    onFilesSelect(dictionaryName, file);
+  };
+
+  const handleBuiltInSelect = (name: string, wordsFile: File, sentencesFile?: File) => {
+    onFilesSelect(name, wordsFile, sentencesFile);
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Choose Word Source">
-      <div>
-        <div className="flex border-b border-slate-700 mb-6">
-          <button
-            onClick={() => setActiveTab('builtin')}
-            className={`flex-1 py-3 text-sm font-semibold transition-colors flex items-center justify-center gap-2 ${activeTab === 'builtin' ? 'text-indigo-400 border-b-2 border-indigo-400' : 'text-slate-400 hover:text-white'}`}
-          >
-            <BookMarked size={16} /> Built-in Dictionaries
-          </button>
-          <button
-            onClick={() => setActiveTab('upload')}
-            className={`flex-1 py-3 text-sm font-semibold transition-colors flex items-center justify-center gap-2 ${activeTab === 'upload' ? 'text-indigo-400 border-b-2 border-indigo-400' : 'text-slate-400 hover:text-white'}`}
-          >
-            <FileUp size={16} /> From Computer
-          </button>
-        </div>
-        
-        {activeTab === 'builtin' && (
-          <BuiltInDictionaries onSelect={onBuiltInSelect} isLoading={isLoading} />
+    <Modal isOpen={isOpen} onClose={onClose} title="Select File Source">
+      <div className="flex border-b border-slate-700">
+        <TabButton activeTab={activeTab} tab="built-in" onClick={setActiveTab}><Library size={16} /> Built-in</TabButton>
+        <TabButton activeTab={activeTab} tab="computer" onClick={setActiveTab}><Upload size={16} /> From Computer</TabButton>
+      </div>
+      <div className="pt-6">
+        {activeTab === 'built-in' && (
+          <BuiltInDictionaries onSelect={handleBuiltInSelect} />
         )}
-        
-        {activeTab === 'upload' && (
-          <div className="text-center">
-            <p className="text-slate-400 mb-6">Upload your own dictionary file in .xlsx format. See instructions for the required column structure.</p>
-            <label
-              htmlFor="local-file-upload"
-              className="px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-lg cursor-pointer transition-colors inline-flex items-center gap-2"
-            >
-              <FileUp size={18} /> Select Excel File
-            </label>
-            <input id="local-file-upload" type="file" className="hidden" onChange={handleFileChange} accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" disabled={isLoading} />
-            {isLoading && <p className="mt-4 text-indigo-400 animate-pulse">Processing...</p>}
-          </div>
+        {activeTab === 'computer' && (
+          <FileUpload onFileUpload={handleLocalFileSelect} isLoading={isLoading} />
         )}
       </div>
     </Modal>

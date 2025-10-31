@@ -9,11 +9,11 @@ interface SetSelectorProps {
 
 // Predefined color classes for the buttons to make them visually distinct
 const colorClasses = [
-  { bg: 'bg-violet-700', hoverBg: 'hover:bg-violet-600', ring: 'focus:ring-violet-500' },
+  { bg: 'bg-sky-700', hoverBg: 'hover:bg-sky-600', ring: 'focus:ring-sky-500' },
   { bg: 'bg-teal-700', hoverBg: 'hover:bg-teal-600', ring: 'focus:ring-teal-500' },
   { bg: 'bg-rose-700', hoverBg: 'hover:bg-rose-600', ring: 'focus:ring-rose-500' },
   { bg: 'bg-amber-700', hoverBg: 'hover:bg-amber-600', ring: 'focus:ring-amber-500' },
-  { bg: 'bg-sky-700', hoverBg: 'hover:bg-sky-600', ring: 'focus:ring-sky-500' },
+  { bg: 'bg-violet-700', hoverBg: 'hover:bg-violet-600', ring: 'focus:ring-violet-500' },
 ];
 
 
