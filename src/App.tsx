@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useAuthState } from 'react-firebase-hooks/auth';
 import { auth, db } from './lib/firebase-client';
-// FIX: The `doc`, `getDoc`, and `setDoc` functions are part of the Firebase v9 modular API. Since the project's setup requires using the v8 compat API, these imports are no longer valid and have been removed.
+import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { Flashcard } from './components/Flashcard';
 import { ProgressBar } from './components/ProgressBar';
 import { SetSelector } from './components/SetSelector';
@@ -45,7 +45,7 @@ const App: React.FC = () => {
     const [isInstructionsModalOpen, setInstructionsModalOpen] = useState(false);
     const [isLearnedWordsModalOpen, setLearnedWordsModalOpen] = useState(false);
 
-    const dictionaryId = useMemo(() => loadedDictionary?.name.replace(/[\/.]/g, '_'), [loadedDictionary]);
+    const dictionaryId = useMemo(() => loadedDictionary?.name.replaceAll(/[./]/g, '_'), [loadedDictionary]);
     
     // Load global sentences from Firestore user document
     useEffect(() => {
@@ -54,13 +54,12 @@ const App: React.FC = () => {
                 setSentences(new Map());
                 return;
             }
-            // FIX: Updated Firestore document reference to use the v8 compat syntax.
-            const userDocRef = db.collection('users').doc(user.uid);
+            const userDocRef = doc(db, 'users', user.uid);
             try {
-                const docSnap = await userDocRef.get();
-                if (docSnap.exists) {
+                const docSnap = await getDoc(userDocRef);
+                if (docSnap.exists()) {
                     const data = docSnap.data();
-                    if (data && data.globalSentences) {
+                    if (data?.globalSentences) {
                         setSentences(new Map(Object.entries(data.globalSentences)));
                     } else {
                         // If the field doesn't exist, start fresh
@@ -80,11 +79,9 @@ const App: React.FC = () => {
         if (!user) return; // Don't save if not logged in
 
         const handler = setTimeout(async () => {
-            // FIX: Updated Firestore document reference to use the v8 compat syntax.
-            const userDocRef = db.collection('users').doc(user.uid);
+            const userDocRef = doc(db, 'users', user.uid);
             try {
-                // FIX: Updated Firestore set call to use the v8 compat `set` method.
-                await userDocRef.set({
+                await setDoc(userDocRef, {
                     globalSentences: Object.fromEntries(sentences)
                 }, { merge: true });
             } catch (error) {
@@ -107,16 +104,18 @@ const App: React.FC = () => {
             }
 
             setIsProgressLoading(true);
-            // FIX: Updated Firestore document reference to use the v8 compat syntax for nested collections.
-            const docRef = db.collection('users').doc(user.uid).collection('progress').doc(dictionaryId);
+            const docRef = doc(db, 'users', user.uid, 'progress', dictionaryId);
             try {
-                // FIX: Updated Firestore get call to use the v8 compat `get` method.
-                const docSnap = await docRef.get();
-                if (docSnap.exists) {
-                    const data = docSnap.data()!;
-                    setLearnedWords(new Map(Object.entries(data.learnedWords || {})));
+                const docSnap = await getDoc(docRef);
+                if (docSnap.exists()) {
+                    const data = docSnap.data();
+                    // Fix: Explicitly type data from Firestore to prevent 'unknown' type errors downstream.
+                    const learnedData = (data.learnedWords || {}) as { [key: string]: WordProgress };
+                    setLearnedWords(new Map(Object.entries(learnedData)));
+                    
+                    const dontKnowData = (data.dontKnowWords || {}) as { [key: string]: Word[] };
                     const dontKnowMap = new Map(
-                        Object.entries(data.dontKnowWords || {}).map(([key, value]) => [
+                        Object.entries(dontKnowData).map(([key, value]) => [
                             Number(key),
                             value as Word[],
                         ])
@@ -145,15 +144,13 @@ const App: React.FC = () => {
         }
 
         const handler = setTimeout(async () => {
-            // FIX: Updated Firestore document reference to use the v8 compat syntax for nested collections.
-            const docRef = db.collection('users').doc(user.uid).collection('progress').doc(dictionaryId);
+            const docRef = doc(db, 'users', user.uid, 'progress', dictionaryId);
             const dataToSave = {
                 learnedWords: Object.fromEntries(learnedWords),
                 dontKnowWords: Object.fromEntries(dontKnowWords),
             };
             try {
-                // FIX: Updated Firestore set call to use the v8 compat `set` method.
-                await docRef.set(dataToSave, { merge: true });
+                await setDoc(docRef, dataToSave, { merge: true });
             } catch (error) {
                 console.error("Error saving dictionary progress to Firestore:", error);
             }
@@ -180,12 +177,10 @@ const App: React.FC = () => {
     }, [loadedDictionary, learnedWords]);
 
     useEffect(() => {
-        // This effect now only runs when the selected set is changed or when the initial data load completes.
-        // It will no longer re-run during a session when `learnedWords` is updated.
         if (selectedSetIndex !== null && !isProgressLoading) {
             startReviewSession(selectedSetIndex);
         }
-    }, [selectedSetIndex, isProgressLoading, loadedDictionary, startReviewSession]); // Added startReviewSession to dependency array
+    }, [selectedSetIndex, isProgressLoading, loadedDictionary, startReviewSession]);
     
     const handleFilesSelect = async (name: string, wordsFile: File, sentencesFile?: File) => {
         setIsLoading(true);
@@ -205,7 +200,7 @@ const App: React.FC = () => {
             setLearnedWords(new Map());
             setDontKnowWords(new Map());
             if (sentenceMapFromFile) {
-                setSentences(prev => new Map([...prev, ...sentenceMapFromFile!]));
+                setSentences(prev => new Map([...prev, ...sentenceMapFromFile]));
             }
 
             const dictionary = await parseDictionaryFile(wordsFile);
@@ -230,7 +225,11 @@ const App: React.FC = () => {
     const learnedWordsWithDetails = useMemo(() => {
         if (!loadedDictionary) return [];
         const allWords = new Map<string, Word>();
-        loadedDictionary.sets.forEach(set => set.words.forEach(word => allWords.set(word.en, word)));
+        for (const set of loadedDictionary.sets) {
+            for (const word of set.words) {
+                allWords.set(word.en, word);
+            }
+        }
         return Array.from(learnedWords.entries())
             .map(([en, progress]) => {
                 const word = allWords.get(en);
@@ -243,34 +242,17 @@ const App: React.FC = () => {
     const updateWordIndex = () => {
         if (currentWordIndex < reviewWords.length - 1) {
             setCurrentWordIndex(prev => prev + 1);
-            setSessionProgress(prev => prev + 1); // Increment stable progress counter
+            setSessionProgress(prev => prev + 1);
         } else {
             setReviewWords([]);
         }
     };
 
-    const handleKnow = () => {
+    const advanceToNextWord = (updateLogic: () => boolean) => {
         if (!currentWord || isChangingWord) return;
-
-        const progress = learnedWords.get(currentWord.en);
-        const currentStage = progress ? progress.srsStage : -1;
-        const nextStage = Math.min(currentStage + 1, SRS_INTERVALS.length - 1);
-        const nextReviewDate = new Date();
-        nextReviewDate.setDate(nextReviewDate.getDate() + SRS_INTERVALS[nextStage]);
-        setLearnedWords(prev => new Map(prev).set(currentWord.en, { srsStage: nextStage, nextReviewDate: nextReviewDate.toISOString() }));
-        
-        if (isDontKnowMode && selectedSetIndex !== null) {
-            setDontKnowWords(prev => {
-                const newMap = new Map(prev);
-                const words = newMap.get(selectedSetIndex)?.filter(w => w.en !== currentWord.en) || [];
-                if (words.length > 0) newMap.set(selectedSetIndex, words);
-                else newMap.delete(selectedSetIndex);
-                return newMap;
-            });
-        }
+        if (!updateLogic()) return;
         
         setIsChangingWord(true);
-        
         setTimeout(() => {
             updateWordIndex();
             setIsFlipped(false);
@@ -278,34 +260,51 @@ const App: React.FC = () => {
         }, 250);
     };
 
-    const handleDontKnow = () => {
-        if (!currentWord || selectedSetIndex === null || isChangingWord) return;
+    const handleKnow = () => {
+        advanceToNextWord(() => {
+            const progress = learnedWords.get(currentWord!.en);
+            const currentStage = progress ? progress.srsStage : -1;
+            const nextStage = Math.min(currentStage + 1, SRS_INTERVALS.length - 1);
+            const nextReviewDate = new Date();
+            nextReviewDate.setDate(nextReviewDate.getDate() + SRS_INTERVALS[nextStage]);
+            setLearnedWords(prev => new Map(prev).set(currentWord!.en, { srsStage: nextStage, nextReviewDate: nextReviewDate.toISOString() }));
+            
+            if (isDontKnowMode && selectedSetIndex !== null) {
+                setDontKnowWords((prev) => {
+                    const newMap = new Map(prev);
+                    const words = newMap.get(selectedSetIndex)?.filter(w => w.en !== currentWord!.en) || [];
+                    if (words.length > 0) newMap.set(selectedSetIndex, words);
+                    else newMap.delete(selectedSetIndex);
+                    return newMap;
+                });
+            }
+            return true;
+        });
+    };
 
-        if (learnedWords.has(currentWord.en)) {
-            setLearnedWords(prev => {
-                const newMap = new Map(prev);
-                newMap.delete(currentWord.en);
-                return newMap;
-            });
-        }
-        if (!isDontKnowMode) {
-            setDontKnowWords(prev => {
-                const newMap = new Map(prev);
-                const currentList = newMap.get(selectedSetIndex) || [];
-                if (!currentList.some(w => w.en === currentWord.en)) {
-                    newMap.set(selectedSetIndex, [...currentList, currentWord]);
-                }
-                return newMap;
-            });
-        }
-        
-        setIsChangingWord(true);
-        
-        setTimeout(() => {
-            updateWordIndex();
-            setIsFlipped(false);
-            setIsChangingWord(false);
-        }, 250);
+    const handleDontKnow = () => {
+        advanceToNextWord(() => {
+            if (selectedSetIndex === null) return false;
+
+            if (learnedWords.has(currentWord!.en)) {
+                setLearnedWords(prev => {
+                    const newMap = new Map(prev);
+                    newMap.delete(currentWord!.en);
+                    return newMap;
+                });
+            }
+            if (!isDontKnowMode) {
+                setDontKnowWords((prev) => {
+                    const newMap = new Map(prev);
+                    const currentList = newMap.get(selectedSetIndex) || [];
+                    if (!currentList.some(w => w.en === currentWord!.en)) {
+                        newMap.set(selectedSetIndex, [...currentList, currentWord!]);
+                    }
+                    return newMap;
+                });
+            }
+            return true;
+        });
     };
 
     const handleFlip = () => setIsFlipped(prev => !prev);
@@ -330,7 +329,7 @@ const App: React.FC = () => {
     };
 
     const handleResetProgress = () => {
-        if (window.confirm('Are you sure you want to reset learning progress for this dictionary? Your global sentence list will not be affected.')) {
+        if (globalThis.confirm('Are you sure you want to reset learning progress for this dictionary? Your global sentence list will not be affected.')) {
             setLearnedWords(new Map());
             setDontKnowWords(new Map());
             if (selectedSetIndex !== null) startReviewSession(selectedSetIndex);
@@ -341,6 +340,48 @@ const App: React.FC = () => {
         setLoadedDictionary(null);
         setSelectedSetIndex(null);
         setFileSourceModalOpen(true);
+    };
+
+    const renderContent = () => {
+        if (isProgressLoading) {
+            return (
+                <div className="w-full aspect-[3/2] flex justify-center items-center text-slate-400">
+                    <Loader2 className="animate-spin h-8 w-8 mr-3" />
+                    <span>Loading progress...</span>
+                </div>
+            );
+        }
+
+        if (reviewWords.length > 0) {
+            return (
+                <div className="w-full flex flex-col items-center">
+                    <div className="w-full text-center mb-2">
+                        <p className="text-slate-400">{sessionProgress} / {sessionTotal}</p>
+                    </div>
+                    <ProgressBar current={sessionProgress} total={sessionTotal} />
+                    <div className={`w-full transition-opacity duration-200 ${isChangingWord ? 'opacity-0' : 'opacity-100'}`}>
+                        <Flashcard word={currentWord} isFlipped={isFlipped} onFlip={handleFlip} exampleSentence={exampleSentence} isChanging={isChangingWord} />
+                    </div>
+                    <div className="flex justify-center gap-4 mt-6 w-full">
+                        <button onClick={handleDontKnow} disabled={isProgressLoading || isChangingWord} className="w-full py-3 text-lg font-semibold bg-rose-600 hover:bg-rose-700 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-wait">Don't know</button>
+                        <button onClick={handleKnow} disabled={isProgressLoading || isChangingWord} className="w-full py-3 text-lg font-semibold bg-emerald-600 hover:bg-emerald-700 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-wait">Know</button>
+                    </div>
+                </div>
+            );
+        }
+
+        return (
+            <div className="text-center my-16">
+                <h2 className="text-2xl font-semibold mb-4 text-slate-300">Session Complete!</h2>
+                <p className="text-slate-400">You've reviewed all available cards for this set.</p>
+                {selectedSetIndex !== null && dontKnowWords.get(selectedSetIndex) && dontKnowWords.get(selectedSetIndex)!.length > 0 && (
+                     <button onClick={startDontKnowSession} className="mt-6 px-5 py-2.5 bg-amber-600 hover:bg-amber-700 rounded-lg font-semibold transition-colors flex items-center gap-2 mx-auto">
+                        <Repeat size={18} />
+                        Review {dontKnowWords.get(selectedSetIndex)?.length} Mistake(s)
+                    </button>
+                )}
+            </div>
+        );
     };
 
     if (!loadedDictionary) {
@@ -388,37 +429,7 @@ const App: React.FC = () => {
 
                 <SetSelector sets={loadedDictionary.sets} selectedSetIndex={selectedSetIndex} onSelectSet={handleSelectSet} />
                 
-                {isProgressLoading ? (
-                     <div className="w-full aspect-[3/2] flex justify-center items-center text-slate-400">
-                        <Loader2 className="animate-spin h-8 w-8 mr-3" />
-                        <span>Loading progress...</span>
-                    </div>
-                ) : reviewWords.length > 0 ? (
-                    <div className="w-full flex flex-col items-center">
-                         <div className="w-full text-center mb-2">
-                             <p className="text-slate-400">{isDontKnowMode ? "Reviewing Mistakes" : "Learning"}: {sessionProgress} / {sessionTotal}</p>
-                        </div>
-                        <ProgressBar current={sessionProgress} total={sessionTotal} />
-                        <div className={`w-full transition-opacity duration-200 ${isChangingWord ? 'opacity-0' : 'opacity-100'}`}>
-                            <Flashcard word={currentWord} isFlipped={isFlipped} onFlip={handleFlip} exampleSentence={exampleSentence} isChanging={isChangingWord} />
-                        </div>
-                        <div className="flex justify-center gap-4 mt-6 w-full">
-                            <button onClick={handleDontKnow} disabled={isProgressLoading || isChangingWord} className="w-full py-3 text-lg font-semibold bg-rose-600 hover:bg-rose-700 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-wait">Don't know</button>
-                            <button onClick={handleKnow} disabled={isProgressLoading || isChangingWord} className="w-full py-3 text-lg font-semibold bg-emerald-600 hover:bg-emerald-700 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-wait">Know</button>
-                        </div>
-                    </div>
-                ) : (
-                    <div className="text-center my-16">
-                        <h2 className="text-2xl font-semibold mb-4 text-slate-300">Session Complete!</h2>
-                        <p className="text-slate-400">You've reviewed all available cards for this set.</p>
-                        {selectedSetIndex !== null && dontKnowWords.get(selectedSetIndex) && dontKnowWords.get(selectedSetIndex)!.length > 0 && (
-                             <button onClick={startDontKnowSession} className="mt-6 px-5 py-2.5 bg-amber-600 hover:bg-amber-700 rounded-lg font-semibold transition-colors flex items-center gap-2 mx-auto">
-                                <Repeat size={18} />
-                                Review {dontKnowWords.get(selectedSetIndex)?.length} Mistake(s)
-                            </button>
-                        )}
-                    </div>
-                )}
+                {renderContent()}
                 
                 <div className="w-full mt-8 p-3 bg-slate-800/50 rounded-lg">
                     <SentenceUpload onSentencesLoaded={(newMap) => setSentences(prev => new Map([...prev, ...newMap]))} onClearSentences={() => setSentences(new Map())} hasSentences={sentences.size > 0}/>
