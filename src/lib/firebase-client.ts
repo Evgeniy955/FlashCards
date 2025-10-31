@@ -1,4 +1,5 @@
-// Fix: Correctly import `initializeApp` as a named export to align with the Firebase v9+ modular SDK.
+
+// Ensured import for Firebase v9+ SDK.
 import { initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';

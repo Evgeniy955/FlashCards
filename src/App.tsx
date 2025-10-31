@@ -381,10 +381,23 @@ const App: React.FC = () => {
         }
 
         if (reviewWords.length > 0 && currentWord) {
+            const counterText = isDontKnowMode
+                ? `${sessionProgress} / ${sessionTotal}`
+                : (staticCardNumber > 0 ? `${staticCardNumber} / ${staticTotalCards}` : '...');
+
             return (
                 <div className="w-full flex flex-col items-center">
-                    <div className="w-full text-center mb-2">
-                        <p className="text-slate-400">{staticCardNumber > 0 ? `${staticCardNumber} / ${staticTotalCards}` : '...'}</p>
+                    <div className="w-full flex items-center justify-center gap-3 h-8 mb-2">
+                        {isDontKnowMode ? (
+                            <>
+                                <span className="text-xs font-semibold uppercase text-amber-400 bg-amber-900/50 px-2 py-1 rounded">
+                                    Training Mode
+                                </span>
+                                <p className="text-slate-400">{counterText}</p>
+                            </>
+                        ) : (
+                            <p className="text-slate-400">{counterText}</p>
+                        )}
                     </div>
                     <ProgressBar current={sessionProgress} total={sessionTotal} />
                     <div className={`w-full transition-opacity duration-200 ${isChangingWord ? 'opacity-0' : 'opacity-100'}`}>
