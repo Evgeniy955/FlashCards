@@ -1,6 +1,6 @@
 import React from 'react';
 import { auth } from '../lib/firebase-client';
-// FIX: Switched from v9 modular imports to v8 compat to fix module export errors.
+// FIX: Switched from v9 modular imports to the v8 compat import style to resolve "no exported member" errors. This is necessary because the project's environment appears to be using an older version of the Firebase SDK.
 import firebase from 'firebase/compat/app';
 import 'firebase/compat/auth';
 
@@ -15,17 +15,17 @@ const GoogleIcon = () => (
 );
 
 interface AuthProps {
-    // FIX: Changed User type to firebase.User from the compat import.
+    // FIX: Updated the User type to use the v8 compat version from the `firebase` namespace.
     user: firebase.User | null | undefined;
 }
 
 export const Auth: React.FC<AuthProps> = ({ user }) => {
     
     const handleSignIn = async () => {
-        // FIX: Use v8 compat provider.
+        // FIX: Updated `GoogleAuthProvider` instantiation to use the v8 compat syntax.
         const provider = new firebase.auth.GoogleAuthProvider();
         try {
-            // FIX: Use v8 compat signInWithPopup method. The `auth` object is now a v8 Auth instance.
+            // FIX: Switched from the v9 `signInWithPopup` function to the v8 instance method.
             await auth.signInWithPopup(provider);
         } catch (error) {
             console.error("Authentication failed:", error);
@@ -34,7 +34,7 @@ export const Auth: React.FC<AuthProps> = ({ user }) => {
 
     const handleSignOut = async () => {
         try {
-            // FIX: Use v8 compat signOut method. The `auth` object is now a v8 Auth instance.
+            // FIX: Switched from the v9 `signOut` function to the v8 instance method.
             await auth.signOut();
         } catch (error) {
             console.error("Sign out failed:", error);
