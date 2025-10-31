@@ -222,6 +222,16 @@ const App: React.FC = () => {
     const exampleSentence = useMemo(() => currentWord ? sentences.get(currentWord.en.toLowerCase()) : undefined, [currentWord, sentences]);
     const totalLearnedCount = useMemo(() => learnedWords.size, [learnedWords]);
 
+    const staticCardNumber = useMemo(() => {
+        if (!currentSet || !currentWord) return 0;
+        // findIndex is 0-based, so we add 1 for a 1-based display
+        return currentSet.words.findIndex(word => word.en === currentWord.en) + 1;
+    }, [currentSet, currentWord]);
+
+    const staticTotalCards = useMemo(() => {
+        return currentSet ? currentSet.words.length : 0;
+    }, [currentSet]);
+
     const learnedWordsWithDetails = useMemo(() => {
         if (!loadedDictionary) return [];
         const allWords = new Map<string, Word>();
@@ -270,7 +280,8 @@ const App: React.FC = () => {
             setLearnedWords(prev => new Map(prev).set(currentWord!.en, { srsStage: nextStage, nextReviewDate: nextReviewDate.toISOString() }));
             
             if (isDontKnowMode && selectedSetIndex !== null) {
-                setDontKnowWords((prev) => {
+// Fix: Explicitly type `prev` to resolve TS errors with `.filter`
+                setDontKnowWords((prev: Map<number, Word[]>) => {
                     const newMap = new Map(prev);
                     const words = newMap.get(selectedSetIndex)?.filter(w => w.en !== currentWord!.en) || [];
                     if (words.length > 0) newMap.set(selectedSetIndex, words);
@@ -294,7 +305,8 @@ const App: React.FC = () => {
                 });
             }
             if (!isDontKnowMode) {
-                setDontKnowWords((prev) => {
+// Fix: Explicitly type `prev` to resolve TS errors with `.some` and spread operator
+                setDontKnowWords((prev: Map<number, Word[]>) => {
                     const newMap = new Map(prev);
                     const currentList = newMap.get(selectedSetIndex) || [];
                     if (!currentList.some(w => w.en === currentWord!.en)) {
@@ -356,7 +368,7 @@ const App: React.FC = () => {
             return (
                 <div className="w-full flex flex-col items-center">
                     <div className="w-full text-center mb-2">
-                        <p className="text-slate-400">{sessionProgress} / {sessionTotal}</p>
+                        <p className="text-slate-400">{staticCardNumber > 0 ? `${staticCardNumber} / ${staticTotalCards}` : '...'}</p>
                     </div>
                     <ProgressBar current={sessionProgress} total={sessionTotal} />
                     <div className={`w-full transition-opacity duration-200 ${isChangingWord ? 'opacity-0' : 'opacity-100'}`}>
