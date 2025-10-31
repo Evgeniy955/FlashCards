@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useAuthState } from 'react-firebase-hooks/auth';
 import { auth, db } from './lib/firebase-client';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+// Fix: Use '-exp' suffix for firestore import to match the Firebase SDK version being used.
+import { doc, getDoc, setDoc } from 'firebase/firestore-exp';
 import { Flashcard } from './components/Flashcard';
 import { ProgressBar } from './components/ProgressBar';
 import { SetSelector } from './components/SetSelector';
@@ -390,13 +391,13 @@ const App: React.FC = () => {
                     <div className="w-full flex items-center justify-center gap-3 h-8 mb-2">
                         {isDontKnowMode ? (
                             <>
-                                <span className="text-xs font-semibold uppercase text-amber-400 bg-amber-900/50 px-2 py-1 rounded">
+                                <span className="text-sm font-semibold uppercase text-amber-400 bg-amber-900/50 px-3 py-1.5 rounded-md">
                                     Training Mode
                                 </span>
-                                <p className="text-slate-400">{counterText}</p>
+                                <p className="text-slate-400 text-sm">{counterText}</p>
                             </>
                         ) : (
-                            <p className="text-slate-400">{counterText}</p>
+                            <p className="text-slate-400 text-sm">{counterText}</p>
                         )}
                     </div>
                     <ProgressBar current={sessionProgress} total={sessionTotal} />
