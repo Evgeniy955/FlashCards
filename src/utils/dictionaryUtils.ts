@@ -19,10 +19,12 @@ const extractWordsFromColumns = (jsonData: (string | null)[][], ruCol: number, e
     return words;
 };
 
-const splitIntoSubsets = (words: Word[], baseSetName: string, originalSetIndex: number): WordSet[] => {
+const splitIntoSubsets = (words: Word[], baseSetName: string, originalSetIndex: number, originalJsonData: (string | null)[][]): WordSet[] => {
     if (words.length <= MAX_SET_SIZE) {
-        // If there's only one set and it's small, don't add a range to the name.
-        if (words.length < MAX_SET_SIZE && words.length === jsonData.filter(row => row?.[originalSetIndex * 4] && row?.[originalSetIndex * 4 + 2]).length) {
+        // Count non-empty rows for the current set in the original data
+        const originalSetWordCount = originalJsonData.filter(row => row?.[originalSetIndex * 4] && row?.[originalSetIndex * 4 + 2]).length;
+        // If there's only one set, it's small, and it matches the original count, don't add a range to the name.
+        if (words.length < MAX_SET_SIZE && words.length === originalSetWordCount) {
              return [{ name: baseSetName, words, originalSetIndex }];
         }
     }
@@ -45,9 +47,6 @@ const splitIntoSubsets = (words: Word[], baseSetName: string, originalSetIndex: 
     return subsets;
 };
 
-
-let jsonData: (string | null)[][] = [];
-
 export const parseDictionaryFile = async (file: File): Promise<LoadedDictionary> => {
     try {
         const buffer = await file.arrayBuffer();
@@ -55,7 +54,7 @@ export const parseDictionaryFile = async (file: File): Promise<LoadedDictionary>
         const workbook = XLSX.read(data, { type: 'array' });
         const sheetName = workbook.SheetNames[0];
         const worksheet = workbook.Sheets[sheetName];
-        jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+        const jsonData: (string | null)[][] = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
 
         if (!jsonData || jsonData.length === 0) {
             throw new Error("The file is empty or in an incorrect format.");
@@ -70,7 +69,7 @@ export const parseDictionaryFile = async (file: File): Promise<LoadedDictionary>
 
             if (words.length > 0) {
                 const baseSetName = `Set ${originalSetIndexCounter + 1}`;
-                const subsets = splitIntoSubsets(words, baseSetName, originalSetIndexCounter);
+                const subsets = splitIntoSubsets(words, baseSetName, originalSetIndexCounter, jsonData);
                 allSets.push(...subsets);
                 originalSetIndexCounter++;
             }
