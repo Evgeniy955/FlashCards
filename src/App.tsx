@@ -41,23 +41,66 @@ const App: React.FC = () => {
     const [isLearnedWordsModalOpen, setLearnedWordsModalOpen] = useState(false);
 
     const dictionaryId = useMemo(() => loadedDictionary?.name.replace(/[\/.]/g, '_'), [loadedDictionary]);
+    
+    // Load global sentences from Firestore user document
+    useEffect(() => {
+        const loadGlobalSentences = async () => {
+            if (!user) {
+                setSentences(new Map());
+                return;
+            }
+            const userDocRef = db.collection('users').doc(user.uid);
+            try {
+                const docSnap = await userDocRef.get();
+                if (docSnap.exists) {
+                    const data = docSnap.data();
+                    if (data && data.globalSentences) {
+                        setSentences(new Map(Object.entries(data.globalSentences)));
+                    } else {
+                        // If the field doesn't exist, start fresh
+                        setSentences(new Map());
+                    }
+                }
+            } catch (error) {
+                console.error("Error loading global sentences:", error);
+                setSentences(new Map());
+            }
+        };
+        loadGlobalSentences();
+    }, [user]);
 
-    // Load progress from Firestore
+    // Save global sentences to Firestore user document
+    useEffect(() => {
+        if (!user) return; // Don't save if not logged in
+
+        const handler = setTimeout(async () => {
+            const userDocRef = db.collection('users').doc(user.uid);
+            try {
+                await userDocRef.set({
+                    globalSentences: Object.fromEntries(sentences)
+                }, { merge: true });
+            } catch (error) {
+                console.error("Error saving global sentences:", error);
+            }
+        }, 1500); // Debounce saves
+
+        return () => clearTimeout(handler);
+    }, [sentences, user]);
+
+
+    // Load DICTIONARY-SPECIFIC progress from Firestore
     useEffect(() => {
         const loadProgress = async () => {
             if (!user || !dictionaryId) {
                 setLearnedWords(new Map());
                 setDontKnowWords(new Map());
-                setSentences(new Map());
                 setIsProgressLoading(false);
                 return;
             }
 
             setIsProgressLoading(true);
-            // FIX: Updated Firestore document reference to use the v8 compatibility syntax.
             const docRef = db.collection('users').doc(user.uid).collection('progress').doc(dictionaryId);
             try {
-                // FIX: Updated Firestore `getDoc` call to the v8 `get()` method.
                 const docSnap = await docRef.get();
                 if (docSnap.exists) {
                     const data = docSnap.data()!;
@@ -69,22 +112,14 @@ const App: React.FC = () => {
                         ])
                     );
                     setDontKnowWords(dontKnowMap);
-                    
-                    // Only load sentences from DB if they haven't just been set from a file.
-                    // `sentences.size === 0` is a good indicator for this condition upon dictionary switch.
-                    if (sentences.size === 0 && data.sentences) {
-                        setSentences(new Map(Object.entries(data.sentences)));
-                    }
                 } else {
-                    // If no document exists, reset progress but respect sentences possibly set from a file.
                     setLearnedWords(new Map());
                     setDontKnowWords(new Map());
                 }
             } catch (error) {
-                console.error("Error loading progress from Firestore:", error);
+                console.error("Error loading dictionary progress from Firestore:", error);
                 setLearnedWords(new Map());
                 setDontKnowWords(new Map());
-                setSentences(new Map());
             } finally {
                 setIsProgressLoading(false);
             }
@@ -93,33 +128,28 @@ const App: React.FC = () => {
         loadProgress();
     }, [user, dictionaryId]);
 
-    // Save progress to Firestore
+    // Save DICTIONARY-SPECIFIC progress to Firestore
     useEffect(() => {
-        // Do not save while loading, or if not logged in/no dictionary
         if (isProgressLoading || !user || !dictionaryId) {
             return;
         }
 
         const handler = setTimeout(async () => {
-            // FIX: Updated Firestore document reference to use the v8 compatibility syntax.
             const docRef = db.collection('users').doc(user.uid).collection('progress').doc(dictionaryId);
             const dataToSave = {
                 learnedWords: Object.fromEntries(learnedWords),
                 dontKnowWords: Object.fromEntries(dontKnowWords),
-                sentences: Object.fromEntries(sentences),
+                // Sentences are no longer saved per dictionary
             };
             try {
-                // FIX: Updated Firestore `setDoc` call to the v8 `set()` method.
                 await docRef.set(dataToSave, { merge: true });
             } catch (error) {
-                console.error("Error saving progress to Firestore:", error);
+                console.error("Error saving dictionary progress to Firestore:", error);
             }
-        }, 1500); // Debounce saves to reduce Firestore writes
+        }, 1500); // Debounce saves
 
-        return () => {
-            clearTimeout(handler);
-        };
-    }, [learnedWords, dontKnowWords, sentences, user, dictionaryId, isProgressLoading]);
+        return () => clearTimeout(handler);
+    }, [learnedWords, dontKnowWords, user, dictionaryId, isProgressLoading]);
 
 
     const startReviewSession = useCallback((setIndex: number) => {
@@ -145,7 +175,7 @@ const App: React.FC = () => {
     const handleFilesSelect = async (name: string, wordsFile: File, sentencesFile?: File) => {
         setIsLoading(true);
         try {
-            // First, parse the optional sentences file to have it ready.
+            // First, parse the optional sentences file to have it ready for merging.
             let sentenceMapFromFile: Map<string, string> | null = null;
             if (sentencesFile) {
                 const text = await sentencesFile.text();
@@ -158,14 +188,15 @@ const App: React.FC = () => {
                 }
             }
 
-            // Clear previous progress states before loading the new dictionary.
-            // This prevents old data from appearing while new data loads.
+            // Clear previous dictionary-specific progress states.
             setLearnedWords(new Map());
             setDontKnowWords(new Map());
-            // Prioritize sentences from the file; otherwise, clear them to allow Firestore to populate.
-            setSentences(sentenceMapFromFile || new Map());
+            // Merge sentences from the file into the global sentence state.
+            if (sentenceMapFromFile) {
+                setSentences(prev => new Map([...prev, ...sentenceMapFromFile!]));
+            }
 
-            // Now, parse and set the dictionary. This will trigger the useEffect to load progress from DB.
+            // Now, parse and set the new dictionary. This will trigger the progress loading useEffect.
             const dictionary = await parseDictionaryFile(wordsFile);
             dictionary.name = name; 
             setLoadedDictionary(dictionary);
@@ -269,11 +300,10 @@ const App: React.FC = () => {
     };
 
     const handleResetProgress = () => {
-        if (window.confirm('Are you sure you want to reset all progress for this dictionary? This action cannot be undone.')) {
+        if (window.confirm('Are you sure you want to reset learning progress for this dictionary? Your global sentence list will not be affected.')) {
             setLearnedWords(new Map());
             setDontKnowWords(new Map());
-            setSentences(new Map());
-            // The save effect will trigger and clear the data in Firestore.
+            // The save effect for progress will trigger and clear the data in Firestore.
             if (selectedSetIndex !== null) startReviewSession(selectedSetIndex);
         }
     };
@@ -360,7 +390,7 @@ const App: React.FC = () => {
                 )}
                 
                 <div className="w-full mt-8 p-3 bg-slate-800/50 rounded-lg">
-                    <SentenceUpload onSentencesLoaded={setSentences} onClearSentences={() => setSentences(new Map())} hasSentences={sentences.size > 0}/>
+                    <SentenceUpload onSentencesLoaded={(newMap) => setSentences(prev => new Map([...prev, ...newMap]))} onClearSentences={() => setSentences(new Map())} hasSentences={sentences.size > 0}/>
                 </div>
 
                 {currentSet && (
