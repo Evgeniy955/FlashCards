@@ -7,10 +7,10 @@ interface FlashcardProps {
   isFlipped: boolean;
   onFlip: () => void;
   exampleSentence?: string;
-  isTransitioning?: boolean;
+  isChanging?: boolean;
 }
 
-export const Flashcard: React.FC<FlashcardProps> = ({ word, isFlipped, onFlip, exampleSentence, isTransitioning }) => {
+export const Flashcard: React.FC<FlashcardProps> = ({ word, isFlipped, onFlip, exampleSentence, isChanging }) => {
   
   const handlePlayAudioSequence = (e: React.MouseEvent) => {
     e.stopPropagation(); // Prevent card from flipping when clicking the button
@@ -42,9 +42,9 @@ export const Flashcard: React.FC<FlashcardProps> = ({ word, isFlipped, onFlip, e
     window.speechSynthesis.speak(wordUtterance);
   };
 
-  const handleFlipWithTransitionCheck = () => {
-    // Prevent card from flipping while the "Know" button transition is active.
-    if (!isTransitioning) {
+  const handleFlipDuringChange = () => {
+    // Prevent card from flipping while the word is changing via Know/Don't Know buttons.
+    if (!isChanging) {
       onFlip();
     }
   };
@@ -54,11 +54,11 @@ export const Flashcard: React.FC<FlashcardProps> = ({ word, isFlipped, onFlip, e
     <div 
         className="w-full aspect-[3/2] cursor-pointer group" 
         style={{ perspective: '1000px' }}
-        onClick={handleFlipWithTransitionCheck}
+        onClick={handleFlipDuringChange}
         role="button"
         tabIndex={0}
         aria-label={`Flashcard for ${word.ru}. Click to flip.`}
-        onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && handleFlipWithTransitionCheck()}
+        onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && handleFlipDuringChange()}
     >
       {/* The inner container that flips */}
       <div 
@@ -71,7 +71,6 @@ export const Flashcard: React.FC<FlashcardProps> = ({ word, isFlipped, onFlip, e
             style={{ backfaceVisibility: 'hidden', WebkitBackfaceVisibility: 'hidden' }}
         >
           <span className="text-4xl sm:text-5xl font-bold text-white">{word.ru}</span>
-          {/* Russian audio button has been removed as requested */}
         </div>
 
         {/* Back of the card (English) */}
@@ -79,8 +78,7 @@ export const Flashcard: React.FC<FlashcardProps> = ({ word, isFlipped, onFlip, e
             className="absolute w-full h-full bg-indigo-700 rounded-2xl shadow-xl flex flex-col justify-center items-center p-6 text-center"
             style={{ backfaceVisibility: 'hidden', WebkitBackfaceVisibility: 'hidden', transform: 'rotateY(180deg)' }}
         >
-          {/* The CSS transition for blur has been removed to make it appear instantly. */}
-          <div className={isTransitioning ? 'blur-md' : ''}>
+          <div>
             <span className="text-4xl sm:text-5xl font-bold text-white">{word.en}</span>
             {exampleSentence && (
               <p className="text-indigo-200 mt-4 text-sm sm:text-base italic">"{exampleSentence}"</p>

@@ -35,7 +35,7 @@ const App: React.FC = () => {
     const [isProgressLoading, setIsProgressLoading] = useState(true); // For Firestore, start as true
     const [isWordListVisible, setIsWordListVisible] = useState(false);
     const [isDontKnowMode, setIsDontKnowMode] = useState(false);
-    const [isTransitioning, setIsTransitioning] = useState(false); // For know/dont-know animation
+    const [isChangingWord, setIsChangingWord] = useState(false); // For fade animation
     
     const [isFileSourceModalOpen, setFileSourceModalOpen] = useState(true);
     const [isInstructionsModalOpen, setInstructionsModalOpen] = useState(false);
@@ -241,7 +241,7 @@ const App: React.FC = () => {
     };
 
     const handleKnow = () => {
-        if (!currentWord || isTransitioning) return;
+        if (!currentWord || isChangingWord) return;
 
         const progress = learnedWords.get(currentWord.en);
         const currentStage = progress ? progress.srsStage : -1;
@@ -260,22 +260,18 @@ const App: React.FC = () => {
             });
         }
         
-        setIsTransitioning(true); // 1. Start transition (blur), disable buttons.
+        setIsChangingWord(true); // 1. Start transition (fade out).
         
-        // 2. Wait 400ms (user sees blur)
+        // 2. Wait for fade out to finish, then update.
         setTimeout(() => {
-            setIsFlipped(false); // 3. Start flipping card back (500ms animation)
-
-            // 4. Halfway through the flip, when content is hidden, change the word.
-            setTimeout(() => {
-                updateWordIndex();
-                setIsTransitioning(false); // 5. End transition, enable buttons for the new card.
-            }, 250); // Half of 500ms animation duration.
-        }, 400);
+            updateWordIndex();      // 3a. Change the word.
+            setIsFlipped(false);    // 3b. Flip back to the front.
+            setIsChangingWord(false); // 3c. End transition (fade in).
+        }, 250); // This duration should match the CSS transition.
     };
 
     const handleDontKnow = () => {
-        if (!currentWord || selectedSetIndex === null || isTransitioning) return;
+        if (!currentWord || selectedSetIndex === null || isChangingWord) return;
 
         if (learnedWords.has(currentWord.en)) {
             setLearnedWords(prev => {
@@ -295,14 +291,14 @@ const App: React.FC = () => {
             });
         }
         
-        setIsTransitioning(true); // 1. Start transition (disable buttons)
-        setIsFlipped(false); // 2. Start flipping card back (500ms animation)
-
-        // 3. Halfway through the flip, change the word.
+        setIsChangingWord(true); // 1. Start transition (fade out).
+        
+        // 2. Wait for fade out to finish, then update.
         setTimeout(() => {
-            updateWordIndex();
-            setIsTransitioning(false); // 4. End transition.
-        }, 250);
+            updateWordIndex();      // 3a. Change the word.
+            setIsFlipped(false);    // 3b. Flip back to the front.
+            setIsChangingWord(false); // 3c. End transition (fade in).
+        }, 250); // This duration should match the CSS transition.
     };
 
     const handleFlip = () => setIsFlipped(prev => !prev);
@@ -402,10 +398,12 @@ const App: React.FC = () => {
                              <p className="text-slate-400">{isDontKnowMode ? "Reviewing Mistakes" : "Learning"}: {currentWordIndex + 1} / {reviewWords.length}</p>
                         </div>
                         <ProgressBar current={currentWordIndex + 1} total={reviewWords.length} />
-                        <Flashcard word={currentWord} isFlipped={isFlipped} onFlip={handleFlip} exampleSentence={exampleSentence} isTransitioning={isTransitioning} />
+                        <div className={`w-full transition-opacity duration-200 ${isChangingWord ? 'opacity-0' : 'opacity-100'}`}>
+                            <Flashcard word={currentWord} isFlipped={isFlipped} onFlip={handleFlip} exampleSentence={exampleSentence} isChanging={isChangingWord} />
+                        </div>
                         <div className="flex justify-center gap-4 mt-6 w-full">
-                            <button onClick={handleDontKnow} disabled={isProgressLoading || isTransitioning} className="w-full py-3 text-lg font-semibold bg-rose-600 hover:bg-rose-700 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-wait">Don't know</button>
-                            <button onClick={handleKnow} disabled={isProgressLoading || isTransitioning} className="w-full py-3 text-lg font-semibold bg-emerald-600 hover:bg-emerald-700 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-wait">Know</button>
+                            <button onClick={handleDontKnow} disabled={isProgressLoading || isChangingWord} className="w-full py-3 text-lg font-semibold bg-rose-600 hover:bg-rose-700 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-wait">Don't know</button>
+                            <button onClick={handleKnow} disabled={isProgressLoading || isChangingWord} className="w-full py-3 text-lg font-semibold bg-emerald-600 hover:bg-emerald-700 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-wait">Know</button>
                         </div>
                     </div>
                 ) : (

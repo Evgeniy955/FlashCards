@@ -1,14 +1,14 @@
-// FIX: Switched to named imports for Firebase modules to align with the v9+ modular SDK and resolve "property does not exist on type" errors.
-import { initializeApp } from 'firebase/app';
-import { getAuth } from 'firebase/auth';
-import { getFirestore } from 'firebase/firestore';
+// FIX: Switched to legacy Firebase v8 syntax to resolve module import errors.
+import firebase from 'firebase/app';
+import 'firebase/auth';
+import 'firebase/firestore';
 import { firebaseConfig } from '../firebase-config';
 
-// Initialize Firebase using the v9+ modular approach
-const app = initializeApp(firebaseConfig);
+// Initialize Firebase
+const app = firebase.initializeApp(firebaseConfig);
 
 // Get auth and firestore instances
-const auth = getAuth(app);
-const db = getFirestore(app);
+const auth = firebase.auth();
+const db = firebase.firestore();
 
 export { app, auth, db };
