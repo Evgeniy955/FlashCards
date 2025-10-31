@@ -11,8 +11,6 @@ declare global {
   }
 }
 
-import { initializeApp, getApp, getApps } from 'firebase/app';
-
 // This configuration securely loads your credentials from environment variables.
 // Ensure these variables are set in your Vercel project settings.
 export const firebaseConfig = {
@@ -25,8 +23,3 @@ export const firebaseConfig = {
   appId: import.meta.env.VITE_FIREBASE_APP_ID,
   measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID
 };
-
-// Initialize Firebase
-const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
-
-export default app;

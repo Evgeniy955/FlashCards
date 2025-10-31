@@ -1,37 +1,29 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { authAdmin, db } from '../../lib/firebase-admin';
+import { db } from '../_lib/firebase-admin';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'GET') {
-    return res.status(405).send('Method Not Allowed');
+    res.setHeader('Allow', ['GET']);
+    return res.status(405).json({ error: 'Method Not Allowed' });
+  }
+
+  const { userId, dictionaryId } = req.query;
+
+  if (!userId || typeof userId !== 'string' || !dictionaryId || typeof dictionaryId !== 'string') {
+    return res.status(400).json({ error: 'Missing or invalid query parameters: userId, dictionaryId' });
   }
 
   try {
-    const token = req.headers.authorization?.split('Bearer ')[1];
-    if (!token) {
-      return res.status(401).send('Authentication required.');
+    const docRef = db.collection('users').doc(userId).collection('progress').doc(dictionaryId);
+    const docSnap = await docRef.get();
+
+    if (docSnap.exists) {
+      res.status(200).json(docSnap.data());
+    } else {
+      res.status(404).json({ message: 'No progress found' });
     }
-    const decodedToken = await authAdmin.verifyIdToken(token);
-    const userId = decodedToken.uid;
-
-    const snapshot = await db.collection('userProgress').doc(userId).collection('progress').get();
-    
-    if (snapshot.empty) {
-      return res.status(200).json({});
-    }
-
-    const progressData: { [key: string]: any } = {};
-    snapshot.forEach(doc => {
-      progressData[doc.id] = doc.data();
-    });
-
-    return res.status(200).json(progressData);
-
   } catch (error) {
     console.error('Error fetching progress:', error);
-    if (error.code === 'auth/id-token-expired') {
-        return res.status(401).send('Token expired.');
-    }
-    return res.status(500).send('Internal Server Error');
+    res.status(500).json({ error: 'Failed to fetch progress' });
   }
 }
