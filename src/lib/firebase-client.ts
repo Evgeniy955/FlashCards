@@ -1,14 +1,13 @@
-// FIX: The `import { initializeApp }` was causing a "no exported member" error.
-// This is likely due to a misconfiguration in the project's TypeScript or module
-// resolution setup. Switching to a namespace import (`* as firebaseApp`) is a
-// robust way to access the function that can bypass such issues.
-import * as firebaseApp from 'firebase/app';
+// FIX: The import for `initializeApp` was using a namespace import (`* as firebaseApp`),
+// but `initializeApp` is a named export. The code has been updated to use a
+// named import (`{ initializeApp }`) and call the function directly.
+import { initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 import { firebaseConfig } from '../firebase-config';
 
 // Initialize Firebase
-const app = firebaseApp.initializeApp(firebaseConfig);
+const app = initializeApp(firebaseConfig);
 
 // Get auth and firestore instances
 const auth = getAuth(app);

@@ -14,6 +14,8 @@ import { Auth } from './components/Auth';
 import { Word, LoadedDictionary, WordProgress } from './types';
 import { parseDictionaryFile, shuffleArray } from './utils/dictionaryUtils';
 import { Shuffle, ChevronsUpDown, Info, BookUser, Trash2, Repeat, Library, Loader2 } from 'lucide-react';
+import { TrainingModeInput, AnswerState } from './components/TrainingModeInput';
+
 
 // --- Constants ---
 const SRS_INTERVALS = [1, 2, 4, 8, 16, 32, 64]; // in days
@@ -42,6 +44,10 @@ const App: React.FC = () => {
     const [isDontKnowMode, setIsDontKnowMode] = useState(false);
     const [isChangingWord, setIsChangingWord] = useState(false); // For fade animation
     const [isInstantChange, setIsInstantChange] = useState(false); // For instant card change
+    
+    // State for Training Mode input
+    const [userAnswer, setUserAnswer] = useState('');
+    const [answerState, setAnswerState] = useState<AnswerState>('idle');
     
     const [isFileSourceModalOpen, setFileSourceModalOpen] = useState(true);
     const [isInstructionsModalOpen, setInstructionsModalOpen] = useState(false);
@@ -339,7 +345,10 @@ const App: React.FC = () => {
         });
     };
 
-    const handleFlip = () => setIsFlipped(prev => !prev);
+    const handleFlip = () => {
+        if (isDontKnowMode && answerState !== 'idle') return; // Don't allow flipping after an answer is given
+        setIsFlipped(prev => !prev);
+    };
     
     const handleSelectSet = (index: number) => {
         if (index !== selectedSetIndex) {
@@ -354,15 +363,47 @@ const App: React.FC = () => {
         if (selectedSetIndex === null) return;
         const words = dontKnowWords.get(selectedSetIndex) || [];
         if (words.length > 0) {
-            setReviewWords(words);
+            setReviewWords(shuffleArray(words)); // Shuffle mistakes at the start of the session
             setSessionTotal(words.length);
             setSessionProgress(words.length > 0 ? 1 : 0);
             setCurrentWordIndex(0);
             setIsFlipped(false);
+            setAnswerState('idle');
+            setUserAnswer('');
             setIsDontKnowMode(true);
             setSessionActive(true);
         }
     };
+
+    const handleTrainingAnswer = () => {
+        if (!currentWord || answerState !== 'idle') return;
+
+        const isCorrect = userAnswer.trim().toLowerCase() === currentWord.en.toLowerCase();
+        
+        if (isCorrect) {
+            setAnswerState('correct');
+            // Remove from 'dontKnowWords' and add to 'learnedWords'
+            handleKnow(); // This function already handles the logic for both
+            
+            setTimeout(() => {
+                setIsFlipped(false);
+                setAnswerState('idle');
+                setUserAnswer('');
+                updateWordIndex();
+            }, 1000); // Wait 1s before moving to next word
+        } else {
+            setAnswerState('incorrect');
+            setIsFlipped(true); // Show the correct answer
+        }
+    };
+
+    const handleTrainingNext = () => {
+        setAnswerState('idle');
+        setUserAnswer('');
+        setIsFlipped(false);
+        updateWordIndex();
+    };
+
 
     const handleResetProgress = () => {
         if (globalThis.confirm('Are you sure you want to reset learning progress for this dictionary? Your global sentence list will not be affected.')) {
@@ -413,8 +454,20 @@ const App: React.FC = () => {
                         <Flashcard word={currentWord} isFlipped={isFlipped} onFlip={handleFlip} exampleSentence={exampleSentence} isChanging={isChangingWord} isInstantChange={isInstantChange} />
                     </div>
                     <div className="flex justify-center gap-4 mt-6 w-full">
-                        <button onClick={handleDontKnow} disabled={isProgressLoading || isChangingWord} className="w-full py-3 text-lg font-semibold bg-rose-600 hover:bg-rose-700 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-wait">Don't know</button>
-                        <button onClick={handleKnow} disabled={isProgressLoading || isChangingWord} className="w-full py-3 text-lg font-semibold bg-emerald-600 hover:bg-emerald-700 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-wait">Know</button>
+                        {isDontKnowMode ? (
+                            <TrainingModeInput
+                                answer={userAnswer}
+                                setAnswer={setUserAnswer}
+                                onCheck={handleTrainingAnswer}
+                                onNext={handleTrainingNext}
+                                answerState={answerState}
+                            />
+                        ) : (
+                            <>
+                                <button onClick={handleDontKnow} disabled={isProgressLoading || isChangingWord} className="w-full py-3 text-lg font-semibold bg-rose-600 hover:bg-rose-700 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-wait">Don't know</button>
+                                <button onClick={handleKnow} disabled={isProgressLoading || isChangingWord} className="w-full py-3 text-lg font-semibold bg-emerald-600 hover:bg-emerald-700 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-wait">Know</button>
+                            </>
+                        )}
                     </div>
                 </div>
             );
