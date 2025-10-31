@@ -71,7 +71,7 @@ export const Flashcard: React.FC<FlashcardProps> = ({ word, isFlipped, onFlip, e
               className="absolute w-full h-full bg-indigo-700 rounded-2xl shadow-xl flex flex-col justify-center items-center p-6 text-center"
               style={{ backfaceVisibility: 'hidden', WebkitBackfaceVisibility: 'hidden', transform: 'rotateY(180deg)' }}
           >
-            <div>
+            <div className={`transition-all duration-300 ease-in-out ${isFlipped ? 'blur-none delay-200' : 'blur-md'}`}>
               <span className="text-4xl sm:text-5xl font-bold text-white">{word.en}</span>
               {exampleSentence && (
                   <p className="text-indigo-200 mt-4 text-sm sm:text-base italic">"{exampleSentence}"</p>
