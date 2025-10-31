@@ -110,7 +110,6 @@ const App: React.FC = () => {
                 const docSnap = await getDoc(docRef);
                 if (docSnap.exists()) {
                     const data = docSnap.data();
-                    // Fix: Explicitly type data from Firestore to prevent 'unknown' type errors downstream.
                     const learnedData = (data.learnedWords || {}) as { [key: string]: WordProgress };
                     setLearnedWords(new Map(Object.entries(learnedData)));
                     
@@ -291,7 +290,6 @@ const App: React.FC = () => {
             setLearnedWords(prev => new Map(prev).set(currentWord!.en, { srsStage: nextStage, nextReviewDate: nextReviewDate.toISOString() }));
             
             if (isDontKnowMode && selectedSetIndex !== null) {
-// Fix: Explicitly type `prev` to resolve TS errors with `.filter`
                 setDontKnowWords((prev: Map<number, Word[]>) => {
                     const newMap = new Map(prev);
                     const words = newMap.get(selectedSetIndex)?.filter(w => w.en !== currentWord!.en) || [];
@@ -316,7 +314,6 @@ const App: React.FC = () => {
                 });
             }
             if (!isDontKnowMode) {
-// Fix: Explicitly type `prev` to resolve TS errors with `.some` and spread operator
                 setDontKnowWords((prev: Map<number, Word[]>) => {
                     const newMap = new Map(prev);
                     const currentList = newMap.get(selectedSetIndex) || [];
@@ -390,13 +387,13 @@ const App: React.FC = () => {
                     <div className="w-full flex items-center justify-center gap-3 h-8 mb-2">
                         {isDontKnowMode ? (
                             <>
-                                <span className="text-xs font-semibold uppercase text-amber-400 bg-amber-900/50 px-2 py-1 rounded">
+                                <span className="text-sm font-semibold uppercase text-amber-400 bg-amber-900/50 px-3 py-1.5 rounded-md">
                                     Training Mode
                                 </span>
-                                <p className="text-slate-400">{counterText}</p>
+                                <p className="text-slate-400 text-sm">{counterText}</p>
                             </>
                         ) : (
-                            <p className="text-slate-400">{counterText}</p>
+                            <p className="text-slate-400 text-sm">{counterText}</p>
                         )}
                     </div>
                     <ProgressBar current={sessionProgress} total={sessionTotal} />
