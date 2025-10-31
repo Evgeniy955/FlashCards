@@ -8,15 +8,15 @@ interface BuiltInDictionariesProps {
 // This list is configured to load the user's specific files.
 // It assumes the word files are in /dictionaries and the sentence file in /sentences
 const dictionaries = [
-    { name: 'Food', wordsPath: '/dictionaries/Food.xlsx', sentencesPath: null },
+    { name: 'Food', wordsPath: '/dictionaries/Food.xlsx', sentencesPath: '/sentences/phrases1.json' },
     { name: 'List 1', wordsPath: '/dictionaries/List1.xlsx', sentencesPath: '/sentences/phrases1.json' },
-    { name: 'List 2', wordsPath: '/dictionaries/List2.xlsx', sentencesPath: null },
-    { name: 'List 3.1', wordsPath: '/dictionaries/List3.1.xlsx', sentencesPath: null },
-    { name: 'List 4', wordsPath: '/dictionaries/List4.xlsx', sentencesPath: null },
-    { name: 'List 5', wordsPath: '/dictionaries/List5.xlsx', sentencesPath: null },
-    { name: 'List 6', wordsPath: '/dictionaries/List6.xlsx', sentencesPath: null },
-    { name: 'List 7', wordsPath: '/dictionaries/List7.xlsx', sentencesPath: null },
-    { name: 'List 8', wordsPath: '/dictionaries/List8.xlsx', sentencesPath: null },
+    { name: 'List 2', wordsPath: '/dictionaries/List2.xlsx', sentencesPath: '/sentences/phrases1.json' },
+    { name: 'List 3.1', wordsPath: '/dictionaries/List3.1.xlsx', sentencesPath: '/sentences/phrases1.json' },
+    { name: 'List 4', wordsPath: '/dictionaries/List4.xlsx', sentencesPath: '/sentences/phrases1.json' },
+    { name: 'List 5', wordsPath: '/dictionaries/List5.xlsx', sentencesPath: '/sentences/phrases1.json' },
+    { name: 'List 6', wordsPath: '/dictionaries/List6.xlsx', sentencesPath: '/sentences/phrases1.json' },
+    { name: 'List 7', wordsPath: '/dictionaries/List7.xlsx', sentencesPath: '/sentences/phrases1.json' },
+    { name: 'List 8', wordsPath: '/dictionaries/List8.xlsx', sentencesPath: '/sentences/phrases1.json' },
 ];
 
 export const BuiltInDictionaries: React.FC<BuiltInDictionariesProps> = ({ onSelect }) => {
