@@ -41,6 +41,7 @@ const App: React.FC = () => {
     const [isWordListVisible, setIsWordListVisible] = useState(false);
     const [isDontKnowMode, setIsDontKnowMode] = useState(false);
     const [isChangingWord, setIsChangingWord] = useState(false); // For fade animation
+    const [isInstantChange, setIsInstantChange] = useState(false); // For instant card change
     
     const [isFileSourceModalOpen, setFileSourceModalOpen] = useState(true);
     const [isInstructionsModalOpen, setInstructionsModalOpen] = useState(false);
@@ -269,12 +270,18 @@ const App: React.FC = () => {
     }, [learnedWords, loadedDictionary]);
     
     const advanceToNextWord = (updateLogic: () => boolean, instant = false) => {
-        if (!currentWord || isChangingWord) return;
+        if (!currentWord || isChangingWord || isInstantChange) return;
         if (!updateLogic()) return;
         
         if (instant) {
+            setIsInstantChange(true);
             setIsFlipped(false);
             updateWordIndex();
+            
+            // Use rAF to ensure the DOM update (without transition) happens before re-enabling it.
+            requestAnimationFrame(() => {
+                setIsInstantChange(false);
+            });
         } else {
             setIsChangingWord(true);
             setTimeout(() => {
@@ -403,7 +410,7 @@ const App: React.FC = () => {
                     </div>
                     <ProgressBar current={sessionProgress} total={sessionTotal} />
                     <div className={`w-full transition-opacity duration-200 ${isChangingWord ? 'opacity-0' : 'opacity-100'}`}>
-                        <Flashcard word={currentWord} isFlipped={isFlipped} onFlip={handleFlip} exampleSentence={exampleSentence} isChanging={isChangingWord} />
+                        <Flashcard word={currentWord} isFlipped={isFlipped} onFlip={handleFlip} exampleSentence={exampleSentence} isChanging={isChangingWord} isInstantChange={isInstantChange} />
                     </div>
                     <div className="flex justify-center gap-4 mt-6 w-full">
                         <button onClick={handleDontKnow} disabled={isProgressLoading || isChangingWord} className="w-full py-3 text-lg font-semibold bg-rose-600 hover:bg-rose-700 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-wait">Don't know</button>

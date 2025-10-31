@@ -1,12 +1,14 @@
-// FIX: The namespace import `* as firebaseApp` was incorrect and caused a type error.
-// Switched to a named import for `initializeApp` as is standard for the Firebase v9+ modular SDK.
-import { initializeApp } from 'firebase/app';
+// FIX: The `import { initializeApp }` was causing a "no exported member" error.
+// This is likely due to a misconfiguration in the project's TypeScript or module
+// resolution setup. Switching to a namespace import (`* as firebaseApp`) is a
+// robust way to access the function that can bypass such issues.
+import * as firebaseApp from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 import { firebaseConfig } from '../firebase-config';
 
 // Initialize Firebase
-const app = initializeApp(firebaseConfig);
+const app = firebaseApp.initializeApp(firebaseConfig);
 
 // Get auth and firestore instances
 const auth = getAuth(app);
