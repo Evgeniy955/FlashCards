@@ -161,7 +161,7 @@ const App: React.FC = () => {
             const progress = learnedWords.get(word.en);
             return !progress || progress.nextReviewDate <= now;
         });
-        setReviewWords(shuffleArray(wordsForReview));
+        setReviewWords(wordsForReview); // Removed automatic shuffle
         setCurrentWordIndex(0);
         setIsFlipped(false);
         setIsDontKnowMode(false);
@@ -320,7 +320,7 @@ const App: React.FC = () => {
         if (selectedSetIndex === null) return;
         const words = dontKnowWords.get(selectedSetIndex) || [];
         if (words.length > 0) {
-            setReviewWords(shuffleArray(words));
+            setReviewWords(words); // Removed automatic shuffle
             setCurrentWordIndex(0);
             setIsFlipped(false);
             setIsDontKnowMode(true);
