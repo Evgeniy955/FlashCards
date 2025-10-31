@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useAuthState } from 'react-firebase-hooks/auth';
 import { auth, db } from './lib/firebase-client';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+// FIX: Removed unused v9 firestore imports. The logic is updated to use the v8 compat API provided by the `db` object.
 import { Flashcard } from './components/Flashcard';
 import { ProgressBar } from './components/ProgressBar';
 import { SetSelector } from './components/SetSelector';
@@ -32,7 +32,7 @@ const App: React.FC = () => {
     const [sentences, setSentences] = useState<Map<string, string>>(new Map());
 
     const [isLoading, setIsLoading] = useState(false); // For file parsing
-    const [isProgressLoading, setIsProgressLoading] = useState(false); // For Firestore
+    const [isProgressLoading, setIsProgressLoading] = useState(true); // For Firestore, start as true
     const [isWordListVisible, setIsWordListVisible] = useState(false);
     const [isDontKnowMode, setIsDontKnowMode] = useState(false);
     
@@ -49,15 +49,18 @@ const App: React.FC = () => {
                 setLearnedWords(new Map());
                 setDontKnowWords(new Map());
                 setSentences(new Map());
+                setIsProgressLoading(false);
                 return;
             }
 
             setIsProgressLoading(true);
-            const docRef = doc(db, 'users', user.uid, 'progress', dictionaryId);
+            // FIX: Updated Firestore document reference to use the v8 compatibility syntax.
+            const docRef = db.collection('users').doc(user.uid).collection('progress').doc(dictionaryId);
             try {
-                const docSnap = await getDoc(docRef);
-                if (docSnap.exists()) {
-                    const data = docSnap.data();
+                // FIX: Updated Firestore `getDoc` call to the v8 `get()` method.
+                const docSnap = await docRef.get();
+                if (docSnap.exists) {
+                    const data = docSnap.data()!;
                     setLearnedWords(new Map(Object.entries(data.learnedWords || {})));
                     const dontKnowMap = new Map(
                         Object.entries(data.dontKnowWords || {}).map(([key, value]) => [
@@ -66,13 +69,16 @@ const App: React.FC = () => {
                         ])
                     );
                     setDontKnowWords(dontKnowMap);
-                    if(data.sentences) {
+                    
+                    // Only load sentences from DB if they haven't just been set from a file.
+                    // `sentences.size === 0` is a good indicator for this condition upon dictionary switch.
+                    if (sentences.size === 0 && data.sentences) {
                         setSentences(new Map(Object.entries(data.sentences)));
                     }
                 } else {
+                    // If no document exists, reset progress but respect sentences possibly set from a file.
                     setLearnedWords(new Map());
                     setDontKnowWords(new Map());
-                    setSentences(new Map());
                 }
             } catch (error) {
                 console.error("Error loading progress from Firestore:", error);
@@ -95,14 +101,16 @@ const App: React.FC = () => {
         }
 
         const handler = setTimeout(async () => {
-            const docRef = doc(db, 'users', user.uid, 'progress', dictionaryId);
+            // FIX: Updated Firestore document reference to use the v8 compatibility syntax.
+            const docRef = db.collection('users').doc(user.uid).collection('progress').doc(dictionaryId);
             const dataToSave = {
                 learnedWords: Object.fromEntries(learnedWords),
                 dontKnowWords: Object.fromEntries(dontKnowWords),
                 sentences: Object.fromEntries(sentences),
             };
             try {
-                await setDoc(docRef, dataToSave);
+                // FIX: Updated Firestore `setDoc` call to the v8 `set()` method.
+                await docRef.set(dataToSave, { merge: true });
             } catch (error) {
                 console.error("Error saving progress to Firestore:", error);
             }
@@ -137,25 +145,33 @@ const App: React.FC = () => {
     const handleFilesSelect = async (name: string, wordsFile: File, sentencesFile?: File) => {
         setIsLoading(true);
         try {
+            // First, parse the optional sentences file to have it ready.
+            let sentenceMapFromFile: Map<string, string> | null = null;
+            if (sentencesFile) {
+                const text = await sentencesFile.text();
+                const jsonObj = JSON.parse(text);
+                sentenceMapFromFile = new Map<string, string>();
+                for (const key in jsonObj) {
+                    if (typeof jsonObj[key] === 'string') {
+                        sentenceMapFromFile.set(key.trim().toLowerCase(), jsonObj[key]);
+                    }
+                }
+            }
+
+            // Clear previous progress states before loading the new dictionary.
+            // This prevents old data from appearing while new data loads.
+            setLearnedWords(new Map());
+            setDontKnowWords(new Map());
+            // Prioritize sentences from the file; otherwise, clear them to allow Firestore to populate.
+            setSentences(sentenceMapFromFile || new Map());
+
+            // Now, parse and set the dictionary. This will trigger the useEffect to load progress from DB.
             const dictionary = await parseDictionaryFile(wordsFile);
             dictionary.name = name; 
             setLoadedDictionary(dictionary);
             setSelectedSetIndex(0);
             setFileSourceModalOpen(false);
 
-            if (sentencesFile) {
-                const text = await sentencesFile.text();
-                const jsonObj = JSON.parse(text);
-                const sentenceMap = new Map<string, string>();
-                for (const key in jsonObj) {
-                    if (typeof jsonObj[key] === 'string') {
-                        sentenceMap.set(key.trim().toLowerCase(), jsonObj[key]);
-                    }
-                }
-                setSentences(sentenceMap);
-            } else {
-                // Let the loading effect handle clearing sentences if none exist in Firestore
-            }
         } catch (error) {
             alert((error as Error).message);
             setLoadedDictionary(null);
@@ -187,8 +203,12 @@ const App: React.FC = () => {
         if (currentWordIndex < reviewWords.length - 1) {
             setCurrentWordIndex(prev => prev + 1);
         } else {
-            setCurrentWordIndex(0);
-            setReviewWords([]); // End of session
+            // End of session, re-evaluate words for review.
+            if (selectedSetIndex !== null) {
+                startReviewSession(selectedSetIndex);
+            } else {
+                 setReviewWords([]);
+            }
         }
     };
 
@@ -253,6 +273,7 @@ const App: React.FC = () => {
             setLearnedWords(new Map());
             setDontKnowWords(new Map());
             setSentences(new Map());
+            // The save effect will trigger and clear the data in Firestore.
             if (selectedSetIndex !== null) startReviewSession(selectedSetIndex);
         }
     };
@@ -313,7 +334,7 @@ const App: React.FC = () => {
                         <Loader2 className="animate-spin h-8 w-8 mr-3" />
                         <span>Loading progress...</span>
                     </div>
-                ) : currentWord ? (
+                ) : reviewWords.length > 0 ? (
                     <div className="w-full flex flex-col items-center">
                          <div className="w-full text-center mb-2">
                              <p className="text-slate-400">{isDontKnowMode ? "Reviewing Mistakes" : "Learning"}: {currentWordIndex + 1} / {reviewWords.length}</p>
