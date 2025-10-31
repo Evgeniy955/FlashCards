@@ -15,6 +15,15 @@ import { Auth } from './components/Auth';
 import { auth } from './lib/firebase-client';
 import { parseDictionaryFile, shuffleArray } from './utils/dictionaryUtils';
 import type { Word, WordSet, LoadedDictionary, WordProgress } from './types';
+import defaultSentencesData from '../../public/sentences/phrases1.json';
+
+// Create the initial map from the imported JSON data
+const initialSentencesMap = new Map<string, string>();
+Object.keys(defaultSentencesData).forEach(key => {
+    // The JSON file has typed keys, but iterating with Object.keys loses that. Cast is safe here.
+    const sentence = defaultSentencesData[key as keyof typeof defaultSentencesData];
+    initialSentencesMap.set(key.toLowerCase(), sentence);
+});
 
 // SRS Intervals in milliseconds
 const srsIntervals: number[] = [
@@ -43,7 +52,7 @@ const App: React.FC = () => {
     const [loadedDictionary, setLoadedDictionary] = useState<LoadedDictionary | null>(null);
     const [selectedSetIndex, setSelectedSetIndex] = useState<number | null>(null);
     const [wordProgress, setWordProgress] = useState<Record<string, WordProgress>>({});
-    const [sentences, setSentences] = useState<Map<string, string>>(new Map());
+    const [sentences, setSentences] = useState<Map<string, string>>(initialSentencesMap);
     const [wordsForSession, setWordsForSession] = useState<Word[]>([]);
     const [currentWordIndex, setCurrentWordIndex] = useState(0);
     const [isFlipped, setIsFlipped] = useState(false);
