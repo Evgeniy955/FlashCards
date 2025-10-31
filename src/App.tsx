@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useAuthState } from 'react-firebase-hooks/auth';
 import { auth, db } from './lib/firebase-client';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { Flashcard } from './components/Flashcard';
 import { ProgressBar } from './components/ProgressBar';
 import { SetSelector } from './components/SetSelector';
@@ -14,7 +13,7 @@ import { Auth } from './components/Auth';
 import { Word, LoadedDictionary, WordProgress } from './types';
 import { parseDictionaryFile, shuffleArray } from './utils/dictionaryUtils';
 import { Shuffle, ChevronsUpDown, Info, BookUser, Trash2, Repeat, Library, Loader2 } from 'lucide-react';
-import { TrainingModeInput, AnswerState } from './components/TrainingModeInput.tsx';
+import { TrainingModeInput, AnswerState } from './components/TrainingModeInput';
 
 
 // --- Constants ---
@@ -62,10 +61,13 @@ const App: React.FC = () => {
                 setSentences(new Map());
                 return;
             }
-            const userDocRef = doc(db, 'users', user.uid);
+            // Fix: Use v8 syntax for document reference
+            const userDocRef = db.collection('users').doc(user.uid);
             try {
-                const docSnap = await getDoc(userDocRef);
-                if (docSnap.exists()) {
+                // Fix: Use v8 syntax to get document
+                const docSnap = await userDocRef.get();
+                // Fix: Use v8 syntax for checking existence and accessing data
+                if (docSnap.exists) {
                     const data = docSnap.data();
                     if (data?.globalSentences) {
                         setSentences(new Map(Object.entries(data.globalSentences)));
@@ -87,9 +89,11 @@ const App: React.FC = () => {
         if (!user) return; // Don't save if not logged in
 
         const handler = setTimeout(async () => {
-            const userDocRef = doc(db, 'users', user.uid);
+            // Fix: Use v8 syntax for document reference
+            const userDocRef = db.collection('users').doc(user.uid);
             try {
-                await setDoc(userDocRef, {
+                // Fix: Use v8 syntax to set document data
+                await userDocRef.set({
                     globalSentences: Object.fromEntries(sentences)
                 }, { merge: true });
             } catch (error) {
@@ -112,15 +116,19 @@ const App: React.FC = () => {
             }
 
             setIsProgressLoading(true);
-            const docRef = doc(db, 'users', user.uid, 'progress', dictionaryId);
+            // Fix: Use v8 syntax for document reference
+            const docRef = db.collection('users').doc(user.uid).collection('progress').doc(dictionaryId);
             try {
-                const docSnap = await getDoc(docRef);
-                if (docSnap.exists()) {
+                // Fix: Use v8 syntax to get document
+                const docSnap = await docRef.get();
+                // Fix: Use v8 syntax for checking existence and accessing data
+                if (docSnap.exists) {
                     const data = docSnap.data();
-                    const learnedData = (data.learnedWords || {}) as { [key: string]: WordProgress };
+                    // Fix: Add optional chaining to safely access potentially undefined data
+                    const learnedData = (data?.learnedWords || {}) as { [key: string]: WordProgress };
                     setLearnedWords(new Map(Object.entries(learnedData)));
                     
-                    const dontKnowData = (data.dontKnowWords || {}) as { [key: string]: Word[] };
+                    const dontKnowData = (data?.dontKnowWords || {}) as { [key: string]: Word[] };
                     const dontKnowMap = new Map(
                         Object.entries(dontKnowData).map(([key, value]) => [
                             Number(key),
@@ -151,13 +159,15 @@ const App: React.FC = () => {
         }
 
         const handler = setTimeout(async () => {
-            const docRef = doc(db, 'users', user.uid, 'progress', dictionaryId);
+             // Fix: Use v8 syntax for document reference
+            const docRef = db.collection('users').doc(user.uid).collection('progress').doc(dictionaryId);
             const dataToSave = {
                 learnedWords: Object.fromEntries(learnedWords),
                 dontKnowWords: Object.fromEntries(dontKnowWords),
             };
             try {
-                await setDoc(docRef, dataToSave, { merge: true });
+                // Fix: Use v8 syntax to set document data
+                await docRef.set(dataToSave, { merge: true });
             } catch (error) {
                 console.error("Error saving dictionary progress to Firestore:", error);
             }
@@ -300,17 +310,17 @@ const App: React.FC = () => {
 
     const handleKnow = () => {
         advanceToNextWord(() => {
-            const progress = learnedWords.get(currentWord!.en);
+            const progress = learnedWords.get(currentWord.en);
             const currentStage = progress ? progress.srsStage : -1;
             const nextStage = Math.min(currentStage + 1, SRS_INTERVALS.length - 1);
             const nextReviewDate = new Date();
             nextReviewDate.setDate(nextReviewDate.getDate() + SRS_INTERVALS[nextStage]);
-            setLearnedWords(prev => new Map(prev).set(currentWord!.en, { srsStage: nextStage, nextReviewDate: nextReviewDate.toISOString() }));
+            setLearnedWords(prev => new Map(prev).set(currentWord.en, { srsStage: nextStage, nextReviewDate: nextReviewDate.toISOString() }));
             
             if (isDontKnowMode && selectedSetIndex !== null) {
                 setDontKnowWords((prev: Map<number, Word[]>) => {
                     const newMap = new Map(prev);
-                    const words = newMap.get(selectedSetIndex)?.filter(w => w.en !== currentWord!.en) || [];
+                    const words = newMap.get(selectedSetIndex)?.filter(w => w.en !== currentWord.en) || [];
                     if (words.length > 0) newMap.set(selectedSetIndex, words);
                     else newMap.delete(selectedSetIndex);
                     return newMap;
@@ -324,10 +334,10 @@ const App: React.FC = () => {
         advanceToNextWord(() => {
             if (selectedSetIndex === null) return false;
 
-            if (learnedWords.has(currentWord!.en)) {
+            if (learnedWords.has(currentWord.en)) {
                 setLearnedWords(prev => {
                     const newMap = new Map(prev);
-                    newMap.delete(currentWord!.en);
+                    newMap.delete(currentWord.en);
                     return newMap;
                 });
             }
@@ -335,8 +345,8 @@ const App: React.FC = () => {
                 setDontKnowWords((prev: Map<number, Word[]>) => {
                     const newMap = new Map(prev);
                     const currentList = newMap.get(selectedSetIndex) || [];
-                    if (!currentList.some(w => w.en === currentWord!.en)) {
-                        newMap.set(selectedSetIndex, [...currentList, currentWord!]);
+                    if (!currentList.some(w => w.en === currentWord.en)) {
+                        newMap.set(selectedSetIndex, [...currentList, currentWord]);
                     }
                     return newMap;
                 });
