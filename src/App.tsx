@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import * as XLSX from 'xlsx';
 import { useAuthState } from 'react-firebase-hooks/auth';
-import { auth } from './lib/firebase-client';
+import { auth, db } from './lib/firebase-client';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { Flashcard } from './components/Flashcard';
 import { ProgressBar } from './components/ProgressBar';
 import { SetSelector } from './components/SetSelector';
@@ -11,94 +11,12 @@ import { LearnedWordsModal } from './components/LearnedWordsModal';
 import { WordList } from './components/WordList';
 import { SentenceUpload } from './components/SentenceUpload';
 import { Auth } from './components/Auth';
-import { Word, WordSet, LoadedDictionary, WordProgress } from './types';
-import { Shuffle, ChevronsUpDown, Info, BookUser, Trash2, Repeat, Library } from 'lucide-react';
+import { Word, LoadedDictionary, WordProgress } from './types';
+import { parseDictionaryFile, shuffleArray } from './utils/dictionaryUtils';
+import { Shuffle, ChevronsUpDown, Info, BookUser, Trash2, Repeat, Library, Loader2 } from 'lucide-react';
 
 // --- Constants ---
-const MAX_SET_SIZE = 30;
 const SRS_INTERVALS = [1, 2, 4, 8, 16, 32, 64]; // in days
-
-// --- Helper Functions ---
-const shuffleArray = <T,>(array: T[]): T[] => {
-  return [...array].sort(() => Math.random() - 0.5);
-};
-
-// Helper to extract words from a specific column pair
-const extractWordsFromColumns = (jsonData: (string | null)[][], ruCol: number, enCol: number): Word[] => {
-    const words: Word[] = [];
-    for (const rowData of jsonData) {
-        const ru = rowData?.[ruCol];
-        const en = rowData?.[enCol];
-        if (ru && en) {
-            words.push({ ru: String(ru).trim(), en: String(en).trim() });
-        }
-    }
-    return words;
-};
-
-// Helper to split a large word array into smaller sets
-const splitIntoSubsets = (words: Word[], baseSetName: string, originalSetIndex: number): WordSet[] => {
-    if (words.length <= MAX_SET_SIZE) {
-        return [{ name: baseSetName, words, originalSetIndex }];
-    }
-    
-    const subsets: WordSet[] = [];
-    for (let i = 0; i < words.length; i += MAX_SET_SIZE) {
-        const chunk = words.slice(i, i + MAX_SET_SIZE);
-        subsets.push({
-            name: `${baseSetName}.${Math.floor(i / MAX_SET_SIZE) + 1}`,
-            words: chunk,
-            originalSetIndex,
-        });
-    }
-    return subsets;
-};
-
-
-const parseDictionaryFile = (file: File): Promise<LoadedDictionary> => {
-    return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            try {
-                const data = new Uint8Array(e.target?.result as ArrayBuffer);
-                const workbook = XLSX.read(data, { type: 'array' });
-                const sheetName = workbook.SheetNames[0];
-                const worksheet = workbook.Sheets[sheetName];
-                const jsonData: (string | null)[][] = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
-
-                if (!jsonData || jsonData.length === 0) {
-                    throw new Error("The file is empty or in an incorrect format.");
-                }
-
-                const allSets: WordSet[] = [];
-                let originalSetIndexCounter = 0;
-                const maxCols = jsonData[0]?.length || 0;
-
-                for (let col = 0; col < maxCols; col += 4) {
-                    const words = extractWordsFromColumns(jsonData, col, col + 2);
-
-                    if (words.length > 0) {
-                        const baseSetName = `Set ${originalSetIndexCounter + 1}`;
-                        const subsets = splitIntoSubsets(words, baseSetName, originalSetIndexCounter);
-                        allSets.push(...subsets);
-                        originalSetIndexCounter++;
-                    }
-                }
-                
-                if (allSets.length === 0) {
-                    throw new Error("No valid word sets found. Ensure columns A/C, E/G, etc., contain words.");
-                }
-                resolve({ name: file.name, sets: allSets });
-            } catch (err) {
-                console.error("Parsing error:", err);
-                reject(err instanceof Error ? err : new Error('Failed to parse the dictionary file.'));
-            }
-        };
-        reader.onerror = () => reject(new Error('Failed to read the file.'));
-        reader.readAsArrayBuffer(file);
-    });
-};
-
 
 // --- Main App Component ---
 const App: React.FC = () => {
@@ -113,7 +31,8 @@ const App: React.FC = () => {
     const [dontKnowWords, setDontKnowWords] = useState<Map<number, Word[]>>(new Map());
     const [sentences, setSentences] = useState<Map<string, string>>(new Map());
 
-    const [isLoading, setIsLoading] = useState(false);
+    const [isLoading, setIsLoading] = useState(false); // For file parsing
+    const [isProgressLoading, setIsProgressLoading] = useState(false); // For Firestore
     const [isWordListVisible, setIsWordListVisible] = useState(false);
     const [isDontKnowMode, setIsDontKnowMode] = useState(false);
     
@@ -121,38 +40,79 @@ const App: React.FC = () => {
     const [isInstructionsModalOpen, setInstructionsModalOpen] = useState(false);
     const [isLearnedWordsModalOpen, setLearnedWordsModalOpen] = useState(false);
 
-    const storageKey = useMemo(() => loadedDictionary ? `flashcard-progress-${loadedDictionary.name}` : null, [loadedDictionary]);
-    
-    // Load progress from localStorage
-    useEffect(() => {
-        if (!storageKey) return;
-        const saved = localStorage.getItem(storageKey);
-        setLearnedWords(new Map());
-        setDontKnowWords(new Map());
-        setSentences(new Map());
-        if (saved) {
-            try {
-                const { learned, dontKnow, sentences: savedSentences } = JSON.parse(saved);
-                setLearnedWords(new Map(learned));
-                setDontKnowWords(new Map(dontKnow));
-                if (savedSentences) setSentences(new Map(savedSentences));
-            } catch (error) {
-                console.error("Failed to parse saved progress", error);
-                localStorage.removeItem(storageKey);
-            }
-        }
-    }, [storageKey]);
+    const dictionaryId = useMemo(() => loadedDictionary?.name.replace(/[\/.]/g, '_'), [loadedDictionary]);
 
-    // Save progress to localStorage
+    // Load progress from Firestore
     useEffect(() => {
-        if (!storageKey) return;
-        const dataToSave = {
-            learned: Array.from(learnedWords.entries()),
-            dontKnow: Array.from(dontKnowWords.entries()),
-            sentences: Array.from(sentences.entries()),
+        const loadProgress = async () => {
+            if (!user || !dictionaryId) {
+                setLearnedWords(new Map());
+                setDontKnowWords(new Map());
+                setSentences(new Map());
+                return;
+            }
+
+            setIsProgressLoading(true);
+            const docRef = doc(db, 'users', user.uid, 'progress', dictionaryId);
+            try {
+                const docSnap = await getDoc(docRef);
+                if (docSnap.exists()) {
+                    const data = docSnap.data();
+                    setLearnedWords(new Map(Object.entries(data.learnedWords || {})));
+                    const dontKnowMap = new Map(
+                        Object.entries(data.dontKnowWords || {}).map(([key, value]) => [
+                            Number(key),
+                            value as Word[],
+                        ])
+                    );
+                    setDontKnowWords(dontKnowMap);
+                    if(data.sentences) {
+                        setSentences(new Map(Object.entries(data.sentences)));
+                    }
+                } else {
+                    setLearnedWords(new Map());
+                    setDontKnowWords(new Map());
+                    setSentences(new Map());
+                }
+            } catch (error) {
+                console.error("Error loading progress from Firestore:", error);
+                setLearnedWords(new Map());
+                setDontKnowWords(new Map());
+                setSentences(new Map());
+            } finally {
+                setIsProgressLoading(false);
+            }
         };
-        localStorage.setItem(storageKey, JSON.stringify(dataToSave));
-    }, [learnedWords, dontKnowWords, sentences, storageKey]);
+
+        loadProgress();
+    }, [user, dictionaryId]);
+
+    // Save progress to Firestore
+    useEffect(() => {
+        // Do not save while loading, or if not logged in/no dictionary
+        if (isProgressLoading || !user || !dictionaryId) {
+            return;
+        }
+
+        const handler = setTimeout(async () => {
+            const docRef = doc(db, 'users', user.uid, 'progress', dictionaryId);
+            const dataToSave = {
+                learnedWords: Object.fromEntries(learnedWords),
+                dontKnowWords: Object.fromEntries(dontKnowWords),
+                sentences: Object.fromEntries(sentences),
+            };
+            try {
+                await setDoc(docRef, dataToSave);
+            } catch (error) {
+                console.error("Error saving progress to Firestore:", error);
+            }
+        }, 1500); // Debounce saves to reduce Firestore writes
+
+        return () => {
+            clearTimeout(handler);
+        };
+    }, [learnedWords, dontKnowWords, sentences, user, dictionaryId, isProgressLoading]);
+
 
     const startReviewSession = useCallback((setIndex: number) => {
         if (!loadedDictionary) return;
@@ -169,10 +129,10 @@ const App: React.FC = () => {
     }, [loadedDictionary, learnedWords]);
 
     useEffect(() => {
-        if (selectedSetIndex !== null) {
+        if (selectedSetIndex !== null && !isProgressLoading) {
             startReviewSession(selectedSetIndex);
         }
-    }, [selectedSetIndex, learnedWords, startReviewSession]);
+    }, [selectedSetIndex, learnedWords, startReviewSession, isProgressLoading]);
     
     const handleFilesSelect = async (name: string, wordsFile: File, sentencesFile?: File) => {
         setIsLoading(true);
@@ -193,6 +153,8 @@ const App: React.FC = () => {
                     }
                 }
                 setSentences(sentenceMap);
+            } else {
+                // Let the loading effect handle clearing sentences if none exist in Firestore
             }
         } catch (error) {
             alert((error as Error).message);
@@ -290,6 +252,7 @@ const App: React.FC = () => {
         if (window.confirm('Are you sure you want to reset all progress for this dictionary? This action cannot be undone.')) {
             setLearnedWords(new Map());
             setDontKnowWords(new Map());
+            setSentences(new Map());
             if (selectedSetIndex !== null) startReviewSession(selectedSetIndex);
         }
     };
@@ -345,7 +308,12 @@ const App: React.FC = () => {
 
                 <SetSelector sets={loadedDictionary.sets} selectedSetIndex={selectedSetIndex} onSelectSet={handleSelectSet} />
                 
-                {currentWord ? (
+                {isProgressLoading ? (
+                     <div className="w-full aspect-[3/2] flex justify-center items-center text-slate-400">
+                        <Loader2 className="animate-spin h-8 w-8 mr-3" />
+                        <span>Loading progress...</span>
+                    </div>
+                ) : currentWord ? (
                     <div className="w-full flex flex-col items-center">
                          <div className="w-full text-center mb-2">
                              <p className="text-slate-400">{isDontKnowMode ? "Reviewing Mistakes" : "Learning"}: {currentWordIndex + 1} / {reviewWords.length}</p>
@@ -353,18 +321,18 @@ const App: React.FC = () => {
                         <ProgressBar current={currentWordIndex + 1} total={reviewWords.length} />
                         <Flashcard word={currentWord} isFlipped={isFlipped} onFlip={handleFlip} exampleSentence={exampleSentence} />
                         <div className="flex justify-center gap-4 mt-6 w-full">
-                            <button onClick={handleDontKnow} className="w-full py-3 text-lg font-semibold bg-rose-600 hover:bg-rose-700 rounded-lg transition-colors">Don't know</button>
-                            <button onClick={handleKnow} className="w-full py-3 text-lg font-semibold bg-emerald-600 hover:bg-emerald-700 rounded-lg transition-colors">Know</button>
+                            <button onClick={handleDontKnow} disabled={isProgressLoading} className="w-full py-3 text-lg font-semibold bg-rose-600 hover:bg-rose-700 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-wait">Don't know</button>
+                            <button onClick={handleKnow} disabled={isProgressLoading} className="w-full py-3 text-lg font-semibold bg-emerald-600 hover:bg-emerald-700 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-wait">Know</button>
                         </div>
                     </div>
                 ) : (
                     <div className="text-center my-16">
                         <h2 className="text-2xl font-semibold mb-4 text-slate-300">Session Complete!</h2>
                         <p className="text-slate-400">You've reviewed all available cards for this set.</p>
-                        {dontKnowWords.get(selectedSetIndex!) && dontKnowWords.get(selectedSetIndex!)!.length > 0 && (
+                        {selectedSetIndex !== null && dontKnowWords.get(selectedSetIndex) && dontKnowWords.get(selectedSetIndex)!.length > 0 && (
                              <button onClick={startDontKnowSession} className="mt-6 px-5 py-2.5 bg-amber-600 hover:bg-amber-700 rounded-lg font-semibold transition-colors flex items-center gap-2 mx-auto">
                                 <Repeat size={18} />
-                                Review {dontKnowWords.get(selectedSetIndex!)?.length} Mistake(s)
+                                Review {dontKnowWords.get(selectedSetIndex)?.length} Mistake(s)
                             </button>
                         )}
                     </div>
