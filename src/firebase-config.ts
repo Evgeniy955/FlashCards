@@ -9,6 +9,10 @@ declare global {
     readonly VITE_FIREBASE_APP_ID: string;
     readonly VITE_FIREBASE_MEASUREMENT_ID: string;
   }
+  // FIX: Added declaration for `ImportMeta` to inform TypeScript about the `env` property provided by Vite, resolving "Property 'env' does not exist on type 'ImportMeta'" errors.
+  interface ImportMeta {
+    readonly env: ImportMetaEnv;
+  }
 }
 
 // This configuration securely loads your credentials from environment variables.

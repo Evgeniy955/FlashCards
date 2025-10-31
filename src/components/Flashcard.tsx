@@ -7,20 +7,45 @@ interface FlashcardProps {
   isFlipped: boolean;
   onFlip: () => void;
   exampleSentence?: string;
+  isChanging?: boolean;
 }
 
-export const Flashcard: React.FC<FlashcardProps> = ({ word, isFlipped, onFlip, exampleSentence }) => {
+export const Flashcard: React.FC<FlashcardProps> = ({ word, isFlipped, onFlip, exampleSentence, isChanging }) => {
   
-  const handlePlayAudio = (e: React.MouseEvent, text: string, lang: string) => {
+  const handlePlayAudioSequence = (e: React.MouseEvent) => {
     e.stopPropagation(); // Prevent card from flipping when clicking the button
-    if ('speechSynthesis' in window) {
-      const utterance = new SpeechSynthesisUtterance(text);
-      utterance.lang = lang;
-      // Cancel any ongoing speech to prevent overlap
-      window.speechSynthesis.cancel();
-      window.speechSynthesis.speak(utterance);
-    } else {
+    
+    if (!('speechSynthesis' in window)) {
       alert('Sorry, your browser does not support text-to-speech.');
+      return;
+    }
+
+    window.speechSynthesis.cancel(); // Stop any ongoing speech to prevent overlap
+
+    // 1. Create utterance for the word
+    const wordUtterance = new SpeechSynthesisUtterance(word.en);
+    wordUtterance.lang = 'en-US';
+
+    // 2. If an example sentence exists, queue it to play after the word
+    if (exampleSentence) {
+      wordUtterance.onend = () => {
+        // Use setTimeout to create a pause. Reduced from 1000ms to 500ms as requested.
+        setTimeout(() => {
+          const sentenceUtterance = new SpeechSynthesisUtterance(exampleSentence);
+          sentenceUtterance.lang = 'en-US';
+          window.speechSynthesis.speak(sentenceUtterance);
+        }, 500); // 500ms = 0.5s
+      };
+    }
+
+    // 3. Start speaking the word
+    window.speechSynthesis.speak(wordUtterance);
+  };
+
+  const handleFlipDuringChange = () => {
+    // Prevent card from flipping while the word is changing via Know/Don't Know buttons.
+    if (!isChanging) {
+      onFlip();
     }
   };
 
@@ -29,11 +54,11 @@ export const Flashcard: React.FC<FlashcardProps> = ({ word, isFlipped, onFlip, e
     <div 
         className="w-full aspect-[3/2] cursor-pointer group" 
         style={{ perspective: '1000px' }}
-        onClick={onFlip}
+        onClick={handleFlipDuringChange}
         role="button"
         tabIndex={0}
         aria-label={`Flashcard for ${word.ru}. Click to flip.`}
-        onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && onFlip()}
+        onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && handleFlipDuringChange()}
     >
       {/* The inner container that flips */}
       <div 
@@ -46,13 +71,6 @@ export const Flashcard: React.FC<FlashcardProps> = ({ word, isFlipped, onFlip, e
             style={{ backfaceVisibility: 'hidden', WebkitBackfaceVisibility: 'hidden' }}
         >
           <span className="text-4xl sm:text-5xl font-bold text-white">{word.ru}</span>
-          <button
-            onClick={(e) => handlePlayAudio(e, word.ru, 'ru-RU')}
-            className="absolute top-4 right-4 p-2 text-slate-400 hover:text-white transition-colors rounded-full hover:bg-slate-700"
-            aria-label="Play Russian pronunciation"
-          >
-            <Volume2 size={24} />
-          </button>
         </div>
 
         {/* Back of the card (English) */}
@@ -67,7 +85,7 @@ export const Flashcard: React.FC<FlashcardProps> = ({ word, isFlipped, onFlip, e
             )}
           </div>
           <button
-            onClick={(e) => handlePlayAudio(e, word.en, 'en-US')}
+            onClick={handlePlayAudioSequence}
             className="absolute top-4 right-4 p-2 text-indigo-200 hover:text-white transition-colors rounded-full hover:bg-indigo-600"
             aria-label="Play English pronunciation"
           >
