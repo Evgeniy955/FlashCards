@@ -14,7 +14,7 @@ import { Auth } from './components/Auth';
 import { Word, LoadedDictionary, WordProgress } from './types';
 import { parseDictionaryFile, shuffleArray } from './utils/dictionaryUtils';
 import { Shuffle, ChevronsUpDown, Info, BookUser, Trash2, Repeat, Library, Loader2 } from 'lucide-react';
-import { TrainingModeInput, AnswerState } from './components/TrainingModeInput';
+import { TrainingModeInput, AnswerState } from './components/TrainingModeInput.tsx';
 
 
 // --- Constants ---

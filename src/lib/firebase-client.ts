@@ -1,13 +1,13 @@
-// FIX: The import for `initializeApp` was using a namespace import (`* as firebaseApp`),
-// but `initializeApp` is a named export. The code has been updated to use a
-// named import (`{ initializeApp }`) and call the function directly.
-import { initializeApp } from 'firebase/app';
+// FIX: The import for `initializeApp` was causing an error when using a named
+// import. Switched to a namespace import (`* as firebase`) and accessed
+// `initializeApp` through it to potentially resolve module resolution issues.
+import * as firebase from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 import { firebaseConfig } from '../firebase-config';
 
 // Initialize Firebase
-const app = initializeApp(firebaseConfig);
+const app = firebase.initializeApp(firebaseConfig);
 
 // Get auth and firestore instances
 const auth = getAuth(app);
