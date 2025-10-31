@@ -1,365 +1,438 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useAuthState } from 'react-firebase-hooks/auth';
-import { auth, db } from './lib/firebase-client';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import * as XLSX from 'xlsx';
+import { Shuffle, List, ArrowLeft, BrainCircuit, HelpCircle, BookCheck, RefreshCw } from 'lucide-react';
+
 import { Flashcard } from './components/Flashcard';
-import { ProgressBar } from './components/ProgressBar';
 import { SetSelector } from './components/SetSelector';
+import { ProgressBar } from './components/ProgressBar';
 import { FileSourceModal } from './components/FileSourceModal';
 import { InstructionsModal } from './components/InstructionsModal';
 import { LearnedWordsModal } from './components/LearnedWordsModal';
-import { WordList } from './components/WordList';
 import { SentenceUpload } from './components/SentenceUpload';
+import { WordList } from './components/WordList';
 import { Auth } from './components/Auth';
-import { Word, LoadedDictionary, WordProgress } from './types';
+import { auth } from './lib/firebase-client';
 import { parseDictionaryFile, shuffleArray } from './utils/dictionaryUtils';
-import { Shuffle, ChevronsUpDown, Info, BookUser, Trash2, Repeat, Library, Loader2 } from 'lucide-react';
+import type { Word, WordSet, LoadedDictionary, WordProgress } from './types';
 
-// --- Constants ---
-const SRS_INTERVALS = [1, 2, 4, 8, 16, 32, 64]; // in days
+// SRS Intervals in milliseconds
+const srsIntervals: number[] = [
+  0,                            // Stage 0 (New): Review immediately or in the next session
+  4 * 3600 * 1000,              // Stage 1: 4 hours
+  8 * 3600 * 1000,              // Stage 2: 8 hours
+  24 * 3600 * 1000,             // Stage 3: 1 day
+  3 * 24 * 3600 * 1000,         // Stage 4: 3 days
+  7 * 24 * 3600 * 1000,         // Stage 5: 1 week
+  2 * 7 * 24 * 3600 * 1000,     // Stage 6: 2 weeks
+  4 * 7 * 24 * 3600 * 1000,     // Stage 7: 1 month
+  16 * 7 * 24 * 3600 * 1000,    // Stage 8: 4 months
+];
 
-// --- Main App Component ---
+const getNextReviewDate = (stage: number): string => {
+  const interval = srsIntervals[Math.min(stage, srsIntervals.length - 1)];
+  return new Date(Date.now() + interval).toISOString();
+};
+
+
 const App: React.FC = () => {
     const [user] = useAuthState(auth);
+    const [isLoading, setIsLoading] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+
     const [loadedDictionary, setLoadedDictionary] = useState<LoadedDictionary | null>(null);
     const [selectedSetIndex, setSelectedSetIndex] = useState<number | null>(null);
+    const [wordProgress, setWordProgress] = useState<Record<string, WordProgress>>({});
+    const [sentences, setSentences] = useState<Map<string, string>>(new Map());
+    const [wordsForSession, setWordsForSession] = useState<Word[]>([]);
     const [currentWordIndex, setCurrentWordIndex] = useState(0);
     const [isFlipped, setIsFlipped] = useState(false);
-    const [reviewWords, setReviewWords] = useState<Word[]>([]);
-    
-    const [learnedWords, setLearnedWords] = useState<Map<string, WordProgress>>(new Map());
-    const [dontKnowWords, setDontKnowWords] = useState<Map<number, Word[]>>(new Map());
-    const [sentences, setSentences] = useState<Map<string, string>>(new Map());
+    const [dontKnowWords, setDontKnowWords] = useState<Record<string, Word[]>>({});
+    const [isTrainingDontKnow, setIsTrainingDontKnow] = useState(false);
 
-    const [isLoading, setIsLoading] = useState(false); // For file parsing
-    const [isProgressLoading, setIsProgressLoading] = useState(false); // For Firestore
+    const [isSourceModalOpen, setIsSourceModalOpen] = useState(false);
+    const [isLearnedWordsModalOpen, setIsLearnedWordsModalOpen] = useState(false);
+    const [isInstructionsModalOpen, setIsInstructionsModalOpen] = useState(false);
     const [isWordListVisible, setIsWordListVisible] = useState(false);
-    const [isDontKnowMode, setIsDontKnowMode] = useState(false);
-    
-    const [isFileSourceModalOpen, setFileSourceModalOpen] = useState(true);
-    const [isInstructionsModalOpen, setInstructionsModalOpen] = useState(false);
-    const [isLearnedWordsModalOpen, setLearnedWordsModalOpen] = useState(false);
 
-    const dictionaryId = useMemo(() => loadedDictionary?.name.replace(/[\/.]/g, '_'), [loadedDictionary]);
+    const dictionaryId = useMemo(() => loadedDictionary?.name.replace(/[^a-zA-Z0-9]/g, '_'), [loadedDictionary]);
+    const progressKey = useMemo(() => user && dictionaryId ? `flashcard_progress_${user.uid}_${dictionaryId}` : null, [user, dictionaryId]);
+    const dontKnowKey = useMemo(() => user && dictionaryId ? `flashcard_dont_know_${user.uid}_${dictionaryId}` : null, [user, dictionaryId]);
 
-    // Load progress from Firestore
+    // Load/Save progress and don't-know words from localStorage
     useEffect(() => {
-        const loadProgress = async () => {
-            if (!user || !dictionaryId) {
-                setLearnedWords(new Map());
-                setDontKnowWords(new Map());
-                setSentences(new Map());
-                return;
-            }
-
-            setIsProgressLoading(true);
-            const docRef = doc(db, 'users', user.uid, 'progress', dictionaryId);
-            try {
-                const docSnap = await getDoc(docRef);
-                if (docSnap.exists()) {
-                    const data = docSnap.data();
-                    setLearnedWords(new Map(Object.entries(data.learnedWords || {})));
-                    const dontKnowMap = new Map(
-                        Object.entries(data.dontKnowWords || {}).map(([key, value]) => [
-                            Number(key),
-                            value as Word[],
-                        ])
-                    );
-                    setDontKnowWords(dontKnowMap);
-                    if(data.sentences) {
-                        setSentences(new Map(Object.entries(data.sentences)));
-                    }
-                } else {
-                    setLearnedWords(new Map());
-                    setDontKnowWords(new Map());
-                    setSentences(new Map());
-                }
-            } catch (error) {
-                console.error("Error loading progress from Firestore:", error);
-                setLearnedWords(new Map());
-                setDontKnowWords(new Map());
-                setSentences(new Map());
-            } finally {
-                setIsProgressLoading(false);
-            }
-        };
-
-        loadProgress();
-    }, [user, dictionaryId]);
-
-    // Save progress to Firestore
-    useEffect(() => {
-        // Do not save while loading, or if not logged in/no dictionary
-        if (isProgressLoading || !user || !dictionaryId) {
-            return;
-        }
-
-        const handler = setTimeout(async () => {
-            const docRef = doc(db, 'users', user.uid, 'progress', dictionaryId);
-            const dataToSave = {
-                learnedWords: Object.fromEntries(learnedWords),
-                dontKnowWords: Object.fromEntries(dontKnowWords),
-                sentences: Object.fromEntries(sentences),
-            };
-            try {
-                await setDoc(docRef, dataToSave);
-            } catch (error) {
-                console.error("Error saving progress to Firestore:", error);
-            }
-        }, 1500); // Debounce saves to reduce Firestore writes
-
-        return () => {
-            clearTimeout(handler);
-        };
-    }, [learnedWords, dontKnowWords, sentences, user, dictionaryId, isProgressLoading]);
-
-
-    const startReviewSession = useCallback((setIndex: number) => {
-        if (!loadedDictionary) return;
-        const set = loadedDictionary.sets[setIndex];
-        const now = new Date().toISOString();
-        const wordsForReview = set.words.filter(word => {
-            const progress = learnedWords.get(word.en);
-            return !progress || progress.nextReviewDate <= now;
-        });
-        setReviewWords(shuffleArray(wordsForReview));
-        setCurrentWordIndex(0);
-        setIsFlipped(false);
-        setIsDontKnowMode(false);
-    }, [loadedDictionary, learnedWords]);
-
-    useEffect(() => {
-        if (selectedSetIndex !== null && !isProgressLoading) {
-            startReviewSession(selectedSetIndex);
-        }
-    }, [selectedSetIndex, learnedWords, startReviewSession, isProgressLoading]);
-    
-    const handleFilesSelect = async (name: string, wordsFile: File, sentencesFile?: File) => {
-        setIsLoading(true);
+        if (!progressKey) return;
         try {
-            const dictionary = await parseDictionaryFile(wordsFile);
-            dictionary.name = name; 
-            setLoadedDictionary(dictionary);
-            setSelectedSetIndex(0);
-            setFileSourceModalOpen(false);
+            const savedProgress = localStorage.getItem(progressKey);
+            setWordProgress(savedProgress ? JSON.parse(savedProgress) : {});
+        } catch (e) { console.error("Failed to load progress", e); }
+    }, [progressKey]);
 
-            if (sentencesFile) {
-                const text = await sentencesFile.text();
-                const jsonObj = JSON.parse(text);
-                const sentenceMap = new Map<string, string>();
-                for (const key in jsonObj) {
-                    if (typeof jsonObj[key] === 'string') {
-                        sentenceMap.set(key.trim().toLowerCase(), jsonObj[key]);
-                    }
-                }
-                setSentences(sentenceMap);
-            } else {
-                // Let the loading effect handle clearing sentences if none exist in Firestore
-            }
-        } catch (error) {
-            alert((error as Error).message);
+    useEffect(() => {
+        if (progressKey) {
+            localStorage.setItem(progressKey, JSON.stringify(wordProgress));
+        }
+    }, [wordProgress, progressKey]);
+
+    useEffect(() => {
+        if (!dontKnowKey) return;
+        try {
+            const saved = localStorage.getItem(dontKnowKey);
+            setDontKnowWords(saved ? JSON.parse(saved) : {});
+        } catch (e) { console.error("Failed to load 'don't know' words", e); }
+    }, [dontKnowKey]);
+
+    useEffect(() => {
+        if (dontKnowKey) {
+            localStorage.setItem(dontKnowKey, JSON.stringify(dontKnowWords));
+        }
+    }, [dontKnowWords, dontKnowKey]);
+
+    // Dictionary and Sentence Loading
+    const handleFileLoad = useCallback(async (file: File) => {
+        setIsLoading(true);
+        setError(null);
+        setIsSourceModalOpen(false);
+        try {
+            const dictionary = await parseDictionaryFile(file);
+            setLoadedDictionary(dictionary);
+            setSelectedSetIndex(null);
+            setWordsForSession([]);
+            setCurrentWordIndex(0);
+            setSentences(new Map());
+            setWordProgress({});
+            setDontKnowWords({});
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'An unknown error occurred.');
             setLoadedDictionary(null);
         } finally {
             setIsLoading(false);
         }
-    };
-    
-    const currentSet = useMemo(() => selectedSetIndex !== null ? loadedDictionary?.sets[selectedSetIndex] : null, [selectedSetIndex, loadedDictionary]);
-    const currentWord = useMemo(() => reviewWords[currentWordIndex], [reviewWords, currentWordIndex]);
-    const exampleSentence = useMemo(() => currentWord ? sentences.get(currentWord.en.toLowerCase()) : undefined, [currentWord, sentences]);
-    const totalLearnedCount = useMemo(() => learnedWords.size, [learnedWords]);
+    }, []);
 
-    const learnedWordsWithDetails = useMemo(() => {
-        if (!loadedDictionary) return [];
-        const allWords = new Map<string, Word>();
-        loadedDictionary.sets.forEach(set => set.words.forEach(word => allWords.set(word.en, word)));
-        return Array.from(learnedWords.entries())
-            .map(([en, progress]) => {
-                const word = allWords.get(en);
-                return word ? { ...word, progress } : null;
-            })
-            .filter((item): item is Word & { progress: WordProgress } => item !== null)
-            .sort((a, b) => a.en.localeCompare(b.en));
-    }, [learnedWords, loadedDictionary]);
-    
-    const goToNextWord = () => {
-        setIsFlipped(false);
-        if (currentWordIndex < reviewWords.length - 1) {
-            setCurrentWordIndex(prev => prev + 1);
-        } else {
+    const handleBuiltInLoad = useCallback(async (path: string, sentencesPath?: string) => {
+        setIsLoading(true);
+        setError(null);
+        setIsSourceModalOpen(false);
+        try {
+            const response = await fetch(path);
+            if (!response.ok) throw new Error(`Failed to fetch dictionary: ${response.statusText}`);
+            const blob = await response.blob();
+            const file = new File([blob], path.split('/').pop() || 'dictionary.xlsx');
+            
+            // Temporarily set dictionary to show loading state correctly before parsing sentences
+            setLoadedDictionary({ name: file.name, sets: [] }); 
+            
+            if (sentencesPath) {
+                await handleSentencesLoadFromPath(sentencesPath);
+            }
+            // Now parse the dictionary file itself
+            const dictionary = await parseDictionaryFile(file);
+            setLoadedDictionary(dictionary);
+            setSelectedSetIndex(null);
+            setWordsForSession([]);
             setCurrentWordIndex(0);
-            setReviewWords([]); // End of session
-        }
-    };
 
-    const handleKnow = () => {
-        if (!currentWord) return;
-        const progress = learnedWords.get(currentWord.en);
-        const currentStage = progress ? progress.srsStage : -1;
-        const nextStage = Math.min(currentStage + 1, SRS_INTERVALS.length - 1);
-        const nextReviewDate = new Date();
-        nextReviewDate.setDate(nextReviewDate.getDate() + SRS_INTERVALS[nextStage]);
-        setLearnedWords(prev => new Map(prev).set(currentWord.en, { srsStage: nextStage, nextReviewDate: nextReviewDate.toISOString() }));
-        if (isDontKnowMode && selectedSetIndex !== null) {
-            setDontKnowWords(prev => {
-                const newMap = new Map(prev);
-                const words = newMap.get(selectedSetIndex)?.filter(w => w.en !== currentWord.en) || [];
-                if (words.length > 0) newMap.set(selectedSetIndex, words);
-                else newMap.delete(selectedSetIndex);
-                return newMap;
+        } catch (err) {
+             setError(err instanceof Error ? err.message : 'An unknown error occurred.');
+             setLoadedDictionary(null);
+        } finally {
+            setIsLoading(false);
+        }
+    }, []);
+
+    const handleSentencesLoadFromPath = async (path: string) => {
+      try {
+        const res = await fetch(path);
+        if (!res.ok) return;
+        const sentenceMap = new Map<string, string>();
+        if (path.endsWith('.json')) {
+            const data = await res.json();
+            Object.keys(data).forEach(key => sentenceMap.set(key.toLowerCase(), data[key]));
+        } else if (path.endsWith('.xlsx')) {
+            const buffer = await res.arrayBuffer();
+            const workbook = XLSX.read(buffer, { type: 'array' });
+            const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+            const jsonData: any[][] = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+            jsonData.forEach(row => {
+                if (row[0] && row[1]) sentenceMap.set(String(row[0]).toLowerCase(), String(row[1]));
             });
         }
-        goToNextWord();
+        setSentences(sentenceMap);
+      } catch (e) {
+        console.error("Failed to load sentences from path:", e);
+      }
     };
 
-    const handleDontKnow = () => {
-        if (!currentWord || selectedSetIndex === null) return;
-        if (learnedWords.has(currentWord.en)) {
-            setLearnedWords(prev => {
-                const newMap = new Map(prev);
-                newMap.delete(currentWord.en);
-                return newMap;
-            });
-        }
-        if (!isDontKnowMode) {
-            setDontKnowWords(prev => {
-                const newMap = new Map(prev);
-                const currentList = newMap.get(selectedSetIndex) || [];
-                if (!currentList.some(w => w.en === currentWord.en)) {
-                    newMap.set(selectedSetIndex, [...currentList, currentWord]);
-                }
-                return newMap;
-            });
-        }
-        goToNextWord();
-    };
+    // Session Management
+    const startSession = useCallback((setIndex: number) => {
+        if (!loadedDictionary) return;
+        const currentSet = loadedDictionary.sets[setIndex];
+        const now = new Date().toISOString();
+        const wordsToReview = currentSet.words.filter(word => {
+            const progress = wordProgress[word.en];
+            return !progress || progress.nextReviewDate <= now;
+        });
 
-    const handleFlip = () => setIsFlipped(prev => !prev);
-    const handleSelectSet = (index: number) => setSelectedSetIndex(index);
-    const handleShuffle = () => setReviewWords(shuffleArray(reviewWords));
-    const startDontKnowSession = () => {
-        if (selectedSetIndex === null) return;
-        const words = dontKnowWords.get(selectedSetIndex) || [];
-        if (words.length > 0) {
-            setReviewWords(shuffleArray(words));
+        setWordsForSession(shuffleArray(wordsToReview));
+        setSelectedSetIndex(setIndex);
+        setCurrentWordIndex(0);
+        setIsFlipped(false);
+        setIsTrainingDontKnow(false);
+        setIsWordListVisible(false);
+    }, [loadedDictionary, wordProgress]);
+
+    const startDontKnowSession = useCallback(() => {
+        if (selectedSetIndex === null || !loadedDictionary) return;
+        const setName = loadedDictionary.sets[selectedSetIndex].name;
+        const words = dontKnowWords[setName];
+        if (words && words.length > 0) {
+            setWordsForSession(shuffleArray(words));
             setCurrentWordIndex(0);
             setIsFlipped(false);
-            setIsDontKnowMode(true);
+            setIsTrainingDontKnow(true);
         }
+    }, [selectedSetIndex, loadedDictionary, dontKnowWords]);
+
+    // Flashcard Actions
+    const handleFlip = () => setIsFlipped(prev => !prev);
+
+    const moveToNextWord = useCallback(() => {
+        setIsFlipped(false);
+        if (currentWordIndex < wordsForSession.length - 1) {
+            setCurrentWordIndex(prev => prev + 1);
+        } else {
+            setWordsForSession([]); // Session ends
+        }
+    }, [currentWordIndex, wordsForSession.length]);
+
+    const handleKnow = useCallback(() => {
+        if (!wordsForSession.length) return;
+        const currentWord = wordsForSession[currentWordIndex];
+        const currentProgress = wordProgress[currentWord.en];
+        const nextStage = (currentProgress?.srsStage || 0) + 1;
+
+        setWordProgress(prev => ({
+            ...prev,
+            [currentWord.en]: { srsStage: nextStage, nextReviewDate: getNextReviewDate(nextStage) },
+        }));
+
+        if (isTrainingDontKnow && selectedSetIndex !== null && loadedDictionary) {
+            const setName = loadedDictionary.sets[selectedSetIndex].name;
+            setDontKnowWords(prev => ({
+                ...prev,
+                [setName]: prev[setName]?.filter(w => w.en !== currentWord.en) || [],
+            }));
+        }
+        moveToNextWord();
+    }, [wordsForSession, currentWordIndex, wordProgress, isTrainingDontKnow, selectedSetIndex, loadedDictionary, moveToNextWord]);
+    
+    const handleDontKnow = useCallback(() => {
+        if (!wordsForSession.length || selectedSetIndex === null || !loadedDictionary) return;
+        const currentWord = wordsForSession[currentWordIndex];
+
+        setWordProgress(prev => ({
+            ...prev,
+            [currentWord.en]: { srsStage: 0, nextReviewDate: getNextReviewDate(0) },
+        }));
+        
+        const setName = loadedDictionary.sets[selectedSetIndex].name;
+        if (!dontKnowWords[setName]?.some(w => w.en === currentWord.en)) {
+            setDontKnowWords(prev => ({
+                ...prev,
+                [setName]: [...(prev[setName] || []), currentWord],
+            }));
+        }
+        moveToNextWord();
+    }, [wordsForSession, currentWordIndex, selectedSetIndex, loadedDictionary, dontKnowWords, moveToNextWord]);
+
+    const handleShuffle = () => {
+        setWordsForSession(shuffleArray(wordsForSession));
+        setCurrentWordIndex(0);
+        setIsFlipped(false);
     };
 
-    const handleResetProgress = () => {
-        if (window.confirm('Are you sure you want to reset all progress for this dictionary? This action cannot be undone.')) {
-            setLearnedWords(new Map());
-            setDontKnowWords(new Map());
-            setSentences(new Map());
-            if (selectedSetIndex !== null) startReviewSession(selectedSetIndex);
+    // General Controls
+    const resetProgress = () => {
+        if (!dictionaryId) return;
+        if (window.confirm("Are you sure you want to reset all progress for this dictionary? This cannot be undone.")) {
+            if (progressKey) localStorage.removeItem(progressKey);
+            if (dontKnowKey) localStorage.removeItem(dontKnowKey);
+            setWordProgress({});
+            setDontKnowWords({});
+            if (selectedSetIndex !== null) {
+                startSession(selectedSetIndex);
+            }
         }
     };
-
-    const handleChangeDictionary = () => {
+    
+    const changeDictionary = () => {
         setLoadedDictionary(null);
         setSelectedSetIndex(null);
-        setFileSourceModalOpen(true);
+        setIsSourceModalOpen(true);
     };
 
-    if (!loadedDictionary) {
-        return (
-            <main className="min-h-screen bg-slate-900 text-white flex flex-col items-center justify-center p-4">
-                <FileSourceModal isOpen={isFileSourceModalOpen} onClose={() => setFileSourceModalOpen(false)} onFilesSelect={handleFilesSelect} isLoading={isLoading} />
+    const currentSet = selectedSetIndex !== null ? loadedDictionary?.sets[selectedSetIndex] : null;
+    const currentWord = wordsForSession[currentWordIndex];
+    const dontKnowCountForSet = (currentSet && dontKnowWords[currentSet.name]?.length) || 0;
+    
+    const learnedWordsForModal = useMemo(() => {
+        if (!loadedDictionary) return [];
+        const allWords = loadedDictionary.sets.flatMap(s => s.words);
+        return allWords
+            .filter(word => wordProgress[word.en]?.srsStage > 0)
+            .map(word => ({ ...word, progress: wordProgress[word.en] }))
+            .sort((a, b) => b.progress.srsStage - a.progress.srsStage);
+    }, [loadedDictionary, wordProgress]);
+
+    // Render Logic
+    const renderContent = () => {
+        if (isLoading && !loadedDictionary?.name) {
+            return <div className="text-center text-indigo-400 animate-pulse">Loading dictionary...</div>;
+        }
+
+        if (error) {
+            return (
+                <div className="text-center text-rose-400">
+                    <p>Error: {error}</p>
+                    <button onClick={changeDictionary} className="mt-4 px-4 py-2 bg-indigo-600 rounded-lg">Try again</button>
+                </div>
+            );
+        }
+
+        if (!loadedDictionary) {
+            return (
                 <div className="text-center">
-                    <h1 className="text-5xl font-bold mb-4">Flashcard App</h1>
-                    <p className="text-slate-400 mb-8">Your personal language learning assistant.</p>
-                    <button onClick={() => setFileSourceModalOpen(true)} className="px-6 py-3 bg-indigo-600 hover:bg-indigo-700 rounded-lg font-semibold transition-colors">
+                    <h1 className="text-4xl font-bold text-white mb-2">Flashcard App</h1>
+                    <p className="text-slate-400 mb-8">Master new vocabulary with spaced repetition.</p>
+                    <button onClick={() => setIsSourceModalOpen(true)} className="px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-lg transition-colors">
                         Get Started
                     </button>
                 </div>
-            </main>
+            );
+        }
+        
+        if (selectedSetIndex === null || !currentSet) {
+            return (
+                <div className="w-full max-w-2xl mx-auto">
+                    <h2 className="text-2xl font-bold text-center text-white mb-2">
+                        {loadedDictionary.name}
+                    </h2>
+                     <p className="text-slate-400 text-center mb-6">Select a set to begin.</p>
+                    <SetSelector sets={loadedDictionary.sets} selectedSetIndex={selectedSetIndex} onSelectSet={startSession} />
+                </div>
+            );
+        }
+        
+        if (wordsForSession.length > 0) {
+            return (
+                <div className="w-full max-w-xl mx-auto flex flex-col items-center">
+                    <div className="w-full mb-4">
+                        <div className="flex justify-between items-center text-sm text-slate-400 mb-1">
+                           <span>{isTrainingDontKnow ? "Reviewing Mistakes" : `Studying: ${currentSet.name}`}</span>
+                           <span>{currentWordIndex + 1} / {wordsForSession.length}</span>
+                        </div>
+                        <ProgressBar current={currentWordIndex + 1} total={wordsForSession.length} />
+                    </div>
+
+                    <Flashcard
+                        word={currentWord}
+                        isFlipped={isFlipped}
+                        onFlip={handleFlip}
+                        exampleSentence={sentences.get(currentWord.en.toLowerCase())}
+                    />
+
+                    <div className="flex justify-center gap-4 mt-8 w-full">
+                        <button onClick={handleDontKnow} className="px-8 py-3 w-1/2 bg-rose-600 hover:bg-rose-700 rounded-lg text-white font-semibold transition-colors">Don't Know</button>
+                        <button onClick={handleKnow} className="px-8 py-3 w-1/2 bg-emerald-600 hover:bg-emerald-700 rounded-lg text-white font-semibold transition-colors">Know</button>
+                    </div>
+
+                     <div className="flex items-center justify-center gap-6 mt-6">
+                        <button onClick={handleShuffle} className="p-2 text-slate-400 hover:text-white transition-colors" title="Shuffle Words">
+                            <Shuffle size={20} />
+                        </button>
+                        <button onClick={() => setIsWordListVisible(prev => !prev)} className="p-2 text-slate-400 hover:text-white transition-colors" title="Toggle Word List">
+                           <List size={20} />
+                        </button>
+                    </div>
+                    
+                    <WordList words={currentSet.words} isVisible={isWordListVisible} />
+                </div>
+            );
+        }
+        
+        // Session Complete
+        return (
+            <div className="text-center">
+                <h2 className="text-3xl font-bold text-white mb-4">Session Complete!</h2>
+                <p className="text-slate-400 mb-8">Great job! Take a break or start a new session.</p>
+                <div className="flex flex-col sm:flex-row justify-center gap-4">
+                    <button onClick={() => startSession(selectedSetIndex)} className="px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-lg transition-colors">
+                        Practice Again
+                    </button>
+                     {dontKnowCountForSet > 0 && (
+                        <button onClick={startDontKnowSession} className="px-6 py-3 bg-rose-600 hover:bg-rose-700 text-white font-semibold rounded-lg transition-colors flex items-center justify-center gap-2">
+                           <BrainCircuit size={18} /> Review {dontKnowCountForSet} Mistake(s)
+                        </button>
+                    )}
+                </div>
+            </div>
         );
-    }
-    
+    };
+
     return (
-        <main className="min-h-screen bg-slate-900 text-white flex flex-col items-center p-4 sm:p-6">
-            <header className="w-full max-w-5xl flex justify-between items-center mb-6">
+        <div className="bg-slate-900 text-white min-h-screen flex flex-col font-sans">
+            <header className="w-full p-4 flex justify-between items-center">
+                <h1 className="text-xl font-bold">
+                    <button onClick={loadedDictionary ? changeDictionary : () => {}}>Flashcards</button>
+                </h1>
                 <div className="flex items-center gap-4">
-                     <button onClick={handleChangeDictionary} className="flex items-center gap-2 text-sm text-slate-400 hover:text-white transition-colors">
-                        <Library size={18} />
-                        <span className="hidden sm:inline">Change</span>
+                    {loadedDictionary && selectedSetIndex !== null && (
+                        <div className="hidden sm:flex items-center gap-4">
+                             <button onClick={() => setIsLearnedWordsModalOpen(true)} className="text-sm font-semibold text-slate-300 hover:text-white transition-colors flex items-center gap-1.5" title="View Learned Words">
+                                <BookCheck size={16} /> Learned
+                            </button>
+                             <button onClick={resetProgress} className="text-sm font-semibold text-slate-300 hover:text-white transition-colors flex items-center gap-1.5" title="Reset Progress">
+                                <RefreshCw size={16} /> Reset
+                            </button>
+                            <button onClick={changeDictionary} className="text-sm font-semibold text-slate-300 hover:text-white transition-colors flex items-center gap-1.5" title="Change Dictionary">
+                                <ArrowLeft size={16} /> Change
+                            </button>
+                        </div>
+                    )}
+                     <button onClick={() => setIsInstructionsModalOpen(true)} className="text-slate-400 hover:text-white" title="How to use">
+                        <HelpCircle size={22} />
                     </button>
-                    <button onClick={() => setInstructionsModalOpen(true)} className="text-slate-400 hover:text-white transition-colors">
-                        <Info size={20} />
-                    </button>
+                    <Auth user={user} />
                 </div>
-                <div className="text-center">
-                    <h1 className="text-lg sm:text-xl font-bold truncate max-w-[200px] sm:max-w-xs" title={loadedDictionary.name}>{loadedDictionary.name}</h1>
-                </div>
-                <Auth user={user} />
             </header>
 
-            <div className="w-full max-w-md flex flex-col items-center">
-                 <div className="w-full flex items-center justify-center gap-4 text-sm mb-4">
-                    <button onClick={() => setLearnedWordsModalOpen(true)} className="flex items-center gap-2 py-1 px-3 bg-slate-800 rounded-full hover:bg-slate-700 transition-colors">
-                        <BookUser size={16} /> Learned: {totalLearnedCount}
-                    </button>
-                    <button onClick={handleResetProgress} className="flex items-center gap-2 py-1 px-3 bg-slate-800 rounded-full hover:bg-slate-700 transition-colors">
-                        <Trash2 size={16} /> Reset
-                    </button>
-                </div>
-
-                <SetSelector sets={loadedDictionary.sets} selectedSetIndex={selectedSetIndex} onSelectSet={handleSelectSet} />
-                
-                {isProgressLoading ? (
-                     <div className="w-full aspect-[3/2] flex justify-center items-center text-slate-400">
-                        <Loader2 className="animate-spin h-8 w-8 mr-3" />
-                        <span>Loading progress...</span>
-                    </div>
-                ) : currentWord ? (
-                    <div className="w-full flex flex-col items-center">
-                         <div className="w-full text-center mb-2">
-                             <p className="text-slate-400">{isDontKnowMode ? "Reviewing Mistakes" : "Learning"}: {currentWordIndex + 1} / {reviewWords.length}</p>
-                        </div>
-                        <ProgressBar current={currentWordIndex + 1} total={reviewWords.length} />
-                        <Flashcard word={currentWord} isFlipped={isFlipped} onFlip={handleFlip} exampleSentence={exampleSentence} />
-                        <div className="flex justify-center gap-4 mt-6 w-full">
-                            <button onClick={handleDontKnow} disabled={isProgressLoading} className="w-full py-3 text-lg font-semibold bg-rose-600 hover:bg-rose-700 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-wait">Don't know</button>
-                            <button onClick={handleKnow} disabled={isProgressLoading} className="w-full py-3 text-lg font-semibold bg-emerald-600 hover:bg-emerald-700 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-wait">Know</button>
-                        </div>
-                    </div>
-                ) : (
-                    <div className="text-center my-16">
-                        <h2 className="text-2xl font-semibold mb-4 text-slate-300">Session Complete!</h2>
-                        <p className="text-slate-400">You've reviewed all available cards for this set.</p>
-                        {selectedSetIndex !== null && dontKnowWords.get(selectedSetIndex) && dontKnowWords.get(selectedSetIndex)!.length > 0 && (
-                             <button onClick={startDontKnowSession} className="mt-6 px-5 py-2.5 bg-amber-600 hover:bg-amber-700 rounded-lg font-semibold transition-colors flex items-center gap-2 mx-auto">
-                                <Repeat size={18} />
-                                Review {dontKnowWords.get(selectedSetIndex)?.length} Mistake(s)
-                            </button>
-                        )}
+            <main className="flex-grow flex items-center justify-center p-4">
+                {renderContent()}
+            </main>
+            
+            <footer className="w-full p-4">
+                {loadedDictionary && selectedSetIndex !== null && (
+                     <div className="w-full max-w-xl mx-auto border-t border-slate-700 pt-4">
+                        <SentenceUpload
+                            onSentencesLoaded={setSentences}
+                            onClearSentences={() => setSentences(new Map())}
+                            hasSentences={sentences.size > 0}
+                        />
                     </div>
                 )}
-                
-                <div className="w-full mt-8 p-3 bg-slate-800/50 rounded-lg">
-                    <SentenceUpload onSentencesLoaded={setSentences} onClearSentences={() => setSentences(new Map())} hasSentences={sentences.size > 0}/>
-                </div>
-
-                {currentSet && (
-                     <div className="flex items-center justify-center gap-6 mt-6">
-                        <button onClick={handleShuffle} disabled={reviewWords.length <= 1} className="flex items-center gap-2 text-slate-400 hover:text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
-                            <Shuffle size={18} /> Shuffle
-                        </button>
-                        <button onClick={() => setIsWordListVisible(v => !v)} className="flex items-center gap-2 text-slate-400 hover:text-white transition-colors">
-                            <ChevronsUpDown size={18} /> Word List
-                        </button>
-                    </div>
-                )}
-                
-                {currentSet && <WordList words={currentSet.words} isVisible={isWordListVisible} />}
-            </div>
-
-            <FileSourceModal isOpen={isFileSourceModalOpen && !loadedDictionary} onClose={() => setFileSourceModalOpen(false)} onFilesSelect={handleFilesSelect} isLoading={isLoading} />
-            <InstructionsModal isOpen={isInstructionsModalOpen} onClose={() => setInstructionsModalOpen(false)} />
-            <LearnedWordsModal isOpen={isLearnedWordsModalOpen} onClose={() => setLearnedWordsModalOpen(false)} learnedWords={learnedWordsWithDetails} />
-        </main>
+            </footer>
+            
+            <FileSourceModal
+                isOpen={isSourceModalOpen}
+                onClose={() => setIsSourceModalOpen(false)}
+                onFileSelect={handleFileLoad}
+                onBuiltInSelect={handleBuiltInLoad}
+                isLoading={isLoading}
+            />
+            <InstructionsModal isOpen={isInstructionsModalOpen} onClose={() => setIsInstructionsModalOpen(false)} />
+            <LearnedWordsModal isOpen={isLearnedWordsModalOpen} onClose={() => setIsLearnedWordsModalOpen(false)} learnedWords={learnedWordsForModal} />
+        </div>
     );
 };
 

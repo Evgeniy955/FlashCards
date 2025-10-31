@@ -888,19 +888,3 @@
   "Turn right at the traffic lights": "Turn right at the traffic lights to go to the supermarket.",
   "Go round the roundabout and take the third exit": "Go round the roundabout and take the third exit to reach the stadium."
 }
---- START OF FILE .env.local.example ---
-
-# --- Frontend Firebase Configuration ---
-# Copy these from your Firebase project settings (Web App SDK config)
-VITE_FIREBASE_API_KEY=
-VITE_FIREBASE_AUTH_DOMAIN=
-VITE_FIREBASE_PROJECT_ID=
-VITE_FIREBASE_STORAGE_BUCKET=
-VITE_FIREBASE_MESSAGING_SENDER_ID=
-VITE_FIREBASE_APP_ID=
-
-# --- Backend Firebase Admin Configuration ---
-# Copy these from the generated Service Account JSON file
-FIREBASE_PROJECT_ID=
-FIREBASE_CLIENT_EMAIL=
-FIREBASE_PRIVATE_KEY=

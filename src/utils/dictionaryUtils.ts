@@ -4,7 +4,7 @@ import type { Word, WordSet, LoadedDictionary } from '../types';
 const MAX_SET_SIZE = 30;
 
 export const shuffleArray = <T,>(array: T[]): T[] => {
-    return [...array].sort(() => Math.random() - 0.5);
+  return [...array].sort(() => Math.random() - 0.5);
 };
 
 const extractWordsFromColumns = (jsonData: (string | null)[][], ruCol: number, enCol: number): Word[] => {
@@ -23,10 +23,10 @@ const splitIntoSubsets = (words: Word[], baseSetName: string, originalSetIndex: 
     if (words.length <= MAX_SET_SIZE) {
         // If there's only one set and it's small, don't add a range to the name.
         if (words.length < MAX_SET_SIZE && words.length === jsonData.filter(row => row?.[originalSetIndex * 4] && row?.[originalSetIndex * 4 + 2]).length) {
-            return [{ name: baseSetName, words, originalSetIndex }];
+             return [{ name: baseSetName, words, originalSetIndex }];
         }
     }
-
+    
     const subsets: WordSet[] = [];
     for (let i = 0; i < words.length; i += MAX_SET_SIZE) {
         const chunk = words.slice(i, i + MAX_SET_SIZE);
@@ -75,7 +75,7 @@ export const parseDictionaryFile = async (file: File): Promise<LoadedDictionary>
                 originalSetIndexCounter++;
             }
         }
-
+        
         if (allSets.length === 0) {
             throw new Error("No valid word sets found. Ensure columns A/C, E/G, etc., contain words.");
         }
