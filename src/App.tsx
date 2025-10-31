@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useAuthState } from 'react-firebase-hooks/auth';
 import { auth, db } from './lib/firebase-client';
-// FIX: The `doc`, `getDoc`, and `setDoc` functions are part of the Firebase v9 modular API. Since the project's setup requires using the v8 compat API, these imports are no longer valid and have been removed.
+import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { Flashcard } from './components/Flashcard';
 import { ProgressBar } from './components/ProgressBar';
 import { SetSelector } from './components/SetSelector';
@@ -27,10 +27,6 @@ const App: React.FC = () => {
     const [isFlipped, setIsFlipped] = useState(false);
     const [reviewWords, setReviewWords] = useState<Word[]>([]);
     
-    // States for session progress tracking to avoid UI jumps
-    const [sessionProgress, setSessionProgress] = useState(0);
-    const [sessionTotal, setSessionTotal] = useState(0);
-    
     const [learnedWords, setLearnedWords] = useState<Map<string, WordProgress>>(new Map());
     const [dontKnowWords, setDontKnowWords] = useState<Map<number, Word[]>>(new Map());
     const [sentences, setSentences] = useState<Map<string, string>>(new Map());
@@ -54,11 +50,10 @@ const App: React.FC = () => {
                 setSentences(new Map());
                 return;
             }
-            // FIX: Updated Firestore document reference to use the v8 compat syntax.
-            const userDocRef = db.collection('users').doc(user.uid);
+            const userDocRef = doc(db, 'users', user.uid);
             try {
-                const docSnap = await userDocRef.get();
-                if (docSnap.exists) {
+                const docSnap = await getDoc(userDocRef);
+                if (docSnap.exists()) {
                     const data = docSnap.data();
                     if (data && data.globalSentences) {
                         setSentences(new Map(Object.entries(data.globalSentences)));
@@ -80,11 +75,9 @@ const App: React.FC = () => {
         if (!user) return; // Don't save if not logged in
 
         const handler = setTimeout(async () => {
-            // FIX: Updated Firestore document reference to use the v8 compat syntax.
-            const userDocRef = db.collection('users').doc(user.uid);
+            const userDocRef = doc(db, 'users', user.uid);
             try {
-                // FIX: Updated Firestore set call to use the v8 compat `set` method.
-                await userDocRef.set({
+                await setDoc(userDocRef, {
                     globalSentences: Object.fromEntries(sentences)
                 }, { merge: true });
             } catch (error) {
@@ -107,12 +100,10 @@ const App: React.FC = () => {
             }
 
             setIsProgressLoading(true);
-            // FIX: Updated Firestore document reference to use the v8 compat syntax for nested collections.
-            const docRef = db.collection('users').doc(user.uid).collection('progress').doc(dictionaryId);
+            const docRef = doc(db, 'users', user.uid, 'progress', dictionaryId);
             try {
-                // FIX: Updated Firestore get call to use the v8 compat `get` method.
-                const docSnap = await docRef.get();
-                if (docSnap.exists) {
+                const docSnap = await getDoc(docRef);
+                if (docSnap.exists()) {
                     const data = docSnap.data()!;
                     setLearnedWords(new Map(Object.entries(data.learnedWords || {})));
                     const dontKnowMap = new Map(
@@ -145,15 +136,14 @@ const App: React.FC = () => {
         }
 
         const handler = setTimeout(async () => {
-            // FIX: Updated Firestore document reference to use the v8 compat syntax for nested collections.
-            const docRef = db.collection('users').doc(user.uid).collection('progress').doc(dictionaryId);
+            const docRef = doc(db, 'users', user.uid, 'progress', dictionaryId);
             const dataToSave = {
                 learnedWords: Object.fromEntries(learnedWords),
                 dontKnowWords: Object.fromEntries(dontKnowWords),
+                // Sentences are no longer saved per dictionary
             };
             try {
-                // FIX: Updated Firestore set call to use the v8 compat `set` method.
-                await docRef.set(dataToSave, { merge: true });
+                await setDoc(docRef, dataToSave, { merge: true });
             } catch (error) {
                 console.error("Error saving dictionary progress to Firestore:", error);
             }
@@ -171,25 +161,22 @@ const App: React.FC = () => {
             const progress = learnedWords.get(word.en);
             return !progress || progress.nextReviewDate <= now;
         });
-        setReviewWords(wordsForReview);
-        setSessionTotal(wordsForReview.length);
-        setSessionProgress(wordsForReview.length > 0 ? 1 : 0);
+        setReviewWords(wordsForReview); // Removed automatic shuffle
         setCurrentWordIndex(0);
         setIsFlipped(false);
         setIsDontKnowMode(false);
     }, [loadedDictionary, learnedWords]);
 
     useEffect(() => {
-        // This effect now only runs when the selected set is changed or when the initial data load completes.
-        // It will no longer re-run during a session when `learnedWords` is updated.
         if (selectedSetIndex !== null && !isProgressLoading) {
             startReviewSession(selectedSetIndex);
         }
-    }, [selectedSetIndex, isProgressLoading, loadedDictionary, startReviewSession]); // Added startReviewSession to dependency array
+    }, [selectedSetIndex, learnedWords, startReviewSession, isProgressLoading]);
     
     const handleFilesSelect = async (name: string, wordsFile: File, sentencesFile?: File) => {
         setIsLoading(true);
         try {
+            // First, parse the optional sentences file to have it ready for merging.
             let sentenceMapFromFile: Map<string, string> | null = null;
             if (sentencesFile) {
                 const text = await sentencesFile.text();
@@ -202,12 +189,15 @@ const App: React.FC = () => {
                 }
             }
 
+            // Clear previous dictionary-specific progress states.
             setLearnedWords(new Map());
             setDontKnowWords(new Map());
+            // Merge sentences from the file into the global sentence state.
             if (sentenceMapFromFile) {
                 setSentences(prev => new Map([...prev, ...sentenceMapFromFile!]));
             }
 
+            // Now, parse and set the new dictionary. This will trigger the progress loading useEffect.
             const dictionary = await parseDictionaryFile(wordsFile);
             dictionary.name = name; 
             setLoadedDictionary(dictionary);
@@ -243,8 +233,9 @@ const App: React.FC = () => {
     const updateWordIndex = () => {
         if (currentWordIndex < reviewWords.length - 1) {
             setCurrentWordIndex(prev => prev + 1);
-            setSessionProgress(prev => prev + 1); // Increment stable progress counter
         } else {
+            // End of session. Just clear the review words to show the "complete" message.
+            // The user can restart by clicking the set button or "Review Mistakes".
             setReviewWords([]);
         }
     };
@@ -269,13 +260,14 @@ const App: React.FC = () => {
             });
         }
         
-        setIsChangingWord(true);
+        setIsChangingWord(true); // 1. Start transition (fade out).
         
+        // 2. Wait for fade out to finish, then update.
         setTimeout(() => {
-            updateWordIndex();
-            setIsFlipped(false);
-            setIsChangingWord(false);
-        }, 250);
+            updateWordIndex();      // 3a. Change the word.
+            setIsFlipped(false);    // 3b. Flip back to the front.
+            setIsChangingWord(false); // 3c. End transition (fade in).
+        }, 250); // This duration should match the CSS transition.
     };
 
     const handleDontKnow = () => {
@@ -299,19 +291,27 @@ const App: React.FC = () => {
             });
         }
         
-        setIsChangingWord(true);
+        setIsChangingWord(true); // 1. Start transition (fade out).
         
+        // 2. Wait for fade out to finish, then update.
         setTimeout(() => {
-            updateWordIndex();
-            setIsFlipped(false);
-            setIsChangingWord(false);
-        }, 250);
+            updateWordIndex();      // 3a. Change the word.
+            setIsFlipped(false);    // 3b. Flip back to the front.
+            setIsChangingWord(false); // 3c. End transition (fade in).
+        }, 250); // This duration should match the CSS transition.
     };
 
     const handleFlip = () => setIsFlipped(prev => !prev);
     
     const handleSelectSet = (index: number) => {
-        setSelectedSetIndex(index);
+        // If a different set is clicked, update the state. The useEffect will start the session.
+        if (index !== selectedSetIndex) {
+            setSelectedSetIndex(index);
+        } else {
+            // If the same set is clicked again (e.g., to restart a completed session),
+            // manually start a new session because the useEffect won't trigger.
+            startReviewSession(index);
+        }
     };
 
     const handleShuffle = () => setReviewWords(shuffleArray(reviewWords));
@@ -320,9 +320,7 @@ const App: React.FC = () => {
         if (selectedSetIndex === null) return;
         const words = dontKnowWords.get(selectedSetIndex) || [];
         if (words.length > 0) {
-            setReviewWords(words);
-            setSessionTotal(words.length);
-            setSessionProgress(words.length > 0 ? 1 : 0);
+            setReviewWords(words); // Removed automatic shuffle
             setCurrentWordIndex(0);
             setIsFlipped(false);
             setIsDontKnowMode(true);
@@ -333,6 +331,7 @@ const App: React.FC = () => {
         if (window.confirm('Are you sure you want to reset learning progress for this dictionary? Your global sentence list will not be affected.')) {
             setLearnedWords(new Map());
             setDontKnowWords(new Map());
+            // The save effect for progress will trigger and clear the data in Firestore.
             if (selectedSetIndex !== null) startReviewSession(selectedSetIndex);
         }
     };
@@ -396,9 +395,9 @@ const App: React.FC = () => {
                 ) : reviewWords.length > 0 ? (
                     <div className="w-full flex flex-col items-center">
                          <div className="w-full text-center mb-2">
-                             <p className="text-slate-400">{isDontKnowMode ? "Reviewing Mistakes" : "Learning"}: {sessionProgress} / {sessionTotal}</p>
+                             <p className="text-slate-400">{isDontKnowMode ? "Reviewing Mistakes" : "Learning"}: {currentWordIndex + 1} / {reviewWords.length}</p>
                         </div>
-                        <ProgressBar current={sessionProgress} total={sessionTotal} />
+                        <ProgressBar current={currentWordIndex + 1} total={reviewWords.length} />
                         <div className={`w-full transition-opacity duration-200 ${isChangingWord ? 'opacity-0' : 'opacity-100'}`}>
                             <Flashcard word={currentWord} isFlipped={isFlipped} onFlip={handleFlip} exampleSentence={exampleSentence} isChanging={isChangingWord} />
                         </div>
