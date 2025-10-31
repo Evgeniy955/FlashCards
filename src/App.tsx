@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useAuthState } from 'react-firebase-hooks/auth';
 import { auth, db } from './lib/firebase-client';
-// FIX: Removed unused v9 firestore imports. The logic is updated to use the v8 compat API provided by the `db` object.
+import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { Flashcard } from './components/Flashcard';
 import { ProgressBar } from './components/ProgressBar';
 import { SetSelector } from './components/SetSelector';
@@ -35,6 +35,7 @@ const App: React.FC = () => {
     const [isProgressLoading, setIsProgressLoading] = useState(true); // For Firestore, start as true
     const [isWordListVisible, setIsWordListVisible] = useState(false);
     const [isDontKnowMode, setIsDontKnowMode] = useState(false);
+    const [isTransitioning, setIsTransitioning] = useState(false); // For know/dont-know animation
     
     const [isFileSourceModalOpen, setFileSourceModalOpen] = useState(true);
     const [isInstructionsModalOpen, setInstructionsModalOpen] = useState(false);
@@ -49,10 +50,10 @@ const App: React.FC = () => {
                 setSentences(new Map());
                 return;
             }
-            const userDocRef = db.collection('users').doc(user.uid);
+            const userDocRef = doc(db, 'users', user.uid);
             try {
-                const docSnap = await userDocRef.get();
-                if (docSnap.exists) {
+                const docSnap = await getDoc(userDocRef);
+                if (docSnap.exists()) {
                     const data = docSnap.data();
                     if (data && data.globalSentences) {
                         setSentences(new Map(Object.entries(data.globalSentences)));
@@ -74,9 +75,9 @@ const App: React.FC = () => {
         if (!user) return; // Don't save if not logged in
 
         const handler = setTimeout(async () => {
-            const userDocRef = db.collection('users').doc(user.uid);
+            const userDocRef = doc(db, 'users', user.uid);
             try {
-                await userDocRef.set({
+                await setDoc(userDocRef, {
                     globalSentences: Object.fromEntries(sentences)
                 }, { merge: true });
             } catch (error) {
@@ -99,10 +100,10 @@ const App: React.FC = () => {
             }
 
             setIsProgressLoading(true);
-            const docRef = db.collection('users').doc(user.uid).collection('progress').doc(dictionaryId);
+            const docRef = doc(db, 'users', user.uid, 'progress', dictionaryId);
             try {
-                const docSnap = await docRef.get();
-                if (docSnap.exists) {
+                const docSnap = await getDoc(docRef);
+                if (docSnap.exists()) {
                     const data = docSnap.data()!;
                     setLearnedWords(new Map(Object.entries(data.learnedWords || {})));
                     const dontKnowMap = new Map(
@@ -135,14 +136,14 @@ const App: React.FC = () => {
         }
 
         const handler = setTimeout(async () => {
-            const docRef = db.collection('users').doc(user.uid).collection('progress').doc(dictionaryId);
+            const docRef = doc(db, 'users', user.uid, 'progress', dictionaryId);
             const dataToSave = {
                 learnedWords: Object.fromEntries(learnedWords),
                 dontKnowWords: Object.fromEntries(dontKnowWords),
                 // Sentences are no longer saved per dictionary
             };
             try {
-                await docRef.set(dataToSave, { merge: true });
+                await setDoc(docRef, dataToSave, { merge: true });
             } catch (error) {
                 console.error("Error saving dictionary progress to Firestore:", error);
             }
@@ -244,13 +245,15 @@ const App: React.FC = () => {
     };
 
     const handleKnow = () => {
-        if (!currentWord) return;
+        if (!currentWord || isTransitioning) return;
+
         const progress = learnedWords.get(currentWord.en);
         const currentStage = progress ? progress.srsStage : -1;
         const nextStage = Math.min(currentStage + 1, SRS_INTERVALS.length - 1);
         const nextReviewDate = new Date();
         nextReviewDate.setDate(nextReviewDate.getDate() + SRS_INTERVALS[nextStage]);
         setLearnedWords(prev => new Map(prev).set(currentWord.en, { srsStage: nextStage, nextReviewDate: nextReviewDate.toISOString() }));
+        
         if (isDontKnowMode && selectedSetIndex !== null) {
             setDontKnowWords(prev => {
                 const newMap = new Map(prev);
@@ -260,7 +263,12 @@ const App: React.FC = () => {
                 return newMap;
             });
         }
-        goToNextWord();
+        
+        setIsTransitioning(true);
+        setTimeout(() => {
+            goToNextWord();
+            setIsTransitioning(false);
+        }, 400);
     };
 
     const handleDontKnow = () => {
@@ -370,10 +378,10 @@ const App: React.FC = () => {
                              <p className="text-slate-400">{isDontKnowMode ? "Reviewing Mistakes" : "Learning"}: {currentWordIndex + 1} / {reviewWords.length}</p>
                         </div>
                         <ProgressBar current={currentWordIndex + 1} total={reviewWords.length} />
-                        <Flashcard word={currentWord} isFlipped={isFlipped} onFlip={handleFlip} exampleSentence={exampleSentence} />
+                        <Flashcard word={currentWord} isFlipped={isFlipped} onFlip={handleFlip} exampleSentence={exampleSentence} isTransitioning={isTransitioning} />
                         <div className="flex justify-center gap-4 mt-6 w-full">
-                            <button onClick={handleDontKnow} disabled={isProgressLoading} className="w-full py-3 text-lg font-semibold bg-rose-600 hover:bg-rose-700 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-wait">Don't know</button>
-                            <button onClick={handleKnow} disabled={isProgressLoading} className="w-full py-3 text-lg font-semibold bg-emerald-600 hover:bg-emerald-700 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-wait">Know</button>
+                            <button onClick={handleDontKnow} disabled={isProgressLoading || isTransitioning} className="w-full py-3 text-lg font-semibold bg-rose-600 hover:bg-rose-700 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-wait">Don't know</button>
+                            <button onClick={handleKnow} disabled={isProgressLoading || isTransitioning} className="w-full py-3 text-lg font-semibold bg-emerald-600 hover:bg-emerald-700 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-wait">Know</button>
                         </div>
                     </div>
                 ) : (

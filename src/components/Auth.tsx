@@ -1,7 +1,6 @@
 import React from 'react';
-// FIX: Switched to Firebase v8 compatibility library to resolve "module has no exported member" errors. Imports for auth providers and functions are now accessed via the `firebase` object.
-import firebase from 'firebase/compat/app';
-import 'firebase/compat/auth';
+// FIX: Switched to a namespace import for 'firebase/auth' to resolve issues where named exports were not being found. This addresses errors for GoogleAuthProvider, signInWithPopup, signOut, and User.
+import * as firebaseAuth from 'firebase/auth';
 import { auth } from '../lib/firebase-client';
 
 const GoogleIcon = () => (
@@ -15,18 +14,15 @@ const GoogleIcon = () => (
 );
 
 interface AuthProps {
-    // FIX: Changed `User` type to `firebase.User` to align with the Firebase v8 compatibility library.
-    user: firebase.User | null | undefined;
+    user: firebaseAuth.User | null | undefined;
 }
 
 export const Auth: React.FC<AuthProps> = ({ user }) => {
     
     const handleSignIn = async () => {
-        // FIX: Updated `GoogleAuthProvider` to be accessed from `firebase.auth`.
-        const provider = new firebase.auth.GoogleAuthProvider();
+        const provider = new firebaseAuth.GoogleAuthProvider();
         try {
-            // FIX: Updated to use the `signInWithPopup` method from the compat `auth` service object.
-            await auth.signInWithPopup(provider);
+            await firebaseAuth.signInWithPopup(auth, provider);
         } catch (error) {
             console.error("Authentication failed:", error);
         }
@@ -34,8 +30,7 @@ export const Auth: React.FC<AuthProps> = ({ user }) => {
 
     const handleSignOut = async () => {
         try {
-            // FIX: Updated to use the `signOut` method from the compat `auth` service object.
-            await auth.signOut();
+            await firebaseAuth.signOut(auth);
         } catch (error) {
             console.error("Sign out failed:", error);
         }

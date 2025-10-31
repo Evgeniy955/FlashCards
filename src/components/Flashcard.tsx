@@ -7,13 +7,14 @@ interface FlashcardProps {
   isFlipped: boolean;
   onFlip: () => void;
   exampleSentence?: string;
+  isTransitioning?: boolean;
 }
 
-export const Flashcard: React.FC<FlashcardProps> = ({ word, isFlipped, onFlip, exampleSentence }) => {
-
+export const Flashcard: React.FC<FlashcardProps> = ({ word, isFlipped, onFlip, exampleSentence, isTransitioning }) => {
+  
   const handlePlayAudioSequence = (e: React.MouseEvent) => {
     e.stopPropagation(); // Prevent card from flipping when clicking the button
-
+    
     if (!('speechSynthesis' in window)) {
       alert('Sorry, your browser does not support text-to-speech.');
       return;
@@ -42,50 +43,50 @@ export const Flashcard: React.FC<FlashcardProps> = ({ word, isFlipped, onFlip, e
   };
 
   return (
-      // The perspective container for the 3D effect
-      <div
-          className="w-full aspect-[3/2] cursor-pointer group"
-          style={{ perspective: '1000px' }}
-          onClick={onFlip}
-          role="button"
-          tabIndex={0}
-          aria-label={`Flashcard for ${word.ru}. Click to flip.`}
-          onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && onFlip()}
+    // The perspective container for the 3D effect
+    <div 
+        className="w-full aspect-[3/2] cursor-pointer group" 
+        style={{ perspective: '1000px' }}
+        onClick={onFlip}
+        role="button"
+        tabIndex={0}
+        aria-label={`Flashcard for ${word.ru}. Click to flip.`}
+        onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && onFlip()}
+    >
+      {/* The inner container that flips */}
+      <div 
+        className="relative w-full h-full transition-transform duration-500"
+        style={{ transformStyle: 'preserve-3d', transform: isFlipped ? 'rotateY(180deg)' : 'rotateY(0deg)' }}
       >
-        {/* The inner container that flips */}
-        <div
-            className="relative w-full h-full transition-transform duration-500"
-            style={{ transformStyle: 'preserve-3d', transform: isFlipped ? 'rotateY(180deg)' : 'rotateY(0deg)' }}
+        {/* Front of the card (Russian) */}
+        <div 
+            className="absolute w-full h-full bg-slate-800 rounded-2xl shadow-xl flex flex-col justify-center items-center p-6 text-center"
+            style={{ backfaceVisibility: 'hidden', WebkitBackfaceVisibility: 'hidden' }}
         >
-          {/* Front of the card (Russian) */}
-          <div
-              className="absolute w-full h-full bg-slate-800 rounded-2xl shadow-xl flex flex-col justify-center items-center p-6 text-center"
-              style={{ backfaceVisibility: 'hidden', WebkitBackfaceVisibility: 'hidden' }}
-          >
-            <span className="text-4xl sm:text-5xl font-bold text-white">{word.ru}</span>
-            {/* Russian audio button has been removed as requested */}
-          </div>
+          <span className="text-4xl sm:text-5xl font-bold text-white">{word.ru}</span>
+          {/* Russian audio button has been removed as requested */}
+        </div>
 
-          {/* Back of the card (English) */}
-          <div
-              className="absolute w-full h-full bg-indigo-700 rounded-2xl shadow-xl flex flex-col justify-center items-center p-6 text-center"
-              style={{ backfaceVisibility: 'hidden', WebkitBackfaceVisibility: 'hidden', transform: 'rotateY(180deg)' }}
-          >
-            <div className={`transition-all duration-300 ease-in-out ${isFlipped ? 'blur-none delay-200' : 'blur-md'}`}>
-              <span className="text-4xl sm:text-5xl font-bold text-white">{word.en}</span>
-              {exampleSentence && (
-                  <p className="text-indigo-200 mt-4 text-sm sm:text-base italic">"{exampleSentence}"</p>
-              )}
-            </div>
-            <button
-                onClick={handlePlayAudioSequence}
-                className="absolute top-4 right-4 p-2 text-indigo-200 hover:text-white transition-colors rounded-full hover:bg-indigo-600"
-                aria-label="Play English pronunciation"
-            >
-              <Volume2 size={24} />
-            </button>
+        {/* Back of the card (English) */}
+        <div 
+            className="absolute w-full h-full bg-indigo-700 rounded-2xl shadow-xl flex flex-col justify-center items-center p-6 text-center"
+            style={{ backfaceVisibility: 'hidden', WebkitBackfaceVisibility: 'hidden', transform: 'rotateY(180deg)' }}
+        >
+          <div className={`transition-all duration-300 ease-in-out ${isTransitioning ? 'blur-md' : 'blur-none'}`}>
+            <span className="text-4xl sm:text-5xl font-bold text-white">{word.en}</span>
+            {exampleSentence && (
+              <p className="text-indigo-200 mt-4 text-sm sm:text-base italic">"{exampleSentence}"</p>
+            )}
           </div>
+          <button
+            onClick={handlePlayAudioSequence}
+            className="absolute top-4 right-4 p-2 text-indigo-200 hover:text-white transition-colors rounded-full hover:bg-indigo-600"
+            aria-label="Play English pronunciation"
+          >
+            <Volume2 size={24} />
+          </button>
         </div>
       </div>
+    </div>
   );
 };

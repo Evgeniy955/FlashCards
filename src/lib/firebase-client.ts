@@ -1,13 +1,14 @@
-// FIX: Switched to Firebase v8 compatibility library to resolve "module has no exported member" errors, which typically occur when using v9 syntax with an older Firebase version.
-import firebase from 'firebase/compat/app';
-import 'firebase/compat/auth';
-import 'firebase/compat/firestore';
-// FIX: Corrected import path for firebase-config
+// FIX: Switched to namespace imports for firebase/app and firebase/auth to resolve issues where named exports could not be found, likely due to a build configuration or dependency issue. This is a more robust way of importing from these modules.
+import * as firebaseApp from 'firebase/app';
+import * as firebaseAuth from 'firebase/auth';
+import { getFirestore } from 'firebase/firestore';
 import { firebaseConfig } from '../firebase-config';
 
-// Initialize Firebase with the configuration from the dedicated config file.
-const app = !firebase.apps.length ? firebase.initializeApp(firebaseConfig) : firebase.app();
-const auth = firebase.auth();
-const db = firebase.firestore();
+// Initialize Firebase using the v9+ modular approach
+const app = firebaseApp.initializeApp(firebaseConfig);
+
+// Get auth and firestore instances
+const auth = firebaseAuth.getAuth(app);
+const db = getFirestore(app);
 
 export { app, auth, db };
