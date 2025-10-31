@@ -234,12 +234,9 @@ const App: React.FC = () => {
         if (currentWordIndex < reviewWords.length - 1) {
             setCurrentWordIndex(prev => prev + 1);
         } else {
-            // End of session, re-evaluate words for review.
-            if (selectedSetIndex !== null) {
-                startReviewSession(selectedSetIndex);
-            } else {
-                 setReviewWords([]);
-            }
+            // End of session. Just clear the review words to show the "complete" message.
+            // The user can restart by clicking the set button or "Review Mistakes".
+            setReviewWords([]);
         }
     };
 
@@ -309,8 +306,20 @@ const App: React.FC = () => {
     };
 
     const handleFlip = () => setIsFlipped(prev => !prev);
-    const handleSelectSet = (index: number) => setSelectedSetIndex(index);
+    
+    const handleSelectSet = (index: number) => {
+        // If a different set is clicked, update the state. The useEffect will start the session.
+        if (index !== selectedSetIndex) {
+            setSelectedSetIndex(index);
+        } else {
+            // If the same set is clicked again (e.g., to restart a completed session),
+            // manually start a new session because the useEffect won't trigger.
+            startReviewSession(index);
+        }
+    };
+
     const handleShuffle = () => setReviewWords(shuffleArray(reviewWords));
+    
     const startDontKnowSession = () => {
         if (selectedSetIndex === null) return;
         const words = dontKnowWords.get(selectedSetIndex) || [];

@@ -1,6 +1,6 @@
 import React from 'react';
-// FIX: Switched to a namespace import for 'firebase/auth' to resolve build errors where named exports were not found.
-import * as firebaseAuth from 'firebase/auth';
+// FIX: Switched to named imports for Firebase auth functions and types to resolve "no exported member" and "property does not exist" errors, aligning with the Firebase v9+ modular SDK.
+import { GoogleAuthProvider, signInWithPopup, signOut, type User } from 'firebase/auth';
 import { auth } from '../lib/firebase-client';
 
 const GoogleIcon = () => (
@@ -14,15 +14,15 @@ const GoogleIcon = () => (
 );
 
 interface AuthProps {
-    user: firebaseAuth.User | null | undefined;
+    user: User | null | undefined;
 }
 
 export const Auth: React.FC<AuthProps> = ({ user }) => {
     
     const handleSignIn = async () => {
-        const provider = new firebaseAuth.GoogleAuthProvider();
+        const provider = new GoogleAuthProvider();
         try {
-            await firebaseAuth.signInWithPopup(auth, provider);
+            await signInWithPopup(auth, provider);
         } catch (error) {
             console.error("Authentication failed:", error);
         }
@@ -30,7 +30,7 @@ export const Auth: React.FC<AuthProps> = ({ user }) => {
 
     const handleSignOut = async () => {
         try {
-            await firebaseAuth.signOut(auth);
+            await signOut(auth);
         } catch (error) {
             console.error("Sign out failed:", error);
         }
