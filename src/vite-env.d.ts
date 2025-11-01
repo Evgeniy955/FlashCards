@@ -1,4 +1,5 @@
-/// <reference types="vite/client" />
+// FIX: Removed the triple-slash directive to resolve a "Cannot find type definition file" error.
+// The interfaces below provide the necessary types for import.meta.env for this project.
 
 interface ImportMetaEnv {
   readonly VITE_FIREBASE_API_KEY: string;

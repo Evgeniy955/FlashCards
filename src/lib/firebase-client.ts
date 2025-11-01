@@ -1,3 +1,4 @@
+// FIX: Changed to a namespace import to handle potential module resolution issues with 'initializeApp'.
 import * as firebaseApp from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
