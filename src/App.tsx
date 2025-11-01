@@ -111,15 +111,15 @@ const App: React.FC = () => {
             }
 
             setIsProgressLoading(true);
-            const docRef = doc(db, 'users', user.uid, 'progress', dictionaryId);
+            const docRef = doc(db, `users/${user.uid}/progress/${dictionaryId}`);
             try {
                 const docSnap = await getDoc(docRef);
                 if (docSnap.exists()) {
                     const data = docSnap.data();
-                    const learnedData = (data?.learnedWords || {}) as { [key: string]: WordProgress };
+                    const learnedData = data?.learnedWords || {};
                     setLearnedWords(new Map(Object.entries(learnedData)));
                     
-                    const dontKnowData = (data?.dontKnowWords || {}) as { [key: string]: Word[] };
+                    const dontKnowData = data?.dontKnowWords || {};
                     const dontKnowMap = new Map(
                         Object.entries(dontKnowData).map(([key, value]) => [
                             Number(key),
@@ -150,7 +150,7 @@ const App: React.FC = () => {
         }
 
         const handler = setTimeout(async () => {
-            const docRef = doc(db, 'users', user.uid, 'progress', dictionaryId);
+            const docRef = doc(db, `users/${user.uid}/progress/${dictionaryId}`);
             const dataToSave = {
                 learnedWords: Object.fromEntries(learnedWords),
                 dontKnowWords: Object.fromEntries(dontKnowWords),
