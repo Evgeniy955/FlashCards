@@ -1,5 +1,4 @@
 // The correct import for the Firebase v9+ modular SDK
-// FIX: Using a namespace import to address potential module resolution issues.
 import * as firebaseApp from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
