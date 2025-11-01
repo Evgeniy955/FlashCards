@@ -8,94 +8,95 @@ interface InstructionsModalProps {
 
 export const InstructionsModal: React.FC<InstructionsModalProps> = ({ isOpen, onClose }) => {
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Інструкція з використання">
+    <Modal isOpen={isOpen} onClose={onClose} title="Instruction Manual">
       <div className="text-slate-300 max-h-[70vh] overflow-y-auto pr-2 space-y-6">
         <section>
-          <h2 className="text-xl font-semibold mb-2 text-indigo-400">1. Початок роботи</h2>
+          <h2 className="text-xl font-semibold mb-2 text-indigo-400">1. Getting Started</h2>
           <p>
-            На головному екрані натисніть кнопку <strong>"Get Started"</strong>. Відкриється вікно, де ви можете обрати джерело слів:
+            On the main screen, click the <strong>"Get Started"</strong> button. A window will open where you can choose your word source:
           </p>
           <ul className="list-disc list-inside space-y-2 mt-3">
-            <li><strong>Built-in:</strong> Вибрати один із готових, вбудованих словників. Деякі з них містять файли з прикладами речень.</li>
-            <li><strong>From Computer:</strong> Завантажити власний файл зі словами у форматі Excel (.xlsx).</li>
+            <li><strong>Built-in:</strong> Select from pre-packaged dictionaries. Some include example sentence files.</li>
+            <li><strong>From Computer:</strong> Upload your own word file in Excel (.xlsx) format.</li>
           </ul>
         </section>
 
         <section>
-          <h2 className="text-xl font-semibold mb-2 text-indigo-400">2. Підготовка файлів</h2>
+          <h2 className="text-xl font-semibold mb-2 text-indigo-400">2. Preparing Your Files</h2>
           
-          <h3 className="text-lg font-semibold mb-1 text-slate-100">Словник слів (.xlsx)</h3>
+          <h3 className="text-lg font-semibold mb-1 text-slate-100">Word Dictionary (.xlsx)</h3>
           <p className="mb-3">
-            Для створення власного набору карток, ваш файл Excel має відповідати чіткій структурі:
+            To create your own flashcard set, your Excel file should follow a clear structure. For language auto-detection, add a header in the first row:
           </p>
           <ul className="list-disc list-inside space-y-2">
-            <li><strong>Колонка A:</strong> Слово російською або українською мовою.</li>
-            <li><strong>Колонка B:</strong> <em>Має бути порожньою.</em></li>
-            <li><strong>Колонка C:</strong> Переклад англійською мовою.</li>
-            <li><strong>Колонка D:</strong> <em>Має бути порожньою.</em></li>
+            <li><strong>Row 1 (Header):</strong> Enter the name of the language in the corresponding column (e.g., "Spanish" in A1, "English" in C1). This is now the recommended way.</li>
+            <li><strong>Row 2 onwards (Words):</strong>
+                <ul>
+                    <li><strong>Column A:</strong> Word in the first language.</li>
+                    <li><strong>Column B:</strong> <em>Should be empty.</em></li>
+                    <li><strong>Column C:</strong> Translation in the second language.</li>
+                    <li><strong>Column D:</strong> <em>Should be empty.</em></li>
+                </ul>
+            </li>
           </ul>
           <div className="mt-4 p-3 bg-slate-900 rounded-lg">
-            <p className="font-mono text-xs text-slate-400">Приклад структури для кількох наборів:</p>
+            <p className="font-mono text-xs text-slate-400">Example structure for multiple sets:</p>
             <pre className="text-slate-300 whitespace-pre-wrap text-xs"><code>
-{`|    A    | B |     C     | D |    E    | F |    G    |
-|---------|---|-----------|---|---------|---|---------|
-|   кот   |   |    cat    |   |  зелений|   |  green  |
-| собака  |   |    dog    |   | червоний|   |   red   |`}
+{`|     A     | B |      C      | D |      E     | F |       G      |
+|-----------|---|-------------|---|------------|---|--------------|
+|  Spanish  |   |   English   |   |   German   |   |   English    | <-- Header Row
+|-----------|---|-------------|---|------------|---|--------------|
+|   gato    |   |     cat     |   |   Katze    |   |     cat      | <-- Word Rows
+|   perro   |   |     dog     |   |    Hund    |   |     dog      |`}
             </code></pre>
           </div>
           <p className="mt-3">
-            Ви можете розміщувати кілька наборів слів на одному аркуші. Наступний набір починатиметься з колонки <strong>E</strong>, потім <strong>I</strong>, і так далі (з кроком у 4 колонки).
+            You can place multiple word sets on the same sheet. The next set will start in column <strong>E</strong>, then <strong>I</strong>, and so on (every 4 columns).
           </p>
-          <p className="mt-3">
-            <strong>Важливо:</strong> Якщо у вашому наборі більше 30 слів, він буде автоматично розділений на менші частини для зручнішого вивчення.
+           <p className="mt-3">
+            <strong>Note:</strong> If you upload a file without a header row, it will still work, but languages will be named generically (e.g., "Language A", "Language C").
           </p>
 
-          <h3 className="text-lg font-semibold mt-4 mb-1 text-slate-100">Речення-приклади (опціонально)</h3>
+          <h3 className="text-lg font-semibold mt-4 mb-1 text-slate-100">Example Sentences (Optional)</h3>
           <p className="mb-3">
-            Щоб бачити слова в контексті, ви можете завантажити файл із прикладами. Це можна зробити на екрані тренування.
+            To see words in context, you can upload a file with examples on the training screen. This file should be for English examples.
           </p>
           <ul className="list-disc list-inside space-y-2">
-            <li><strong>Формат .xlsx:</strong> <strong>Колонка A</strong> — англійське слово, <strong>Колонка B</strong> — речення-приклад.</li>
-            <li><strong>Формат .json:</strong> Об'єкт, де ключ — англійське слово (в нижньому регістрі), а значення — речення.</li>
+            <li><strong>.xlsx Format:</strong> <strong>Column A</strong> — English word, <strong>Column B</strong> — example sentence.</li>
+            <li><strong>.json Format:</strong> An object where the key is the English word (lowercase) and the value is the sentence.</li>
           </ul>
         </section>
 
         <section>
-          <h2 className="text-xl font-semibold mb-2 text-indigo-400">3. Процес тренування</h2>
+          <h2 className="text-xl font-semibold mb-2 text-indigo-400">3. The Training Process</h2>
           <ul className="list-disc list-inside space-y-2">
-            <li><strong>Вибір набору:</strong> Після завантаження файлу оберіть один із доступних наборів слів для початку.</li>
-            <li><strong>Інтервальне повторення:</strong> Додаток показує лише ті слова, які нові або час яких настав для повторення.</li>
-            <li><strong>Кнопки "Know" / "Don't know":</strong> Натискання <strong>"Know"</strong> збільшує інтервал до наступного показу слова. Натискання <strong>"Don't know"</strong> скидає прогрес, і слово з'явиться у наступній сесії.</li>
-            <li><strong>Перевертання картки:</strong> Натисніть на картку, щоб побачити переклад.</li>
-            <li><strong>Прослуховування:</strong> Натисніть іконку динаміка, щоб почути якісну вимову.</li>
-            <li><strong>Перемішування:</strong> Натисніть іконку з двома стрілками, щоб перемішати поточний набір слів.</li>
-            <li><strong>Список слів:</strong> Натисніть іконку зі стрілками вгору-вниз, щоб показати повний список слів у поточному наборі.</li>
+            <li><strong>Set Selection:</strong> After uploading a file, choose one of the available word sets to begin.</li>
+            <li><strong>Spaced Repetition:</strong> The app only shows words that are new or due for review.</li>
+            <li><strong>"Know" / "Don't know" Buttons:</strong> Clicking <strong>"Know"</strong> increases the interval until the next review. Clicking <strong>"Don't know"</strong> resets the progress, and the word will appear in the next session.</li>
+            <li><strong>Flipping the Card:</strong> Click the card to see the translation.</li>
+            <li><strong>Listening:</strong> Click the speaker icon to hear high-quality pronunciation (English only).</li>
+            <li><strong>Shuffle:</strong> Click the shuffle icon to randomize the current word set.</li>
+            <li><strong>Word List:</strong> Click the list icon to show the full list of words in the current set.</li>
+            <li><strong>Translation Direction:</strong> Use the toggle (e.g., "Spanish ↔ English") to switch between forward and reverse translation practice.</li>
           </ul>
         </section>
 
         <section>
-          <h2 className="text-xl font-semibold mb-2 text-indigo-400">4. Тренування невідомих слів</h2>
+          <h2 className="text-xl font-semibold mb-2 text-indigo-400">4. Training Unknown Words</h2>
           <p>
-            Слова, які ви відмітили як <strong>"Don't know"</strong>, зберігаються в окремому списку для кожного набору. Після завершення основної сесії з'явиться кнопка для їх тренування, що дозволяє зосередитись на найскладнішому матеріалі.
+            Words you mark as <strong>"Don't know"</strong> are saved in a separate list for each set. After completing the main session, a button will appear to train these words, allowing you to focus on the most challenging material in either "Write" or "Guess" mode.
           </p>
         </section>
         
         <section>
-          <h2 className="text-xl font-semibold mb-2 text-indigo-400">5. Керування реченнями</h2>
+          <h2 className="text-xl font-semibold mb-2 text-indigo-400">5. Managing Progress</h2>
           <p>
-            На екрані тренування, під карткою, знаходиться блок керування реченнями. Натисніть <strong>"Upload Sentences (Optional)"</strong> або <strong>"Update"</strong>, щоб додати або оновити речення з файлу. Щоб видалити всі завантажені речення, натисніть кнопку <strong>"Clear"</strong>.
-          </p>
-        </section>
-
-        <section>
-          <h2 className="text-xl font-semibold mb-2 text-indigo-400">6. Керування прогресом</h2>
-          <p>
-            Увесь ваш прогрес (вивчені та невідомі слова) зберігається локально у вашому браузері. У верхній частині екрана є кнопки для керування цим прогресом:
+            All your progress (learned and unknown words) is stored in your account, linked to the specific dictionary file.
           </p>
            <ul className="list-disc list-inside space-y-2 mt-3">
-                <li><strong>Learned:</strong> Відкриває вікно зі списком усіх слів, які ви відмітили як "Know". Ви можете побачити загальну кількість вивчених слів та поточний етап їх вивчення.</li>
-                <li><strong>Reset:</strong> Повністю видаляє **весь** збережений прогрес (вивчені слова та список "Don't know") для **всього** поточного словника. Ця дія незворотна і дозволяє почати навчання з чистого аркуша.</li>
-                <li><strong>Change:</strong> Дозволяє змінити поточний словник. Натискання цієї кнопки відкриє вікно вибору файлу, де ви зможете завантажити новий словник або вибрати інший із вбудованих.</li>
+                <li><strong>Learned:</strong> Opens a window listing all words you've marked as "Know," showing their current learning stage.</li>
+                <li><strong>Reset:</strong> Completely erases all saved progress for the current dictionary. This is irreversible.</li>
+                <li><strong>Change:</strong> Lets you switch to a different dictionary.</li>
             </ul>
         </section>
       </div>
