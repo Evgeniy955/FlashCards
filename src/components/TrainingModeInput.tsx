@@ -9,9 +9,10 @@ interface TrainingModeInputProps {
   onCheck: () => void;
   onNext: () => void;
   answerState: AnswerState;
+  placeholder: string;
 }
 
-export const TrainingModeInput: React.FC<TrainingModeInputProps> = ({ answer, setAnswer, onCheck, onNext, answerState }) => {
+export const TrainingModeInput: React.FC<TrainingModeInputProps> = ({ answer, setAnswer, onCheck, onNext, answerState, placeholder }) => {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (answerState === 'idle') {
@@ -40,7 +41,7 @@ export const TrainingModeInput: React.FC<TrainingModeInputProps> = ({ answer, se
           type="text"
           value={answer}
           onChange={(e) => setAnswer(e.target.value)}
-          placeholder="Type the English translation..."
+          placeholder={placeholder}
           disabled={answerState !== 'idle'}
           className={`w-full p-3 text-center text-lg bg-slate-800 rounded-lg border-2 transition-colors duration-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-900 disabled:opacity-70 ${stateStyles[answerState]}`}
           autoFocus
