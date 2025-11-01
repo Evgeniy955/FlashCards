@@ -288,8 +288,16 @@ const App: React.FC = () => {
                 }
             }
 
+            // --- Fully reset state for the new dictionary ---
             setLearnedWords(new Map());
             setDontKnowWords(new Map());
+            setReviewWords([]);
+            setSessionActive(false);
+            setSessionProgress(0);
+            setSessionTotal(0);
+            setCurrentWordIndex(0);
+            setIsDontKnowMode(false);
+
             if (sentenceMapFromFile) {
                 setSentences(prev => new Map([...prev, ...sentenceMapFromFile]));
             }
@@ -297,9 +305,8 @@ const App: React.FC = () => {
             const dictionary = await parseDictionaryFile(wordsFile);
             dictionary.name = name; 
             setLoadedDictionary(dictionary);
-            setSelectedSetIndex(0);
+            setSelectedSetIndex(0); // This sets the stage for the useEffect to start the session
             setFileSourceModalOpen(false);
-            setSessionActive(false); // Let the effect handle starting the session
 
         } catch (error) {
             alert((error as Error).message);
