@@ -1,17 +1,22 @@
 import React, { useState } from 'react';
+import { User } from 'firebase/auth';
 import { Modal } from './Modal';
 import { FileUpload } from './FileUpload';
 import { BuiltInDictionaries } from './BuiltInDictionaries';
-import { Library, Upload } from 'lucide-react';
+import { UserDictionaries } from './UserDictionaries';
+import { Library, Upload, User as UserIcon } from 'lucide-react';
+import { UserDictionary } from '../types';
 
 interface FileSourceModalProps {
   isOpen: boolean;
   onClose: () => void;
   onFilesSelect: (name: string, wordsFile: File, sentencesFile?: File) => void;
+  onUserDictionaryLoad: (dictionary: UserDictionary) => void;
   isLoading: boolean;
+  user: User | null | undefined;
 }
 
-type Tab = 'built-in' | 'computer';
+type Tab = 'built-in' | 'computer' | 'user';
 
 // Moved TabButton outside the component to prevent re-creation on each render.
 const TabButton = ({ activeTab, tab, onClick, children }: React.PropsWithChildren<{ activeTab: Tab, tab: Tab, onClick: (tab: Tab) => void }>) => (
@@ -28,7 +33,7 @@ const TabButton = ({ activeTab, tab, onClick, children }: React.PropsWithChildre
 );
 
 
-export const FileSourceModal: React.FC<FileSourceModalProps> = ({ isOpen, onClose, onFilesSelect, isLoading }) => {
+export const FileSourceModal: React.FC<FileSourceModalProps> = ({ isOpen, onClose, onFilesSelect, onUserDictionaryLoad, isLoading, user }) => {
   const [activeTab, setActiveTab] = useState<Tab>('built-in');
 
   const handleLocalFileSelect = (file: File) => {
@@ -46,6 +51,9 @@ export const FileSourceModal: React.FC<FileSourceModalProps> = ({ isOpen, onClos
       <div className="flex border-b border-slate-700">
         <TabButton activeTab={activeTab} tab="built-in" onClick={setActiveTab}><Library size={16} /> Built-in</TabButton>
         <TabButton activeTab={activeTab} tab="computer" onClick={setActiveTab}><Upload size={16} /> From Computer</TabButton>
+        {user && (
+           <TabButton activeTab={activeTab} tab="user" onClick={setActiveTab}><UserIcon size={16} /> My Dictionaries</TabButton>
+        )}
       </div>
       <div className="pt-6">
         {activeTab === 'built-in' && (
@@ -53,6 +61,9 @@ export const FileSourceModal: React.FC<FileSourceModalProps> = ({ isOpen, onClos
         )}
         {activeTab === 'computer' && (
           <FileUpload onFileUpload={handleLocalFileSelect} isLoading={isLoading} />
+        )}
+        {activeTab === 'user' && user && (
+          <UserDictionaries user={user} onLoad={onUserDictionaryLoad} onCloseModal={onClose} />
         )}
       </div>
     </Modal>
