@@ -12,7 +12,7 @@ import { WordList } from './components/WordList';
 import { SentenceUpload } from './components/SentenceUpload';
 import { Auth } from './components/Auth';
 import { Word, LoadedDictionary, WordProgress, TranslationMode } from './types';
-import { parseDictionaryFile, shuffleArray } from './utils/dictionaryUtils';
+import { parseDictionaryFile, shuffleArray, getWordId } from './utils/dictionaryUtils';
 import { Shuffle, ChevronsUpDown, Info, BookUser, Trash2, Repeat, Library, Loader2 } from 'lucide-react';
 import { TrainingModeInput, AnswerState } from './components/TrainingModeInput';
 import { TrainingModeGuess } from './components/TrainingModeGuess';
@@ -177,7 +177,8 @@ const App: React.FC = () => {
         if (!currentSet || !loadedDictionary) return;
     
         const isStandardMode = translationMode === 'standard';
-        const correctTranslation = isStandardMode ? correctWord.en : correctWord.ru;
+        const correctTranslation = isStandardMode ? correctWord.lang2 : correctWord.lang1;
+        const correctWordId = getWordId(correctWord);
     
         const originalSetIndex = currentSet.originalSetIndex;
         const allWordsInOriginalSet = loadedDictionary.sets
@@ -185,14 +186,14 @@ const App: React.FC = () => {
             .flatMap(s => s.words);
     
         let distractors = allWordsInOriginalSet
-            .filter(w => (isStandardMode ? w.en : w.ru) !== correctTranslation)
+            .filter(w => getWordId(w) !== correctWordId)
             .sort(() => 0.5 - Math.random())
             .slice(0, 2);
     
         if (distractors.length < 2) {
             const fallbackDistractors = loadedDictionary.sets
                 .flatMap(s => s.words)
-                .filter(w => (isStandardMode ? w.en : w.ru) !== correctTranslation && !distractors.some(d => (isStandardMode ? d.en : d.ru) === (isStandardMode ? w.en : w.ru)))
+                .filter(w => getWordId(w) !== correctWordId && !distractors.some(d => getWordId(d) === getWordId(w)))
                 .sort(() => 0.5 - Math.random())
                 .slice(0, 2 - distractors.length);
             distractors.push(...fallbackDistractors);
@@ -200,7 +201,7 @@ const App: React.FC = () => {
     
         const options = shuffleArray([
             correctTranslation, 
-            ...distractors.map(d => isStandardMode ? d.en : d.ru)
+            ...distractors.map(d => isStandardMode ? d.lang2 : d.lang1)
         ]);
         setGuessOptions(options);
     }, [currentSet, loadedDictionary, translationMode]);
@@ -224,7 +225,8 @@ const App: React.FC = () => {
         const set = loadedDictionary.sets[setIndex];
         const now = new Date().toISOString();
         const wordsForReview = set.words.filter(word => {
-            const progress = learnedWords.get(word.en);
+            const wordId = getWordId(word);
+            const progress = learnedWords.get(wordId);
             return !progress || progress.nextReviewDate <= now;
         });
 
@@ -254,8 +256,8 @@ const App: React.FC = () => {
 
     useEffect(() => {
         if (isDontKnowMode && trainingMode === 'guess' && currentWord) {
-            // Check if current options are for the current word, if not, generate new ones
-            if (!guessOptions.includes(translationMode === 'standard' ? currentWord.en : currentWord.ru)) {
+            const currentCorrectAnswer = translationMode === 'standard' ? currentWord.lang2 : currentWord.lang1;
+            if (!guessOptions.includes(currentCorrectAnswer)) {
                  generateGuessOptions(currentWord);
             }
         }
@@ -297,12 +299,12 @@ const App: React.FC = () => {
         }
     };
     
-    const exampleSentence = useMemo(() => currentWord ? sentences.get(currentWord.en.toLowerCase()) : undefined, [currentWord, sentences]);
+    const exampleSentence = useMemo(() => currentWord ? sentences.get(currentWord.lang2.toLowerCase()) : undefined, [currentWord, sentences]);
     const totalLearnedCount = useMemo(() => learnedWords.size, [learnedWords]);
 
     const staticCardNumber = useMemo(() => {
         if (!currentSet || !currentWord) return 0;
-        return currentSet.words.findIndex(word => word.en === currentWord.en) + 1;
+        return currentSet.words.findIndex(w => getWordId(w) === getWordId(currentWord)) + 1;
     }, [currentSet, currentWord]);
 
     const staticTotalCards = useMemo(() => {
@@ -314,16 +316,16 @@ const App: React.FC = () => {
         const allWords = new Map<string, Word>();
         for (const set of loadedDictionary.sets) {
             for (const word of set.words) {
-                allWords.set(word.en, word);
+                allWords.set(getWordId(word), word);
             }
         }
         return Array.from(learnedWords.entries())
-            .map(([en, progress]) => {
-                const word = allWords.get(en);
+            .map(([id, progress]) => {
+                const word = allWords.get(id);
                 return word ? { ...word, progress } : null;
             })
             .filter((item): item is Word & { progress: WordProgress } => item !== null)
-            .sort((a, b) => a.en.localeCompare(b.en));
+            .sort((a, b) => a.lang2.localeCompare(b.lang2));
     }, [learnedWords, loadedDictionary]);
     
     const advanceToNextWord = (updateLogic: () => boolean, instant = false) => {
@@ -350,17 +352,18 @@ const App: React.FC = () => {
 
     const handleKnow = () => {
         advanceToNextWord(() => {
-            const progress = learnedWords.get(currentWord.en);
+            const wordId = getWordId(currentWord);
+            const progress = learnedWords.get(wordId);
             const currentStage = progress ? progress.srsStage : -1;
             const nextStage = Math.min(currentStage + 1, SRS_INTERVALS.length - 1);
             const nextReviewDate = new Date();
             nextReviewDate.setDate(nextReviewDate.getDate() + SRS_INTERVALS[nextStage]);
-            setLearnedWords(prev => new Map(prev).set(currentWord.en, { srsStage: nextStage, nextReviewDate: nextReviewDate.toISOString() }));
+            setLearnedWords(prev => new Map(prev).set(wordId, { srsStage: nextStage, nextReviewDate: nextReviewDate.toISOString() }));
             
             if (isDontKnowMode && selectedSetIndex !== null) {
                 setDontKnowWords((prev: Map<number, Word[]>) => {
                     const newMap = new Map(prev);
-                    const words = newMap.get(selectedSetIndex)?.filter(w => w.en !== currentWord.en) || [];
+                    const words = newMap.get(selectedSetIndex)?.filter(w => getWordId(w) !== wordId) || [];
                     if (words.length > 0) newMap.set(selectedSetIndex, words);
                     else newMap.delete(selectedSetIndex);
                     return newMap;
@@ -373,11 +376,12 @@ const App: React.FC = () => {
     const handleDontKnow = () => {
         advanceToNextWord(() => {
             if (selectedSetIndex === null) return false;
+            const wordId = getWordId(currentWord);
 
-            if (learnedWords.has(currentWord.en)) {
+            if (learnedWords.has(wordId)) {
                 setLearnedWords(prev => {
                     const newMap = new Map(prev);
-                    newMap.delete(currentWord.en);
+                    newMap.delete(wordId);
                     return newMap;
                 });
             }
@@ -385,7 +389,7 @@ const App: React.FC = () => {
                 setDontKnowWords((prev: Map<number, Word[]>) => {
                     const newMap = new Map(prev);
                     const currentList = newMap.get(selectedSetIndex) || [];
-                    if (!currentList.some(w => w.en === currentWord.en)) {
+                    if (!currentList.some(w => getWordId(w) === wordId)) {
                         newMap.set(selectedSetIndex, [...currentList, currentWord]);
                     }
                     return newMap;
@@ -433,7 +437,7 @@ const App: React.FC = () => {
     const handleTrainingAnswer = () => {
         if (!currentWord || answerState !== 'idle') return;
 
-        const correctAnswer = translationMode === 'standard' ? currentWord.en : currentWord.ru;
+        const correctAnswer = translationMode === 'standard' ? currentWord.lang2 : currentWord.lang1;
         const isCorrect = userAnswer.trim().toLowerCase() === correctAnswer.toLowerCase();
         
         if (isCorrect) {
@@ -460,18 +464,18 @@ const App: React.FC = () => {
 
     const handleGuess = (isCorrect: boolean) => {
         if (isCorrect) {
-            // Logic from handleKnow without advancing the word
-            const progress = learnedWords.get(currentWord.en);
+            const wordId = getWordId(currentWord);
+            const progress = learnedWords.get(wordId);
             const currentStage = progress ? progress.srsStage : -1;
             const nextStage = Math.min(currentStage + 1, SRS_INTERVALS.length - 1);
             const nextReviewDate = new Date();
             nextReviewDate.setDate(nextReviewDate.getDate() + SRS_INTERVALS[nextStage]);
-            setLearnedWords(prev => new Map(prev).set(currentWord.en, { srsStage: nextStage, nextReviewDate: nextReviewDate.toISOString() }));
+            setLearnedWords(prev => new Map(prev).set(wordId, { srsStage: nextStage, nextReviewDate: nextReviewDate.toISOString() }));
             
             if (isDontKnowMode && selectedSetIndex !== null) {
                 setDontKnowWords((prev: Map<number, Word[]>) => {
                     const newMap = new Map(prev);
-                    const words = newMap.get(selectedSetIndex)?.filter(w => w.en !== currentWord.en) || [];
+                    const words = newMap.get(selectedSetIndex)?.filter(w => getWordId(w) !== wordId) || [];
                     if (words.length > 0) newMap.set(selectedSetIndex, words);
                     else newMap.delete(selectedSetIndex);
                     return newMap;
@@ -508,10 +512,13 @@ const App: React.FC = () => {
             );
         }
 
-        if (reviewWords.length > 0 && currentWord) {
+        if (reviewWords.length > 0 && currentWord && currentSet) {
             const counterText = isDontKnowMode
                 ? `${sessionProgress} / ${sessionTotal}`
                 : (staticCardNumber > 0 ? `${staticCardNumber} / ${staticTotalCards}` : '...');
+            
+            const placeholderLang = translationMode === 'standard' ? currentSet.lang2 : currentSet.lang1;
+            const correctAnswer = translationMode === 'standard' ? currentWord.lang2 : currentWord.lang1;
 
             return (
                 <div className="w-full flex flex-col items-center">
@@ -533,7 +540,7 @@ const App: React.FC = () => {
                     </div>
                     <ProgressBar current={sessionProgress} total={sessionTotal} />
                     <div className={`w-full transition-opacity duration-200 ${isChangingWord ? 'opacity-0' : 'opacity-100'}`}>
-                        <Flashcard word={currentWord} isFlipped={isFlipped} onFlip={handleFlip} exampleSentence={exampleSentence} isChanging={isChangingWord} isInstantChange={isInstantChange} translationMode={translationMode} />
+                        <Flashcard word={currentWord} isFlipped={isFlipped} onFlip={handleFlip} exampleSentence={exampleSentence} isChanging={isChangingWord} isInstantChange={isInstantChange} translationMode={translationMode} lang1={currentSet.lang1} lang2={currentSet.lang2} />
                     </div>
                     <div className="flex justify-center gap-4 mt-6 w-full">
                         {isDontKnowMode ? (
@@ -544,12 +551,12 @@ const App: React.FC = () => {
                                     onCheck={handleTrainingAnswer}
                                     onNext={handleTrainingNext}
                                     answerState={answerState}
-                                    placeholder={translationMode === 'standard' ? 'Type the English translation...' : 'Type the Russian translation...'}
+                                    placeholder={`Type the ${placeholderLang} translation...`}
                                 />
                             ) : (
                                 <TrainingModeGuess
                                     options={guessOptions}
-                                    correctAnswer={translationMode === 'standard' ? currentWord.en : currentWord.ru}
+                                    correctAnswer={correctAnswer}
                                     onGuess={handleGuess}
                                     onNext={handleTrainingNext}
                                 />
@@ -635,19 +642,19 @@ const App: React.FC = () => {
                         <button onClick={handleShuffle} disabled={reviewWords.length <= 1} className="flex items-center gap-2 text-slate-400 hover:text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
                             <Shuffle size={18} /> Shuffle
                         </button>
-                        <TranslationModeToggle mode={translationMode} onModeChange={setTranslationMode} />
+                        <TranslationModeToggle mode={translationMode} onModeChange={setTranslationMode} lang1={currentSet.lang1} lang2={currentSet.lang2} />
                         <button onClick={() => setIsWordListVisible(v => !v)} className="flex items-center gap-2 text-slate-400 hover:text-white transition-colors">
                             <ChevronsUpDown size={18} /> List
                         </button>
                     </div>
                 )}
                 
-                {currentSet && <WordList words={currentSet.words} isVisible={isWordListVisible} />}
+                {currentSet && <WordList words={currentSet.words} isVisible={isWordListVisible} lang1={currentSet.lang1} lang2={currentSet.lang2} />}
             </div>
 
             <FileSourceModal isOpen={isFileSourceModalOpen && !loadedDictionary} onClose={() => setFileSourceModalOpen(false)} onFilesSelect={handleFilesSelect} isLoading={isLoading} />
             <InstructionsModal isOpen={isInstructionsModalOpen} onClose={() => setInstructionsModalOpen(false)} />
-            <LearnedWordsModal isOpen={isLearnedWordsModalOpen} onClose={() => setLearnedWordsModalOpen(false)} learnedWords={learnedWordsWithDetails} />
+            <LearnedWordsModal isOpen={isLearnedWordsModalOpen} onClose={() => setLearnedWordsModalOpen(false)} learnedWords={learnedWordsWithDetails} lang1={currentSet?.lang1 || 'Language 1'} lang2={currentSet?.lang2 || 'Language 2'} />
         </main>
     );
 };

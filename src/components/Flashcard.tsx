@@ -10,9 +10,11 @@ interface FlashcardProps {
   isChanging?: boolean;
   isInstantChange?: boolean;
   translationMode: TranslationMode;
+  lang1: string;
+  lang2: string;
 }
 
-export const Flashcard: React.FC<FlashcardProps> = ({ word, isFlipped, onFlip, exampleSentence, isChanging, isInstantChange, translationMode }) => {
+export const Flashcard: React.FC<FlashcardProps> = ({ word, isFlipped, onFlip, exampleSentence, isChanging, isInstantChange, translationMode, lang1, lang2 }) => {
   
   const handlePlayAudioSequence = (e: React.MouseEvent) => {
     e.stopPropagation(); // Prevent card from flipping when clicking the button
@@ -24,41 +26,40 @@ export const Flashcard: React.FC<FlashcardProps> = ({ word, isFlipped, onFlip, e
 
     window.speechSynthesis.cancel(); // Stop any ongoing speech to prevent overlap
 
-    // 1. Create utterance for the word
-    const wordUtterance = new SpeechSynthesisUtterance(word.en);
+    // Always speak the English word (lang2)
+    const wordToSpeak = word.lang2;
+    const wordUtterance = new SpeechSynthesisUtterance(wordToSpeak);
     wordUtterance.lang = 'en-US';
 
-    // 2. If an example sentence exists, queue it to play after the word
     if (exampleSentence) {
       wordUtterance.onend = () => {
-        // Use setTimeout to create a pause. Reduced from 1000ms to 500ms as requested.
         setTimeout(() => {
           const sentenceUtterance = new SpeechSynthesisUtterance(exampleSentence);
           sentenceUtterance.lang = 'en-US';
           window.speechSynthesis.speak(sentenceUtterance);
-        }, 500); // 500ms = 0.5s
+        }, 500);
       };
     }
 
-    // 3. Start speaking the word
     window.speechSynthesis.speak(wordUtterance);
   };
 
   const handleFlipDuringChange = () => {
-    // Prevent card from flipping while the word is changing via Know/Don't Know buttons.
     if (!isChanging) {
       onFlip();
     }
   };
 
   const isStandardMode = translationMode === 'standard';
+  const frontWord = isStandardMode ? word.lang1 : word.lang2;
+  const backWord = isStandardMode ? word.lang2 : word.lang1;
 
   const frontContent = (
     <div 
         className={`absolute w-full h-full ${isStandardMode ? 'bg-slate-800' : 'bg-indigo-700'} rounded-2xl shadow-xl flex flex-col justify-center items-center p-6 text-center`}
         style={{ backfaceVisibility: 'hidden', WebkitBackfaceVisibility: 'hidden' }}
     >
-      <span className="text-4xl sm:text-5xl font-bold text-white">{isStandardMode ? word.ru : word.en}</span>
+      <span className="text-4xl sm:text-5xl font-bold text-white">{frontWord}</span>
     </div>
   );
 
@@ -68,7 +69,7 @@ export const Flashcard: React.FC<FlashcardProps> = ({ word, isFlipped, onFlip, e
         style={{ backfaceVisibility: 'hidden', WebkitBackfaceVisibility: 'hidden', transform: 'rotateY(180deg)' }}
     >
       <div>
-        <span className="text-4xl sm:text-5xl font-bold text-white">{isStandardMode ? word.en : word.ru}</span>
+        <span className="text-4xl sm:text-5xl font-bold text-white">{backWord}</span>
         {exampleSentence && (
           <p className={`${isStandardMode ? 'text-indigo-200' : 'text-slate-300'} mt-4 text-sm sm:text-base italic`}>"{exampleSentence}"</p>
         )}
@@ -84,17 +85,15 @@ export const Flashcard: React.FC<FlashcardProps> = ({ word, isFlipped, onFlip, e
   );
 
   return (
-    // The perspective container for the 3D effect
     <div 
         className="w-full aspect-[3/2] cursor-pointer group" 
         style={{ perspective: '1000px' }}
         onClick={handleFlipDuringChange}
         role="button"
         tabIndex={0}
-        aria-label={`Flashcard for ${word.ru}. Click to flip.`}
+        aria-label={`Flashcard for ${lang1} word ${word.lang1}. Click to flip.`}
         onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && handleFlipDuringChange()}
     >
-      {/* The inner container that flips */}
       <div 
         className={`relative w-full h-full ${!isInstantChange ? 'transition-transform duration-500' : ''}`}
         style={{ transformStyle: 'preserve-3d', transform: isFlipped ? 'rotateY(180deg)' : 'rotateY(0deg)' }}
