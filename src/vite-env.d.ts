@@ -1,6 +1,5 @@
-// The /// <reference types="vite/client" /> directive is failing in this environment.
-// To resolve errors with `import.meta.env`, the necessary types are defined manually below.
-// This is a workaround; the root cause is likely a missing dependency or misconfiguration.
+// FIX: Removed the triple-slash directive to resolve a "Cannot find type definition file" error.
+// The interfaces below provide the necessary types for import.meta.env for this project.
 
 interface ImportMetaEnv {
   readonly VITE_FIREBASE_API_KEY: string;

@@ -1,7 +1,6 @@
 import React from 'react';
-import { auth } from '../lib/firebase-client';
 import { GoogleAuthProvider, signInWithPopup, signOut, User } from 'firebase/auth';
-
+import { auth } from '../lib/firebase-client';
 
 const GoogleIcon = () => (
     <svg className="w-5 h-5" viewBox="0 0 48 48">
