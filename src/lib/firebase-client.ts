@@ -1,4 +1,5 @@
-import { initializeApp } from 'firebase/app';
+// FIX: Corrected the import for `initializeApp`. In some Firebase versions or configurations, it's exported from the root 'firebase' package instead of 'firebase/app'.
+import { initializeApp } from 'firebase';
 import { getAuth } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';

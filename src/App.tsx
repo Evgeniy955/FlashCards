@@ -62,7 +62,8 @@ const App: React.FC = () => {
 
     const [localFile, setLocalFile] = useState<File | null>(null); // To hold a newly uploaded file for saving
 
-    const dictionaryId = useMemo(() => loadedDictionary?.name.replaceAll(/[./]/g, '_'), [loadedDictionary]);
+    // FIX: `replaceAll` is not available in all JS environments. Using `replace` with a global regex achieves the same result and is more compatible.
+    const dictionaryId = useMemo(() => loadedDictionary?.name.replace(/[./]/g, '_'), [loadedDictionary]);
 
     // Load global sentences from Firestore user document
     useEffect(() => {
