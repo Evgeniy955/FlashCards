@@ -158,9 +158,17 @@ const App: React.FC = () => {
         if(isTrainingDontKnow && activeSet) {
             setDontKnowWords(p => {
                 const newMap = new Map(p);
-                const set = newMap.get(activeSet.name) || new Set<string>();
-                set.delete(word.en);
-                newMap.set(activeSet.name, set);
+                const set = newMap.get(activeSet.name);
+                // FIX: Use `instanceof Set` as a type guard and perform an immutable update.
+                if (set instanceof Set) {
+                    const newSet = new Set(set);
+                    newSet.delete(word.en);
+                    if (newSet.size === 0) {
+                        newMap.delete(activeSet.name);
+                    } else {
+                        newMap.set(activeSet.name, newSet);
+                    }
+                }
                 return newMap;
             });
         }
@@ -169,9 +177,11 @@ const App: React.FC = () => {
         if (!isTrainingDontKnow && activeSet) {
              setDontKnowWords(p => {
                 const newMap = new Map(p);
-                const set = newMap.get(activeSet.name) || new Set<string>();
-                set.add(word.en);
-                newMap.set(activeSet.name, set);
+                const set = newMap.get(activeSet.name);
+                // FIX: Use `instanceof Set` for a type guard and perform an immutable update.
+                const newSet = set instanceof Set ? new Set(set) : new Set<string>();
+                newSet.add(word.en);
+                newMap.set(activeSet.name, newSet);
                 return newMap;
             });
         }
