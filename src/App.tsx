@@ -526,13 +526,15 @@ const App: React.FC = () => {
                         {isDontKnowMode ? (
                             <>
                                 <p className="text-slate-400 text-sm text-left">{counterText}</p>
-                                <TrainingModeToggle mode={trainingMode} onModeChange={(mode) => {
-                                    setTrainingMode(mode);
-                                    setIsFlipped(false);
-                                    setAnswerState('idle');
-                                    setUserAnswer('');
-                                }} />
-                                <div /> {/* Placeholder for grid */}
+                                <h2 className="text-base font-semibold text-amber-400 text-center">Training Mode</h2>
+                                <div className="flex justify-end">
+                                    <TrainingModeToggle mode={trainingMode} onModeChange={(mode) => {
+                                        setTrainingMode(mode);
+                                        setIsFlipped(false);
+                                        setAnswerState('idle');
+                                        setUserAnswer('');
+                                    }} />
+                                </div>
                             </>
                         ) : (
                             <p className="text-slate-400 text-sm col-span-3 text-center">{counterText}</p>
@@ -579,7 +581,7 @@ const App: React.FC = () => {
                 {selectedSetIndex !== null && dontKnowWords.get(selectedSetIndex) && dontKnowWords.get(selectedSetIndex)!.length > 0 && (
                      <button onClick={startDontKnowSession} className="mt-6 px-5 py-2.5 bg-amber-600 hover:bg-amber-700 rounded-lg font-semibold transition-colors flex items-center gap-2 mx-auto">
                         <Repeat size={18} />
-                        Review {dontKnowWords.get(selectedSetIndex)?.length} Mistake(s)
+                        Training Mode ({dontKnowWords.get(selectedSetIndex)?.length})
                     </button>
                 )}
             </div>
