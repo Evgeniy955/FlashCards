@@ -1,9 +1,6 @@
 import React from 'react';
-// Fix: Import Firebase v8 for compatibility.
-import firebase from 'firebase/app';
-import 'firebase/auth';
+import { GoogleAuthProvider, signInWithPopup, signOut, User } from 'firebase/auth';
 import { auth } from '../lib/firebase-client';
-
 
 const GoogleIcon = () => (
     <svg className="w-5 h-5" viewBox="0 0 48 48">
@@ -16,18 +13,15 @@ const GoogleIcon = () => (
 );
 
 interface AuthProps {
-    // Fix: Updated User type to use the one from firebase v8.
-    user: firebase.User | null | undefined;
+    user: User | null | undefined;
 }
 
 export const Auth: React.FC<AuthProps> = ({ user }) => {
     
     const handleSignIn = async () => {
-        // Fix: Use v8 syntax for GoogleAuthProvider.
-        const provider = new firebase.auth.GoogleAuthProvider();
+        const provider = new GoogleAuthProvider();
         try {
-            // Fix: Use v8 syntax for signInWithPopup.
-            await auth.signInWithPopup(provider);
+            await signInWithPopup(auth, provider);
         } catch (error) {
             console.error("Authentication failed:", error);
         }
@@ -35,8 +29,7 @@ export const Auth: React.FC<AuthProps> = ({ user }) => {
 
     const handleSignOut = async () => {
         try {
-            // Fix: Use v8 syntax for signOut.
-            await auth.signOut();
+            await signOut(auth);
         } catch (error) {
             console.error("Sign out failed:", error);
         }

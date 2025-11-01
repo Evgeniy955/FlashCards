@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useAuthState } from 'react-firebase-hooks/auth';
 import { auth, db } from './lib/firebase-client';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { Flashcard } from './components/Flashcard';
 import { ProgressBar } from './components/ProgressBar';
 import { SetSelector } from './components/SetSelector';
@@ -61,18 +62,14 @@ const App: React.FC = () => {
                 setSentences(new Map());
                 return;
             }
-            // Fix: Use v8 syntax for document reference
-            const userDocRef = db.collection('users').doc(user.uid);
+            const userDocRef = doc(db, 'users', user.uid);
             try {
-                // Fix: Use v8 syntax to get document
-                const docSnap = await userDocRef.get();
-                // Fix: Use v8 syntax for checking existence and accessing data
-                if (docSnap.exists) {
+                const docSnap = await getDoc(userDocRef);
+                if (docSnap.exists()) {
                     const data = docSnap.data();
                     if (data?.globalSentences) {
                         setSentences(new Map(Object.entries(data.globalSentences)));
                     } else {
-                        // If the field doesn't exist, start fresh
                         setSentences(new Map());
                     }
                 }
@@ -86,20 +83,18 @@ const App: React.FC = () => {
 
     // Save global sentences to Firestore user document
     useEffect(() => {
-        if (!user) return; // Don't save if not logged in
+        if (!user) return;
 
         const handler = setTimeout(async () => {
-            // Fix: Use v8 syntax for document reference
-            const userDocRef = db.collection('users').doc(user.uid);
+            const userDocRef = doc(db, 'users', user.uid);
             try {
-                // Fix: Use v8 syntax to set document data
-                await userDocRef.set({
+                await setDoc(userDocRef, {
                     globalSentences: Object.fromEntries(sentences)
                 }, { merge: true });
             } catch (error) {
                 console.error("Error saving global sentences:", error);
             }
-        }, 1500); // Debounce saves
+        }, 1500);
 
         return () => clearTimeout(handler);
     }, [sentences, user]);
@@ -116,15 +111,11 @@ const App: React.FC = () => {
             }
 
             setIsProgressLoading(true);
-            // Fix: Use v8 syntax for document reference
-            const docRef = db.collection('users').doc(user.uid).collection('progress').doc(dictionaryId);
+            const docRef = doc(db, 'users', user.uid, 'progress', dictionaryId);
             try {
-                // Fix: Use v8 syntax to get document
-                const docSnap = await docRef.get();
-                // Fix: Use v8 syntax for checking existence and accessing data
-                if (docSnap.exists) {
+                const docSnap = await getDoc(docRef);
+                if (docSnap.exists()) {
                     const data = docSnap.data();
-                    // Fix: Add optional chaining to safely access potentially undefined data
                     const learnedData = (data?.learnedWords || {}) as { [key: string]: WordProgress };
                     setLearnedWords(new Map(Object.entries(learnedData)));
                     
@@ -159,19 +150,17 @@ const App: React.FC = () => {
         }
 
         const handler = setTimeout(async () => {
-             // Fix: Use v8 syntax for document reference
-            const docRef = db.collection('users').doc(user.uid).collection('progress').doc(dictionaryId);
+            const docRef = doc(db, 'users', user.uid, 'progress', dictionaryId);
             const dataToSave = {
                 learnedWords: Object.fromEntries(learnedWords),
                 dontKnowWords: Object.fromEntries(dontKnowWords),
             };
             try {
-                // Fix: Use v8 syntax to set document data
-                await docRef.set(dataToSave, { merge: true });
+                await setDoc(docRef, dataToSave, { merge: true });
             } catch (error) {
                 console.error("Error saving dictionary progress to Firestore:", error);
             }
-        }, 1500); // Debounce saves
+        }, 1500);
 
         return () => clearTimeout(handler);
     }, [learnedWords, dontKnowWords, user, dictionaryId, isProgressLoading]);
@@ -260,7 +249,6 @@ const App: React.FC = () => {
 
     const staticCardNumber = useMemo(() => {
         if (!currentSet || !currentWord) return 0;
-        // findIndex is 0-based, so we add 1 for a 1-based display
         return currentSet.words.findIndex(word => word.en === currentWord.en) + 1;
     }, [currentSet, currentWord]);
 
@@ -294,7 +282,6 @@ const App: React.FC = () => {
             setIsFlipped(false);
             updateWordIndex();
             
-            // Use rAF to ensure the DOM update (without transition) happens before re-enabling it.
             requestAnimationFrame(() => {
                 setIsInstantChange(false);
             });
@@ -356,13 +343,13 @@ const App: React.FC = () => {
     };
 
     const handleFlip = () => {
-        if (isDontKnowMode && answerState !== 'idle') return; // Don't allow flipping after an answer is given
+        if (isDontKnowMode && answerState !== 'idle') return;
         setIsFlipped(prev => !prev);
     };
     
     const handleSelectSet = (index: number) => {
         if (index !== selectedSetIndex) {
-            setSessionActive(false); // Force session to reset for the new set
+            setSessionActive(false);
             setSelectedSetIndex(index);
         }
     };
@@ -373,7 +360,7 @@ const App: React.FC = () => {
         if (selectedSetIndex === null) return;
         const words = dontKnowWords.get(selectedSetIndex) || [];
         if (words.length > 0) {
-            setReviewWords(shuffleArray(words)); // Shuffle mistakes at the start of the session
+            setReviewWords(shuffleArray(words));
             setSessionTotal(words.length);
             setSessionProgress(words.length > 0 ? 1 : 0);
             setCurrentWordIndex(0);
@@ -392,18 +379,17 @@ const App: React.FC = () => {
         
         if (isCorrect) {
             setAnswerState('correct');
-            // Remove from 'dontKnowWords' and add to 'learnedWords'
-            handleKnow(); // This function already handles the logic for both
+            handleKnow();
             
             setTimeout(() => {
                 setIsFlipped(false);
                 setAnswerState('idle');
                 setUserAnswer('');
                 updateWordIndex();
-            }, 1000); // Wait 1s before moving to next word
+            }, 1000);
         } else {
             setAnswerState('incorrect');
-            setIsFlipped(true); // Show the correct answer
+            setIsFlipped(true);
         }
     };
 
@@ -419,7 +405,7 @@ const App: React.FC = () => {
         if (globalThis.confirm('Are you sure you want to reset learning progress for this dictionary? Your global sentence list will not be affected.')) {
             setLearnedWords(new Map());
             setDontKnowWords(new Map());
-            setSessionActive(false); // Force session to restart with fresh progress
+            setSessionActive(false);
         }
     };
 
