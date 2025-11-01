@@ -18,3 +18,5 @@ export interface WordProgress {
   srsStage: number;
   nextReviewDate: string; // ISO 8601 date string
 }
+
+export type TranslationMode = 'standard' | 'reverse';

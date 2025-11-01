@@ -11,12 +11,13 @@ import { LearnedWordsModal } from './components/LearnedWordsModal';
 import { WordList } from './components/WordList';
 import { SentenceUpload } from './components/SentenceUpload';
 import { Auth } from './components/Auth';
-import { Word, LoadedDictionary, WordProgress } from './types';
+import { Word, LoadedDictionary, WordProgress, TranslationMode } from './types';
 import { parseDictionaryFile, shuffleArray } from './utils/dictionaryUtils';
 import { Shuffle, ChevronsUpDown, Info, BookUser, Trash2, Repeat, Library, Loader2 } from 'lucide-react';
 import { TrainingModeInput, AnswerState } from './components/TrainingModeInput';
 import { TrainingModeGuess } from './components/TrainingModeGuess';
 import { TrainingModeToggle } from './components/TrainingModeToggle';
+import { TranslationModeToggle } from './components/TranslationModeToggle';
 
 
 // --- Constants ---
@@ -51,6 +52,7 @@ const App: React.FC = () => {
     const [userAnswer, setUserAnswer] = useState('');
     const [answerState, setAnswerState] = useState<AnswerState>('idle');
     const [trainingMode, setTrainingMode] = useState<'write' | 'guess'>('write');
+    const [translationMode, setTranslationMode] = useState<TranslationMode>('standard');
     const [guessOptions, setGuessOptions] = useState<string[]>([]);
     
     const [isFileSourceModalOpen, setFileSourceModalOpen] = useState(true);
@@ -174,30 +176,34 @@ const App: React.FC = () => {
     const generateGuessOptions = useCallback((correctWord: Word) => {
         if (!currentSet || !loadedDictionary) return;
     
-        // Get distractors from the original, larger set for more variety
+        const isStandardMode = translationMode === 'standard';
+        const correctTranslation = isStandardMode ? correctWord.en : correctWord.ru;
+    
         const originalSetIndex = currentSet.originalSetIndex;
         const allWordsInOriginalSet = loadedDictionary.sets
             .filter(s => s.originalSetIndex === originalSetIndex)
             .flatMap(s => s.words);
     
         let distractors = allWordsInOriginalSet
-            .filter(w => w.en !== correctWord.en)
+            .filter(w => (isStandardMode ? w.en : w.ru) !== correctTranslation)
             .sort(() => 0.5 - Math.random())
             .slice(0, 2);
     
-        // Fallback if not enough words in the set
         if (distractors.length < 2) {
             const fallbackDistractors = loadedDictionary.sets
                 .flatMap(s => s.words)
-                .filter(w => w.en !== correctWord.en && !distractors.some(d => d.en === w.en))
+                .filter(w => (isStandardMode ? w.en : w.ru) !== correctTranslation && !distractors.some(d => (isStandardMode ? d.en : d.ru) === (isStandardMode ? w.en : w.ru)))
                 .sort(() => 0.5 - Math.random())
                 .slice(0, 2 - distractors.length);
             distractors.push(...fallbackDistractors);
         }
     
-        const options = shuffleArray([correctWord.en, ...distractors.map(d => d.en)]);
+        const options = shuffleArray([
+            correctTranslation, 
+            ...distractors.map(d => isStandardMode ? d.en : d.ru)
+        ]);
         setGuessOptions(options);
-    }, [currentSet, loadedDictionary]);
+    }, [currentSet, loadedDictionary, translationMode]);
 
     const updateWordIndex = () => {
         const nextIndex = currentWordIndex + 1;
@@ -249,11 +255,11 @@ const App: React.FC = () => {
     useEffect(() => {
         if (isDontKnowMode && trainingMode === 'guess' && currentWord) {
             // Check if current options are for the current word, if not, generate new ones
-            if (!guessOptions.includes(currentWord.en)) {
+            if (!guessOptions.includes(translationMode === 'standard' ? currentWord.en : currentWord.ru)) {
                  generateGuessOptions(currentWord);
             }
         }
-    }, [trainingMode, isDontKnowMode, currentWord, guessOptions, generateGuessOptions]);
+    }, [trainingMode, isDontKnowMode, currentWord, guessOptions, generateGuessOptions, translationMode]);
     
     const handleFilesSelect = async (name: string, wordsFile: File, sentencesFile?: File) => {
         setIsLoading(true);
@@ -427,7 +433,8 @@ const App: React.FC = () => {
     const handleTrainingAnswer = () => {
         if (!currentWord || answerState !== 'idle') return;
 
-        const isCorrect = userAnswer.trim().toLowerCase() === currentWord.en.toLowerCase();
+        const correctAnswer = translationMode === 'standard' ? currentWord.en : currentWord.ru;
+        const isCorrect = userAnswer.trim().toLowerCase() === correctAnswer.toLowerCase();
         
         if (isCorrect) {
             setAnswerState('correct');
@@ -526,7 +533,7 @@ const App: React.FC = () => {
                     </div>
                     <ProgressBar current={sessionProgress} total={sessionTotal} />
                     <div className={`w-full transition-opacity duration-200 ${isChangingWord ? 'opacity-0' : 'opacity-100'}`}>
-                        <Flashcard word={currentWord} isFlipped={isFlipped} onFlip={handleFlip} exampleSentence={exampleSentence} isChanging={isChangingWord} isInstantChange={isInstantChange} />
+                        <Flashcard word={currentWord} isFlipped={isFlipped} onFlip={handleFlip} exampleSentence={exampleSentence} isChanging={isChangingWord} isInstantChange={isInstantChange} translationMode={translationMode} />
                     </div>
                     <div className="flex justify-center gap-4 mt-6 w-full">
                         {isDontKnowMode ? (
@@ -537,11 +544,12 @@ const App: React.FC = () => {
                                     onCheck={handleTrainingAnswer}
                                     onNext={handleTrainingNext}
                                     answerState={answerState}
+                                    placeholder={translationMode === 'standard' ? 'Type the English translation...' : 'Type the Russian translation...'}
                                 />
                             ) : (
                                 <TrainingModeGuess
                                     options={guessOptions}
-                                    correctAnswer={currentWord.en}
+                                    correctAnswer={translationMode === 'standard' ? currentWord.en : currentWord.ru}
                                     onGuess={handleGuess}
                                     onNext={handleTrainingNext}
                                 />
@@ -627,8 +635,9 @@ const App: React.FC = () => {
                         <button onClick={handleShuffle} disabled={reviewWords.length <= 1} className="flex items-center gap-2 text-slate-400 hover:text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
                             <Shuffle size={18} /> Shuffle
                         </button>
+                        <TranslationModeToggle mode={translationMode} onModeChange={setTranslationMode} />
                         <button onClick={() => setIsWordListVisible(v => !v)} className="flex items-center gap-2 text-slate-400 hover:text-white transition-colors">
-                            <ChevronsUpDown size={18} /> Word List
+                            <ChevronsUpDown size={18} /> List
                         </button>
                     </div>
                 )}

@@ -1,6 +1,6 @@
 import React from 'react';
 import { Volume2 } from 'lucide-react';
-import type { Word } from '../types';
+import type { Word, TranslationMode } from '../types';
 
 interface FlashcardProps {
   word: Word;
@@ -9,9 +9,10 @@ interface FlashcardProps {
   exampleSentence?: string;
   isChanging?: boolean;
   isInstantChange?: boolean;
+  translationMode: TranslationMode;
 }
 
-export const Flashcard: React.FC<FlashcardProps> = ({ word, isFlipped, onFlip, exampleSentence, isChanging, isInstantChange }) => {
+export const Flashcard: React.FC<FlashcardProps> = ({ word, isFlipped, onFlip, exampleSentence, isChanging, isInstantChange, translationMode }) => {
   
   const handlePlayAudioSequence = (e: React.MouseEvent) => {
     e.stopPropagation(); // Prevent card from flipping when clicking the button
@@ -50,6 +51,38 @@ export const Flashcard: React.FC<FlashcardProps> = ({ word, isFlipped, onFlip, e
     }
   };
 
+  const isStandardMode = translationMode === 'standard';
+
+  const frontContent = (
+    <div 
+        className={`absolute w-full h-full ${isStandardMode ? 'bg-slate-800' : 'bg-indigo-700'} rounded-2xl shadow-xl flex flex-col justify-center items-center p-6 text-center`}
+        style={{ backfaceVisibility: 'hidden', WebkitBackfaceVisibility: 'hidden' }}
+    >
+      <span className="text-4xl sm:text-5xl font-bold text-white">{isStandardMode ? word.ru : word.en}</span>
+    </div>
+  );
+
+  const backContent = (
+    <div 
+        className={`absolute w-full h-full ${isStandardMode ? 'bg-indigo-700' : 'bg-slate-800'} rounded-2xl shadow-xl flex flex-col justify-center items-center p-6 text-center`}
+        style={{ backfaceVisibility: 'hidden', WebkitBackfaceVisibility: 'hidden', transform: 'rotateY(180deg)' }}
+    >
+      <div>
+        <span className="text-4xl sm:text-5xl font-bold text-white">{isStandardMode ? word.en : word.ru}</span>
+        {exampleSentence && (
+          <p className={`${isStandardMode ? 'text-indigo-200' : 'text-slate-300'} mt-4 text-sm sm:text-base italic`}>"{exampleSentence}"</p>
+        )}
+      </div>
+      <button
+        onClick={handlePlayAudioSequence}
+        className={`absolute top-4 right-4 p-2 ${isStandardMode ? 'text-indigo-200 hover:text-white hover:bg-indigo-600' : 'text-slate-300 hover:text-white hover:bg-slate-700'} transition-colors rounded-full`}
+        aria-label="Play English pronunciation"
+      >
+        <Volume2 size={24} />
+      </button>
+    </div>
+  );
+
   return (
     // The perspective container for the 3D effect
     <div 
@@ -66,33 +99,8 @@ export const Flashcard: React.FC<FlashcardProps> = ({ word, isFlipped, onFlip, e
         className={`relative w-full h-full ${!isInstantChange ? 'transition-transform duration-500' : ''}`}
         style={{ transformStyle: 'preserve-3d', transform: isFlipped ? 'rotateY(180deg)' : 'rotateY(0deg)' }}
       >
-        {/* Front of the card (Russian) */}
-        <div 
-            className="absolute w-full h-full bg-slate-800 rounded-2xl shadow-xl flex flex-col justify-center items-center p-6 text-center"
-            style={{ backfaceVisibility: 'hidden', WebkitBackfaceVisibility: 'hidden' }}
-        >
-          <span className="text-4xl sm:text-5xl font-bold text-white">{word.ru}</span>
-        </div>
-
-        {/* Back of the card (English) */}
-        <div 
-            className="absolute w-full h-full bg-indigo-700 rounded-2xl shadow-xl flex flex-col justify-center items-center p-6 text-center"
-            style={{ backfaceVisibility: 'hidden', WebkitBackfaceVisibility: 'hidden', transform: 'rotateY(180deg)' }}
-        >
-          <div>
-            <span className="text-4xl sm:text-5xl font-bold text-white">{word.en}</span>
-            {exampleSentence && (
-              <p className="text-indigo-200 mt-4 text-sm sm:text-base italic">"{exampleSentence}"</p>
-            )}
-          </div>
-          <button
-            onClick={handlePlayAudioSequence}
-            className="absolute top-4 right-4 p-2 text-indigo-200 hover:text-white transition-colors rounded-full hover:bg-indigo-600"
-            aria-label="Play English pronunciation"
-          >
-            <Volume2 size={24} />
-          </button>
-        </div>
+        {frontContent}
+        {backContent}
       </div>
     </div>
   );
