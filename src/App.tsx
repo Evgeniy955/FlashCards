@@ -206,20 +206,6 @@ const App: React.FC = () => {
         setGuessOptions(options);
     }, [currentSet, loadedDictionary, translationMode]);
 
-    const updateWordIndex = () => {
-        const nextIndex = currentWordIndex + 1;
-        if (nextIndex < reviewWords.length) {
-            setCurrentWordIndex(nextIndex);
-            setSessionProgress(prev => prev + 1);
-            if (isDontKnowMode && trainingMode === 'guess') {
-                generateGuessOptions(reviewWords[nextIndex]);
-            }
-        } else {
-            setReviewWords([]);
-            setSessionActive(false); // End session
-        }
-    };
-
     const startReviewSession = useCallback((setIndex: number) => {
         if (!loadedDictionary) return;
         const set = loadedDictionary.sets[setIndex];
@@ -245,14 +231,38 @@ const App: React.FC = () => {
             setSessionActive(false);
         }
     }, [loadedDictionary, learnedWords]);
+    
+    const updateWordIndex = () => {
+        const nextIndex = currentWordIndex + 1;
+        if (nextIndex < reviewWords.length) {
+            setCurrentWordIndex(nextIndex);
+            setSessionProgress(prev => prev + 1);
+            if (isDontKnowMode && trainingMode === 'guess') {
+                generateGuessOptions(reviewWords[nextIndex]);
+            }
+        } else {
+             // Session over. Check for a new session immediately to prevent flicker.
+             if (selectedSetIndex !== null) {
+                // `startReviewSession` will find the next batch of words to study
+                // from the main set. If no words are ready, it will correctly
+                // set the state to show the "Session Complete" message.
+                startReviewSession(selectedSetIndex);
+            } else {
+                // Fallback if no set is selected for some reason
+                setReviewWords([]);
+                setSessionActive(false);
+            }
+        }
+    };
 
     const currentWord = useMemo(() => reviewWords[currentWordIndex], [reviewWords, currentWordIndex]);
 
+    // Effect to start the very first session when progress is loaded
     useEffect(() => {
-        if (selectedSetIndex !== null && !isProgressLoading && !sessionActive) {
-            startReviewSession(selectedSetIndex);
+        if (selectedSetIndex !== null && !isProgressLoading && !sessionActive && reviewWords.length === 0) {
+             startReviewSession(selectedSetIndex);
         }
-    }, [selectedSetIndex, isProgressLoading, sessionActive, startReviewSession]);
+    }, [selectedSetIndex, isProgressLoading, sessionActive, startReviewSession, reviewWords.length]);
 
     useEffect(() => {
         if (isDontKnowMode && trainingMode === 'guess' && currentWord) {
@@ -289,7 +299,7 @@ const App: React.FC = () => {
             setLoadedDictionary(dictionary);
             setSelectedSetIndex(0);
             setFileSourceModalOpen(false);
-            setSessionActive(false);
+            setSessionActive(false); // Let the effect handle starting the session
 
         } catch (error) {
             alert((error as Error).message);
@@ -407,8 +417,8 @@ const App: React.FC = () => {
     
     const handleSelectSet = (index: number) => {
         if (index !== selectedSetIndex) {
-            setSessionActive(false);
             setSelectedSetIndex(index);
+            startReviewSession(index);
         }
     };
 
@@ -491,7 +501,11 @@ const App: React.FC = () => {
         if (globalThis.confirm('Are you sure you want to reset learning progress for this dictionary? Your global sentence list will not be affected.')) {
             setLearnedWords(new Map());
             setDontKnowWords(new Map());
-            setSessionActive(false);
+            if (selectedSetIndex !== null) {
+                startReviewSession(selectedSetIndex);
+            } else {
+                setSessionActive(false);
+            }
         }
     };
 
@@ -512,7 +526,7 @@ const App: React.FC = () => {
             );
         }
 
-        if (reviewWords.length > 0 && currentWord && currentSet) {
+        if (sessionActive && reviewWords.length > 0 && currentWord && currentSet) {
             const counterText = isDontKnowMode
                 ? `${sessionProgress} / ${sessionTotal}`
                 : (staticCardNumber > 0 ? `${staticCardNumber} / ${staticTotalCards}` : '...');
@@ -522,20 +536,22 @@ const App: React.FC = () => {
 
             return (
                 <div className="w-full flex flex-col items-center">
-                    <div className="w-full grid grid-cols-3 items-center gap-3 h-8 mb-2">
+                    <div className="w-full flex items-center gap-4 h-8 mb-2">
                         {isDontKnowMode ? (
                             <>
-                                <p className="text-slate-400 text-sm text-left">{counterText}</p>
-                                <TrainingModeToggle mode={trainingMode} onModeChange={(mode) => {
-                                    setTrainingMode(mode);
-                                    setIsFlipped(false);
-                                    setAnswerState('idle');
-                                    setUserAnswer('');
-                                }} />
-                                <div /> {/* Placeholder for grid */}
+                                <div className="flex-shrink-0">
+                                    <TrainingModeToggle mode={trainingMode} onModeChange={(mode) => {
+                                        setTrainingMode(mode);
+                                        setIsFlipped(false);
+                                        setAnswerState('idle');
+                                        setUserAnswer('');
+                                    }} />
+                                </div>
+                                <h2 className="text-base font-semibold text-amber-400 text-center flex-grow">Training Mode</h2>
+                                 <p className="text-slate-400 text-sm flex-shrink-0">{counterText}</p>
                             </>
                         ) : (
-                            <p className="text-slate-400 text-sm col-span-3 text-center">{counterText}</p>
+                            <p className="text-slate-400 text-sm text-center w-full">{counterText}</p>
                         )}
                     </div>
                     <ProgressBar current={sessionProgress} total={sessionTotal} />
@@ -579,7 +595,7 @@ const App: React.FC = () => {
                 {selectedSetIndex !== null && dontKnowWords.get(selectedSetIndex) && dontKnowWords.get(selectedSetIndex)!.length > 0 && (
                      <button onClick={startDontKnowSession} className="mt-6 px-5 py-2.5 bg-amber-600 hover:bg-amber-700 rounded-lg font-semibold transition-colors flex items-center gap-2 mx-auto">
                         <Repeat size={18} />
-                        Review {dontKnowWords.get(selectedSetIndex)?.length} Mistake(s)
+                        Training Mode ({dontKnowWords.get(selectedSetIndex)?.length})
                     </button>
                 )}
             </div>
