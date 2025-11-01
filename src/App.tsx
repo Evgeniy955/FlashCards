@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-// Assuming lodash-es is a dependency
 import { shuffle, sampleSize } from 'lodash-es';
-import { ArrowDownUp, BrainCircuit, Shuffle, Type, List, CheckSquare } from 'lucide-react';
+import { ArrowDownUp, BrainCircuit, Shuffle, List } from 'lucide-react';
 import { useAuthState } from 'react-firebase-hooks/auth';
 
 import type { Word, LoadedDictionary, WordProgress } from './types';
@@ -14,13 +13,11 @@ import { InstructionsModal } from './components/InstructionsModal';
 import { LearnedWordsModal } from './components/LearnedWordsModal';
 import { WordList } from './components/WordList';
 import { SentenceUpload } from './components/SentenceUpload';
-import { TrainingModeInput, AnswerState } from './components/TrainingModeInput';
 import { MultipleChoice } from './components/MultipleChoice';
 import { Auth } from './components/Auth';
 import { auth } from './lib/firebase-client';
 
 const SRS_STAGES = [1, 2, 4, 8, 16, 32, 64]; // in days
-type TrainingMode = 'flashcard' | 'type-in' | 'multiple-choice';
 
 // Local storage helpers
 const getLocalStorage = <T,>(key: string, defaultValue: T): T => {
@@ -57,9 +54,6 @@ const App: React.FC = () => {
   const [sentences, setSentences] = useState<Map<string, string>>(new Map());
   const [isPronouncing, setIsPronouncing] = useState(false);
 
-  const [trainingMode, setTrainingMode] = useState<TrainingMode>('flashcard');
-  const [answer, setAnswer] = useState('');
-  const [answerState, setAnswerState] = useState<AnswerState>('idle');
   const [mcOptions, setMcOptions] = useState<Word[]>([]);
   const [selectedMcOption, setSelectedMcOption] = useState<Word | null>(null);
 
@@ -127,26 +121,32 @@ const App: React.FC = () => {
 
   const currentWord = useMemo(() => sessionQueue[currentWordIndex] || null, [sessionQueue, currentWordIndex]);
   
-  // Setup MC options when word changes
+  // Setup MC options for training mode
   useEffect(() => {
-    if (trainingMode === 'multiple-choice' && currentWord && activeSet) {
+    if (isTrainingDontKnow && currentWord && activeSet) {
         const others = activeSet.words.filter(w => w.en !== currentWord.en);
-        setMcOptions(shuffle([currentWord, ...sampleSize(others, 3)]));
+        // Correct: 2 distractors + 1 correct = 3 options total
+        setMcOptions(shuffle([currentWord, ...sampleSize(others, 2)]));
         setSelectedMcOption(null);
     }
-  }, [currentWord, trainingMode, activeSet]);
+  }, [currentWord, isTrainingDontKnow, activeSet]);
 
   const goToNextWord = useCallback(() => {
     if (currentWordIndex < sessionQueue.length - 1) {
       setCurrentWordIndex(i => i + 1);
     } else {
-      setSessionQueue(createSessionQueue());
-      setCurrentWordIndex(0);
+      // End of session, re-evaluate what to do next
+      if(isTrainingDontKnow) {
+        // End of training session, clear the queue to show completion screen
+        setSessionQueue([]);
+      } else {
+        // End of regular session, create a new one
+        setSessionQueue(createSessionQueue());
+        setCurrentWordIndex(0);
+      }
     }
     setIsFlipped(false);
-    setAnswer('');
-    setAnswerState('idle');
-  }, [currentWordIndex, sessionQueue.length, createSessionQueue]);
+  }, [currentWordIndex, sessionQueue.length, createSessionQueue, isTrainingDontKnow]);
 
   const handleProgressUpdate = useCallback((word: Word, knewIt: boolean) => {
     const currentProgress = wordProgress.get(word.en);
@@ -158,7 +158,6 @@ const App: React.FC = () => {
         if(isTrainingDontKnow && activeSet) {
             setDontKnowWords(p => {
                 const newMap = new Map(p);
-                // FIX: Explicitly type new Set() to avoid 'unknown' type inference.
                 const set = newMap.get(activeSet.name) || new Set<string>();
                 set.delete(word.en);
                 newMap.set(activeSet.name, set);
@@ -170,7 +169,6 @@ const App: React.FC = () => {
         if (!isTrainingDontKnow && activeSet) {
              setDontKnowWords(p => {
                 const newMap = new Map(p);
-                // FIX: Explicitly type new Set() to avoid 'unknown' type inference.
                 const set = newMap.get(activeSet.name) || new Set<string>();
                 set.add(word.en);
                 newMap.set(activeSet.name, set);
@@ -180,7 +178,9 @@ const App: React.FC = () => {
     }
 
     const nextReviewDate = new Date();
-    nextReviewDate.setDate(nextReviewDate.getDate() + (knewIt && nextStage > -1 ? SRS_STAGES[nextStage] : 1));
+    // If they knew it, schedule based on SRS, otherwise, schedule for tomorrow.
+    const daysToAdd = knewIt && nextStage > -1 ? SRS_STAGES[nextStage] : 1;
+    nextReviewDate.setDate(nextReviewDate.getDate() + daysToAdd);
     
     setWordProgress(p => new Map(p).set(word.en, { srsStage: nextStage, nextReviewDate: nextReviewDate.toISOString() }));
 
@@ -209,6 +209,10 @@ const App: React.FC = () => {
             window.localStorage.removeItem(`dontknow-${dictionary.name}`);
             setWordProgress(new Map());
             setDontKnowWords(new Map());
+            // After resetting, restart the session
+            if (activeSet) {
+              setSessionQueue(createSessionQueue());
+            }
         }
     }
   };
@@ -241,16 +245,6 @@ const App: React.FC = () => {
       setFileModalOpen(true);
   };
 
-  // Handlers for Type-in mode
-  const handleCheckAnswer = () => {
-    if (!currentWord) return;
-    setAnswerState(answer.trim().toLowerCase() === currentWord.en.toLowerCase() ? 'correct' : 'incorrect');
-  };
-  const handleNextAfterAnswer = () => {
-    if(!currentWord) return;
-    handleProgressUpdate(currentWord, answerState === 'correct');
-  };
-
   // Handler for Multiple-choice mode
   const handleSelectMcOption = (selected: Word) => {
     if (!currentWord || selectedMcOption) return;
@@ -258,7 +252,7 @@ const App: React.FC = () => {
     const isCorrect = selected.en === currentWord.en;
     setTimeout(() => {
         handleProgressUpdate(currentWord, isCorrect);
-    }, 1000);
+    }, 1200); // Add a slight delay to show feedback
   };
 
   if (!dictionary || !activeSet) {
@@ -280,10 +274,6 @@ const App: React.FC = () => {
       </main>
     );
   }
-  
-  const ModeButton = ({ mode, icon, label }: {mode: TrainingMode, icon: React.ReactNode, label: string}) => (
-    <button onClick={() => setTrainingMode(mode)} className={`flex items-center gap-2 px-3 py-1.5 text-xs rounded-md transition-colors ${trainingMode === mode ? 'bg-indigo-600 text-white' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'}`}>{icon}{label}</button>
-  )
 
   return (
     <div className="min-h-screen bg-slate-900 text-white font-sans flex flex-col">
@@ -313,15 +303,19 @@ const App: React.FC = () => {
             <ProgressBar current={currentWordIndex + 1} total={sessionQueue.length} />
 
             <div className="relative">
-              <Flashcard word={currentWord} sentence={currentSentence} isFlipped={isFlipped || answerState !== 'idle' || !!selectedMcOption} onFlip={() => setIsFlipped(!isFlipped)} onPronounce={handlePronounce} isPronouncing={isPronouncing}/>
+              <Flashcard word={currentWord} sentence={currentSentence} isFlipped={isFlipped || !!selectedMcOption} onFlip={() => setIsFlipped(!isFlipped)} onPronounce={handlePronounce} isPronouncing={isPronouncing} disableFlipOnClick={isTrainingDontKnow} />
               <div className="absolute -top-10 right-0 flex gap-2"><button onClick={() => setWordListVisible(!isWordListVisible)} className="p-2 bg-slate-800 rounded-full text-slate-400 hover:text-white hover:bg-slate-700 transition-colors" title="Toggle Word List"><ArrowDownUp size={18} /></button><button onClick={() => setSessionQueue(shuffle([...sessionQueue]))} className="p-2 bg-slate-800 rounded-full text-slate-400 hover:text-white hover:bg-slate-700 transition-colors" title="Shuffle remaining cards"><Shuffle size={18} /></button></div>
             </div>
             
             <div className="w-full max-w-lg mx-auto mt-6">
-              <div className="flex justify-center gap-2 mb-6"><ModeButton mode="flashcard" icon={<CheckSquare size={14}/>} label="Review"/><ModeButton mode="type-in" icon={<Type size={14}/>} label="Type"/><ModeButton mode="multiple-choice" icon={<List size={14}/>} label="Choice"/></div>
-              {trainingMode === 'flashcard' && (<div className="flex gap-4"><button onClick={() => handleProgressUpdate(currentWord, false)} className="flex-1 py-4 text-lg font-semibold bg-rose-600 hover:bg-rose-700 rounded-lg transition-colors">Don't know</button><button onClick={() => handleProgressUpdate(currentWord, true)} className="flex-1 py-4 text-lg font-semibold bg-emerald-600 hover:bg-emerald-700 rounded-lg transition-colors">Know</button></div>)}
-              {trainingMode === 'type-in' && (<TrainingModeInput answer={answer} setAnswer={setAnswer} onCheck={handleCheckAnswer} onNext={handleNextAfterAnswer} answerState={answerState}/>)}
-              {trainingMode === 'multiple-choice' && (<MultipleChoice questionWord={currentWord} options={mcOptions} onSelectOption={handleSelectMcOption} selectedOption={selectedMcOption} correctOption={currentWord}/>)}
+              {isTrainingDontKnow ? (
+                 <MultipleChoice questionWord={currentWord} options={mcOptions} onSelectOption={handleSelectMcOption} selectedOption={selectedMcOption} correctOption={currentWord}/>
+              ) : (
+                <div className="flex gap-4">
+                  <button onClick={() => handleProgressUpdate(currentWord, false)} className="flex-1 py-4 text-lg font-semibold bg-rose-600 hover:bg-rose-700 rounded-lg transition-colors">Don't know</button>
+                  <button onClick={() => handleProgressUpdate(currentWord, true)} className="flex-1 py-4 text-lg font-semibold bg-emerald-600 hover:bg-emerald-700 rounded-lg transition-colors">Know</button>
+                </div>
+              )}
             </div>
           </>
         )}

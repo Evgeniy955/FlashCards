@@ -9,21 +9,28 @@ interface FlashcardProps {
   onFlip: () => void;
   onPronounce: () => void;
   isPronouncing: boolean;
+  disableFlipOnClick?: boolean;
 }
 
-export const Flashcard: React.FC<FlashcardProps> = ({ word, sentence, isFlipped, onFlip, onPronounce, isPronouncing }) => {
+export const Flashcard: React.FC<FlashcardProps> = ({ word, sentence, isFlipped, onFlip, onPronounce, isPronouncing, disableFlipOnClick = false }) => {
   const frontContent = word.ru;
   const backContent = word.en;
+
+  const handleCardClick = () => {
+    if (!disableFlipOnClick) {
+      onFlip();
+    }
+  };
 
   return (
     <div className="w-full max-w-lg mx-auto perspective-1000">
       <div
         className={`relative w-full h-64 md:h-80 transition-transform duration-700 preserve-3d ${isFlipped ? 'rotate-y-180' : ''}`}
-        onClick={onFlip}
+        onClick={handleCardClick}
         role="button"
         aria-label={`Flashcard: ${isFlipped ? backContent : frontContent}. Click to flip.`}
         tabIndex={0}
-        onKeyDown={(e) => (e.key === ' ' || e.key === 'Enter') && onFlip()}
+        onKeyDown={(e) => (e.key === ' ' || e.key === 'Enter') && handleCardClick()}
       >
         {/* Front of the card */}
         <div className="absolute w-full h-full backface-hidden flex flex-col items-center justify-center p-6 bg-slate-800 border-2 border-slate-700 rounded-2xl shadow-2xl cursor-pointer">
