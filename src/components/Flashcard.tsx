@@ -1,96 +1,53 @@
 import React from 'react';
-import { Volume2 } from 'lucide-react';
+import { Volume2, RefreshCw } from 'lucide-react';
 import type { Word } from '../types';
 
 interface FlashcardProps {
   word: Word;
+  sentence: string | null;
   isFlipped: boolean;
   onFlip: () => void;
-  exampleSentence?: string;
-  isChanging?: boolean;
-  isInstantChange?: boolean;
+  onPronounce: () => void;
+  isPronouncing: boolean;
 }
 
-export const Flashcard: React.FC<FlashcardProps> = ({ word, isFlipped, onFlip, exampleSentence, isChanging, isInstantChange }) => {
-  
-  const handlePlayAudioSequence = (e: React.MouseEvent) => {
-    e.stopPropagation(); // Prevent card from flipping when clicking the button
-    
-    if (!('speechSynthesis' in window)) {
-      alert('Sorry, your browser does not support text-to-speech.');
-      return;
-    }
-
-    window.speechSynthesis.cancel(); // Stop any ongoing speech to prevent overlap
-
-    // 1. Create utterance for the word
-    const wordUtterance = new SpeechSynthesisUtterance(word.en);
-    wordUtterance.lang = 'en-US';
-
-    // 2. If an example sentence exists, queue it to play after the word
-    if (exampleSentence) {
-      wordUtterance.onend = () => {
-        // Use setTimeout to create a pause. Reduced from 1000ms to 500ms as requested.
-        setTimeout(() => {
-          const sentenceUtterance = new SpeechSynthesisUtterance(exampleSentence);
-          sentenceUtterance.lang = 'en-US';
-          window.speechSynthesis.speak(sentenceUtterance);
-        }, 500); // 500ms = 0.5s
-      };
-    }
-
-    // 3. Start speaking the word
-    window.speechSynthesis.speak(wordUtterance);
-  };
-
-  const handleFlipDuringChange = () => {
-    // Prevent card from flipping while the word is changing via Know/Don't Know buttons.
-    if (!isChanging) {
-      onFlip();
-    }
-  };
+export const Flashcard: React.FC<FlashcardProps> = ({ word, sentence, isFlipped, onFlip, onPronounce, isPronouncing }) => {
+  const frontContent = word.ru;
+  const backContent = word.en;
 
   return (
-    // The perspective container for the 3D effect
-    <div 
-        className="w-full aspect-[3/2] cursor-pointer group" 
-        style={{ perspective: '1000px' }}
-        onClick={handleFlipDuringChange}
+    <div className="w-full max-w-lg mx-auto perspective-1000">
+      <div
+        className={`relative w-full h-64 md:h-80 transition-transform duration-700 preserve-3d ${isFlipped ? 'rotate-y-180' : ''}`}
+        onClick={onFlip}
         role="button"
+        aria-label={`Flashcard: ${isFlipped ? backContent : frontContent}. Click to flip.`}
         tabIndex={0}
-        aria-label={`Flashcard for ${word.ru}. Click to flip.`}
-        onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && handleFlipDuringChange()}
-    >
-      {/* The inner container that flips */}
-      <div 
-        className={`relative w-full h-full ${!isInstantChange ? 'transition-transform duration-500' : ''}`}
-        style={{ transformStyle: 'preserve-3d', transform: isFlipped ? 'rotateY(180deg)' : 'rotateY(0deg)' }}
+        onKeyDown={(e) => (e.key === ' ' || e.key === 'Enter') && onFlip()}
       >
-        {/* Front of the card (Russian) */}
-        <div 
-            className="absolute w-full h-full bg-slate-800 rounded-2xl shadow-xl flex flex-col justify-center items-center p-6 text-center"
-            style={{ backfaceVisibility: 'hidden', WebkitBackfaceVisibility: 'hidden' }}
-        >
-          <span className="text-4xl sm:text-5xl font-bold text-white">{word.ru}</span>
+        {/* Front of the card */}
+        <div className="absolute w-full h-full backface-hidden flex flex-col items-center justify-center p-6 bg-slate-800 border-2 border-slate-700 rounded-2xl shadow-2xl cursor-pointer">
+          <p className="text-4xl md:text-5xl font-bold text-center text-white break-all">{frontContent}</p>
         </div>
 
-        {/* Back of the card (English) */}
-        <div 
-            className="absolute w-full h-full bg-indigo-700 rounded-2xl shadow-xl flex flex-col justify-center items-center p-6 text-center"
-            style={{ backfaceVisibility: 'hidden', WebkitBackfaceVisibility: 'hidden', transform: 'rotateY(180deg)' }}
-        >
-          <div>
-            <span className="text-4xl sm:text-5xl font-bold text-white">{word.en}</span>
-            {exampleSentence && (
-              <p className="text-indigo-200 mt-4 text-sm sm:text-base italic">"{exampleSentence}"</p>
+        {/* Back of the card */}
+        <div className="absolute w-full h-full backface-hidden flex flex-col items-center justify-center p-6 bg-slate-700 border-2 border-slate-600 rounded-2xl shadow-2xl cursor-pointer rotate-y-180">
+          <div className="text-center">
+            <p className="text-4xl md:text-5xl font-bold text-indigo-400 break-all">{backContent}</p>
+            {sentence && (
+              <p className="mt-4 text-sm md:text-base text-slate-300 italic">"{sentence}"</p>
             )}
           </div>
           <button
-            onClick={handlePlayAudioSequence}
-            className="absolute top-4 right-4 p-2 text-indigo-200 hover:text-white transition-colors rounded-full hover:bg-indigo-600"
-            aria-label="Play English pronunciation"
+            onClick={(e) => {
+              e.stopPropagation();
+              onPronounce();
+            }}
+            disabled={isPronouncing}
+            className="absolute top-4 right-4 text-slate-400 hover:text-white transition-colors disabled:opacity-50"
+            aria-label={`Pronounce "${backContent}"`}
           >
-            <Volume2 size={24} />
+            {isPronouncing ? <RefreshCw className="animate-spin" /> : <Volume2 />}
           </button>
         </div>
       </div>
