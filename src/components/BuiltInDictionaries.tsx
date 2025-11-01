@@ -11,7 +11,7 @@ const dictionaries = [
     { name: 'Food', wordsPath: '/dictionaries/Food.xlsx', sentencesPath: '/sentences/phrases1.json' },
     { name: 'List 1', wordsPath: '/dictionaries/List1.xlsx', sentencesPath: '/sentences/phrases1.json' },
     { name: 'List 2', wordsPath: '/dictionaries/List2.xlsx', sentencesPath: '/sentences/phrases1.json' },
-    { name: 'List 3.1', wordsPath: '/dictionaries/List3.1.xlsx', sentencesPath: '/sentences/phrases1.json' },
+    { name: 'List 3', wordsPath: '/dictionaries/List3.xlsx', sentencesPath: '/sentences/phrases1.json' },
     { name: 'List 4', wordsPath: '/dictionaries/List4.xlsx', sentencesPath: '/sentences/phrases1.json' },
     { name: 'List 5', wordsPath: '/dictionaries/List5.xlsx', sentencesPath: '/sentences/phrases1.json' },
     { name: 'List 6', wordsPath: '/dictionaries/List6.xlsx', sentencesPath: '/sentences/phrases1.json' },
@@ -44,7 +44,7 @@ export const BuiltInDictionaries: React.FC<BuiltInDictionariesProps> = ({ onSele
             console.warn(`Could not load optional sentences file: ${dict.sentencesPath}`);
         }
       }
-      
+
       onSelect(dict.name, wordsFile, sentencesFile);
 
     } catch (err) {
