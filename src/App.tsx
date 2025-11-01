@@ -15,6 +15,8 @@ import { Word, LoadedDictionary, WordProgress } from './types';
 import { parseDictionaryFile, shuffleArray } from './utils/dictionaryUtils';
 import { Shuffle, ChevronsUpDown, Info, BookUser, Trash2, Repeat, Library, Loader2 } from 'lucide-react';
 import { TrainingModeInput, AnswerState } from './components/TrainingModeInput';
+import { TrainingModeGuess } from './components/TrainingModeGuess';
+import { TrainingModeToggle } from './components/TrainingModeToggle';
 
 
 // --- Constants ---
@@ -48,6 +50,8 @@ const App: React.FC = () => {
     // State for Training Mode input
     const [userAnswer, setUserAnswer] = useState('');
     const [answerState, setAnswerState] = useState<AnswerState>('idle');
+    const [trainingMode, setTrainingMode] = useState<'write' | 'guess'>('write');
+    const [guessOptions, setGuessOptions] = useState<string[]>([]);
     
     const [isFileSourceModalOpen, setFileSourceModalOpen] = useState(true);
     const [isInstructionsModalOpen, setInstructionsModalOpen] = useState(false);
@@ -165,10 +169,44 @@ const App: React.FC = () => {
         return () => clearTimeout(handler);
     }, [learnedWords, dontKnowWords, user, dictionaryId, isProgressLoading]);
 
+    const currentSet = useMemo(() => selectedSetIndex !== null ? loadedDictionary?.sets[selectedSetIndex] : null, [selectedSetIndex, loadedDictionary]);
+
+    const generateGuessOptions = useCallback((correctWord: Word) => {
+        if (!currentSet || !loadedDictionary) return;
+    
+        // Get distractors from the original, larger set for more variety
+        const originalSetIndex = currentSet.originalSetIndex;
+        const allWordsInOriginalSet = loadedDictionary.sets
+            .filter(s => s.originalSetIndex === originalSetIndex)
+            .flatMap(s => s.words);
+    
+        let distractors = allWordsInOriginalSet
+            .filter(w => w.en !== correctWord.en)
+            .sort(() => 0.5 - Math.random())
+            .slice(0, 2);
+    
+        // Fallback if not enough words in the set
+        if (distractors.length < 2) {
+            const fallbackDistractors = loadedDictionary.sets
+                .flatMap(s => s.words)
+                .filter(w => w.en !== correctWord.en && !distractors.some(d => d.en === w.en))
+                .sort(() => 0.5 - Math.random())
+                .slice(0, 2 - distractors.length);
+            distractors.push(...fallbackDistractors);
+        }
+    
+        const options = shuffleArray([correctWord.en, ...distractors.map(d => d.en)]);
+        setGuessOptions(options);
+    }, [currentSet, loadedDictionary]);
+
     const updateWordIndex = () => {
-        if (currentWordIndex < reviewWords.length - 1) {
-            setCurrentWordIndex(prev => prev + 1);
+        const nextIndex = currentWordIndex + 1;
+        if (nextIndex < reviewWords.length) {
+            setCurrentWordIndex(nextIndex);
             setSessionProgress(prev => prev + 1);
+            if (isDontKnowMode && trainingMode === 'guess') {
+                generateGuessOptions(reviewWords[nextIndex]);
+            }
         } else {
             setReviewWords([]);
             setSessionActive(false); // End session
@@ -200,11 +238,22 @@ const App: React.FC = () => {
         }
     }, [loadedDictionary, learnedWords]);
 
+    const currentWord = useMemo(() => reviewWords[currentWordIndex], [reviewWords, currentWordIndex]);
+
     useEffect(() => {
         if (selectedSetIndex !== null && !isProgressLoading && !sessionActive) {
             startReviewSession(selectedSetIndex);
         }
     }, [selectedSetIndex, isProgressLoading, sessionActive, startReviewSession]);
+
+    useEffect(() => {
+        if (isDontKnowMode && trainingMode === 'guess' && currentWord) {
+            // Check if current options are for the current word, if not, generate new ones
+            if (!guessOptions.includes(currentWord.en)) {
+                 generateGuessOptions(currentWord);
+            }
+        }
+    }, [trainingMode, isDontKnowMode, currentWord, guessOptions, generateGuessOptions]);
     
     const handleFilesSelect = async (name: string, wordsFile: File, sentencesFile?: File) => {
         setIsLoading(true);
@@ -242,8 +291,6 @@ const App: React.FC = () => {
         }
     };
     
-    const currentSet = useMemo(() => selectedSetIndex !== null ? loadedDictionary?.sets[selectedSetIndex] : null, [selectedSetIndex, loadedDictionary]);
-    const currentWord = useMemo(() => reviewWords[currentWordIndex], [reviewWords, currentWordIndex]);
     const exampleSentence = useMemo(() => currentWord ? sentences.get(currentWord.en.toLowerCase()) : undefined, [currentWord, sentences]);
     const totalLearnedCount = useMemo(() => learnedWords.size, [learnedWords]);
 
@@ -343,7 +390,8 @@ const App: React.FC = () => {
     };
 
     const handleFlip = () => {
-        if (isDontKnowMode && answerState !== 'idle') return;
+        if (isDontKnowMode && answerState !== 'idle' && trainingMode === 'write') return;
+        if (isDontKnowMode && trainingMode === 'guess' && isFlipped) return; // Don't allow flipping back in guess mode
         setIsFlipped(prev => !prev);
     };
     
@@ -360,7 +408,8 @@ const App: React.FC = () => {
         if (selectedSetIndex === null) return;
         const words = dontKnowWords.get(selectedSetIndex) || [];
         if (words.length > 0) {
-            setReviewWords(shuffleArray(words));
+            const shuffledWords = shuffleArray(words);
+            setReviewWords(shuffledWords);
             setSessionTotal(words.length);
             setSessionProgress(words.length > 0 ? 1 : 0);
             setCurrentWordIndex(0);
@@ -369,6 +418,9 @@ const App: React.FC = () => {
             setUserAnswer('');
             setIsDontKnowMode(true);
             setSessionActive(true);
+            if (trainingMode === 'guess') {
+                generateGuessOptions(shuffledWords[0]);
+            }
         }
     };
 
@@ -385,7 +437,6 @@ const App: React.FC = () => {
                 setIsFlipped(false);
                 setAnswerState('idle');
                 setUserAnswer('');
-                updateWordIndex();
             }, 1000);
         } else {
             setAnswerState('incorrect');
@@ -398,6 +449,30 @@ const App: React.FC = () => {
         setUserAnswer('');
         setIsFlipped(false);
         updateWordIndex();
+    };
+
+    const handleGuess = (isCorrect: boolean) => {
+        if (isCorrect) {
+            // Logic from handleKnow without advancing the word
+            const progress = learnedWords.get(currentWord.en);
+            const currentStage = progress ? progress.srsStage : -1;
+            const nextStage = Math.min(currentStage + 1, SRS_INTERVALS.length - 1);
+            const nextReviewDate = new Date();
+            nextReviewDate.setDate(nextReviewDate.getDate() + SRS_INTERVALS[nextStage]);
+            setLearnedWords(prev => new Map(prev).set(currentWord.en, { srsStage: nextStage, nextReviewDate: nextReviewDate.toISOString() }));
+            
+            if (isDontKnowMode && selectedSetIndex !== null) {
+                setDontKnowWords((prev: Map<number, Word[]>) => {
+                    const newMap = new Map(prev);
+                    const words = newMap.get(selectedSetIndex)?.filter(w => w.en !== currentWord.en) || [];
+                    if (words.length > 0) newMap.set(selectedSetIndex, words);
+                    else newMap.delete(selectedSetIndex);
+                    return newMap;
+                });
+            }
+        } else {
+            setIsFlipped(true);
+        }
     };
 
 
@@ -433,16 +508,20 @@ const App: React.FC = () => {
 
             return (
                 <div className="w-full flex flex-col items-center">
-                    <div className="w-full flex items-center justify-center gap-3 h-8 mb-2">
+                    <div className="w-full grid grid-cols-3 items-center gap-3 h-8 mb-2">
                         {isDontKnowMode ? (
                             <>
-                                <span className="text-sm font-semibold uppercase text-amber-400 bg-amber-900/50 px-3 py-1.5 rounded-md">
-                                    Training Mode
-                                </span>
-                                <p className="text-slate-400 text-sm">{counterText}</p>
+                                <p className="text-slate-400 text-sm text-left">{counterText}</p>
+                                <TrainingModeToggle mode={trainingMode} onModeChange={(mode) => {
+                                    setTrainingMode(mode);
+                                    setIsFlipped(false);
+                                    setAnswerState('idle');
+                                    setUserAnswer('');
+                                }} />
+                                <div /> {/* Placeholder for grid */}
                             </>
                         ) : (
-                            <p className="text-slate-400 text-sm">{counterText}</p>
+                            <p className="text-slate-400 text-sm col-span-3 text-center">{counterText}</p>
                         )}
                     </div>
                     <ProgressBar current={sessionProgress} total={sessionTotal} />
@@ -451,13 +530,22 @@ const App: React.FC = () => {
                     </div>
                     <div className="flex justify-center gap-4 mt-6 w-full">
                         {isDontKnowMode ? (
-                            <TrainingModeInput
-                                answer={userAnswer}
-                                setAnswer={setUserAnswer}
-                                onCheck={handleTrainingAnswer}
-                                onNext={handleTrainingNext}
-                                answerState={answerState}
-                            />
+                            trainingMode === 'write' ? (
+                                <TrainingModeInput
+                                    answer={userAnswer}
+                                    setAnswer={setUserAnswer}
+                                    onCheck={handleTrainingAnswer}
+                                    onNext={handleTrainingNext}
+                                    answerState={answerState}
+                                />
+                            ) : (
+                                <TrainingModeGuess
+                                    options={guessOptions}
+                                    correctAnswer={currentWord.en}
+                                    onGuess={handleGuess}
+                                    onNext={handleTrainingNext}
+                                />
+                            )
                         ) : (
                             <>
                                 <button onClick={handleDontKnow} disabled={isProgressLoading || isChangingWord} className="w-full py-3 text-lg font-semibold bg-rose-600 hover:bg-rose-700 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-wait">Don't know</button>
