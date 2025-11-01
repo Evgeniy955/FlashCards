@@ -1,12 +1,12 @@
-// FIX: Changed to a namespace import to resolve issues with named export resolution in some environments.
-import * as firebaseApp from 'firebase/app';
+// FIX: Changed to a named import for `initializeApp` as per Firebase v9 modular API.
+import { initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
 import { firebaseConfig } from '../firebase-config';
 
 // Initialize Firebase with the modern v9+ API
-const app = firebaseApp.initializeApp(firebaseConfig);
+const app = initializeApp(firebaseConfig);
 
 // Get auth and firestore instances using the v9+ modular functions
 const auth = getAuth(app);
