@@ -1,594 +1,726 @@
-
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { User, onAuthStateChanged } from 'firebase/auth';
+import { useAuthState } from 'react-firebase-hooks/auth';
+import { auth, db } from './lib/firebase-client';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
-import {
-    FileText,
-    HelpCircle,
-    RotateCw,
-    Shuffle,
-    List,
-    GraduationCap,
-    Sparkles,
-    ArrowLeft,
-    BookOpen,
-} from 'lucide-react';
-
-import { Auth } from './components/Auth';
-import { FileSourceModal } from './components/FileSourceModal';
 import { Flashcard } from './components/Flashcard';
-import { InstructionsModal } from './components/InstructionsModal';
-import { LearnedWordsModal } from './components/LearnedWordsModal';
 import { ProgressBar } from './components/ProgressBar';
 import { SetSelector } from './components/SetSelector';
-import { ThemeToggle } from './components/ThemeToggle';
-import { TranslationModeToggle } from './components/TranslationModeToggle';
+import { FileSourceModal } from './components/FileSourceModal';
+import { InstructionsModal } from './components/InstructionsModal';
+import { LearnedWordsModal } from './components/LearnedWordsModal';
 import { WordList } from './components/WordList';
 import { SentenceUpload } from './components/SentenceUpload';
-import { TrainingModeToggle } from './components/TrainingModeToggle';
+import { Auth } from './components/Auth';
+import { Word, LoadedDictionary, WordProgress, TranslationMode, Theme } from './types';
+import { parseDictionaryFile, shuffleArray, getWordId } from './utils/dictionaryUtils';
+import { Shuffle, ChevronsUpDown, Info, BookUser, Trash2, Repeat, Library, Loader2 } from 'lucide-react';
 import { TrainingModeInput, AnswerState } from './components/TrainingModeInput';
 import { TrainingModeGuess } from './components/TrainingModeGuess';
-
-import { auth, db } from './lib/firebase-client';
+import { TrainingModeToggle } from './components/TrainingModeToggle';
+import { TranslationModeToggle } from './components/TranslationModeToggle';
 import { saveLocalProgress, loadLocalProgress, deleteLocalProgress } from './lib/localProgress';
-import { parseDictionaryFile, shuffleArray, getWordId } from './utils/dictionaryUtils';
-import type {
-    Theme,
-    Word,
-    WordSet,
-    LoadedDictionary,
-    WordProgress,
-    TranslationMode,
-} from './types';
+import { ThemeToggle } from './components/ThemeToggle';
 
-// Spaced Repetition System (SRS) intervals in days
-const srsIntervals = [1, 2, 4, 8, 16, 32, 64, 128, 256];
 
+// --- Constants ---
+const SRS_INTERVALS = [1, 2, 4, 8, 16, 32, 64]; // in days
+
+// --- Main App Component ---
 const App: React.FC = () => {
-    // UI and Auth State
-    const [theme, setTheme] = useState<Theme>(() => (localStorage.getItem('theme') as Theme) || 'light');
-    const [user, setUser] = useState<User | null>(null);
-    const [authLoading, setAuthLoading] = useState(true);
-    const [isLoading, setIsLoading] = useState(false);
-    const [error, setError] = useState<string | null>(null);
-
-    // Dictionary and Set State
-    const [dictionary, setDictionary] = useState<LoadedDictionary | null>(null);
+    const [user] = useAuthState(auth);
+    const [loadedDictionary, setLoadedDictionary] = useState<LoadedDictionary | null>(null);
     const [selectedSetIndex, setSelectedSetIndex] = useState<number | null>(null);
-    const [sentences, setSentences] = useState<Map<string, string> | null>(null);
-
-    // Main Training State
-    const [studyQueue, setStudyQueue] = useState<Word[]>([]);
     const [currentWordIndex, setCurrentWordIndex] = useState(0);
     const [isFlipped, setIsFlipped] = useState(false);
-    const [isInstantChange, setIsInstantChange] = useState(false);
-    const [translationMode, setTranslationMode] = useState<TranslationMode>('standard');
+    const [reviewWords, setReviewWords] = useState<Word[]>([]);
 
-    // Progress State
-    const [learnedWords, setLearnedWords] = useState<Record<string, WordProgress>>({});
-    const [dontKnowWords, setDontKnowWords] = useState<Record<string, Word[]>>({});
+    // States for session progress tracking
+    const [sessionProgress, setSessionProgress] = useState(0);
+    const [sessionTotal, setSessionTotal] = useState(0);
+    const [sessionActive, setSessionActive] = useState(false);
 
-    // "Don't Know" Words Training State
-    const [isTrainingDontKnow, setIsTrainingDontKnow] = useState(false);
-    const [dontKnowQueue, setDontKnowQueue] = useState<Word[]>([]);
-    const [currentDontKnowIndex, setCurrentDontKnowIndex] = useState(0);
-    const [trainingMode, setTrainingMode] = useState<'write' | 'guess'>('write');
+    const [learnedWords, setLearnedWords] = useState<Map<string, WordProgress>>(new Map());
+    const [dontKnowWords, setDontKnowWords] = useState<Map<number, Word[]>>(new Map());
+    const [sentences, setSentences] = useState<Map<string, string>>(new Map());
+
+    const [isLoading, setIsLoading] = useState(false); // For file parsing
+    const [isProgressLoading, setIsProgressLoading] = useState(true); // For Firestore, start as true
+    const [isWordListVisible, setIsWordListVisible] = useState(false);
+    const [isDontKnowMode, setIsDontKnowMode] = useState(false);
+    const [isChangingWord, setIsChangingWord] = useState(false); // For fade animation
+    const [isInstantChange, setIsInstantChange] = useState(false); // For instant card change
+
+    // State for Training Mode input
     const [userAnswer, setUserAnswer] = useState('');
     const [answerState, setAnswerState] = useState<AnswerState>('idle');
+    const [trainingMode, setTrainingMode] = useState<'write' | 'guess'>('write');
+    const [translationMode, setTranslationMode] = useState<TranslationMode>('standard');
     const [guessOptions, setGuessOptions] = useState<string[]>([]);
 
-    // Modal and Visibility State
-    const [isSourceModalOpen, setIsSourceModalOpen] = useState(false);
-    const [isLearnedWordsModalOpen, setIsLearnedWordsModalOpen] = useState(false);
-    const [isInstructionsModalOpen, setIsInstructionsModalOpen] = useState(false);
-    const [isWordListVisible, setIsWordListVisible] = useState(false);
+    const [isFileSourceModalOpen, setFileSourceModalOpen] = useState(true);
+    const [isInstructionsModalOpen, setInstructionsModalOpen] = useState(false);
+    const [isLearnedWordsModalOpen, setLearnedWordsModalOpen] = useState(false);
+    const [theme, setTheme] = useState<Theme>('dark');
 
-    // --- EFFECTS ---
-
+    // Effect to set initial theme from localStorage or system preference
     useEffect(() => {
-        document.documentElement.classList.toggle('dark', theme === 'dark');
+        const savedTheme = localStorage.getItem('theme') as Theme | null;
+        const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+
+        if (savedTheme) {
+            setTheme(savedTheme);
+        } else if (systemPrefersDark) {
+            setTheme('dark');
+        } else {
+            setTheme('light');
+        }
+    }, []);
+
+    // Effect to apply theme class to <html> and save to localStorage
+    useEffect(() => {
+        const root = window.document.documentElement;
+        if (theme === 'dark') {
+            root.classList.add('dark');
+        } else {
+            root.classList.remove('dark');
+        }
         localStorage.setItem('theme', theme);
     }, [theme]);
 
+
+    // FIX: Replaced `replaceAll` with `replace` with a global regex for wider compatibility.
+    const dictionaryId = useMemo(() => loadedDictionary?.name.replace(/[./]/g, '_'), [loadedDictionary]);
+
+    // Load global sentences from Firestore user document
     useEffect(() => {
-        const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-            setUser(currentUser);
-            setAuthLoading(false);
-        });
-        return () => unsubscribe();
-    }, []);
+        const loadGlobalSentences = async () => {
+            if (!user) {
+                setSentences(new Map());
+                return;
+            }
+            const userDocRef = doc(db, 'users', user.uid);
+            try {
+                const docSnap = await getDoc(userDocRef);
+                if (docSnap.exists()) {
+                    const data = docSnap.data();
+                    if (data?.globalSentences) {
+                        setSentences(new Map(Object.entries(data.globalSentences)));
+                    } else {
+                        setSentences(new Map());
+                    }
+                }
+            } catch (error) {
+                console.error("Error loading global sentences:", error);
+                setSentences(new Map());
+            }
+        };
+        loadGlobalSentences();
+    }, [user]);
 
-    const getProgressId = useCallback(() => {
-        if (!dictionary) return null;
-        return user ? `${user.uid}_${dictionary.name}` : dictionary.name;
-    }, [user, dictionary]);
+    // Save global sentences to Firestore user document
+    useEffect(() => {
+        if (!user) return;
 
-    // Load progress when user or dictionary changes
+        const handler = setTimeout(async () => {
+            const userDocRef = doc(db, 'users', user.uid);
+            try {
+                await setDoc(userDocRef, {
+                    globalSentences: Object.fromEntries(sentences)
+                }, { merge: true });
+            } catch (error) {
+                console.error("Error saving global sentences:", error);
+            }
+        }, 1500);
+
+        return () => clearTimeout(handler);
+    }, [sentences, user]);
+
+
+    // Load DICTIONARY-SPECIFIC progress from Firestore or Local Storage
     useEffect(() => {
         const loadProgress = async () => {
-            const progressId = getProgressId();
-            if (!progressId) return;
+            if (!dictionaryId) {
+                setLearnedWords(new Map());
+                setDontKnowWords(new Map());
+                setIsProgressLoading(false);
+                return;
+            }
 
-            setIsLoading(true);
+            setIsProgressLoading(true);
             try {
-                let data = { learnedWords: {}, dontKnowWords: {} };
-                if (user) {
-                    const docRef = doc(db, 'progress', progressId);
+                if (user) { // User is logged in, use Firestore
+                    const docRef = doc(db, `users/${user.uid}/progress/${dictionaryId}`);
                     const docSnap = await getDoc(docRef);
-                    if (docSnap.exists()) data = docSnap.data() as any;
-                } else {
-                    const localProgress = await loadLocalProgress(progressId);
-                    if (localProgress) data = localProgress as any;
+                    if (docSnap.exists()) {
+                        const data = docSnap.data();
+                        const learnedData = data?.learnedWords || {};
+                        setLearnedWords(new Map(Object.entries(learnedData)));
+                        const dontKnowData = data?.dontKnowWords || {};
+                        const dontKnowMap = new Map(
+                            Object.entries(dontKnowData).map(([key, value]) => [Number(key), value as Word[]])
+                        );
+                        setDontKnowWords(dontKnowMap);
+                    } else {
+                        setLearnedWords(new Map());
+                        setDontKnowWords(new Map());
+                    }
+                } else { // User is not logged in, use IndexedDB
+                    const localProgress = await loadLocalProgress(dictionaryId);
+                    if (localProgress) {
+                        const learnedData = localProgress.learnedWords || {};
+                        setLearnedWords(new Map(Object.entries(learnedData)));
+                        const dontKnowData = localProgress.dontKnowWords || {};
+                        const dontKnowMap = new Map(
+                            Object.entries(dontKnowData).map(([key, value]) => [Number(key), value as Word[]])
+                        );
+                        setDontKnowWords(dontKnowMap);
+                    } else {
+                        setLearnedWords(new Map());
+                        setDontKnowWords(new Map());
+                    }
                 }
-                setLearnedWords(data.learnedWords || {});
-                setDontKnowWords(data.dontKnowWords || {});
-            } catch (e) {
-                console.error("Failed to load progress:", e);
-                setError("Could not load your progress.");
+            } catch (error) {
+                console.error("Error loading progress:", error);
+                setLearnedWords(new Map());
+                setDontKnowWords(new Map());
             } finally {
-                setIsLoading(false);
+                setIsProgressLoading(false);
             }
         };
 
-        if (dictionary) loadProgress();
-    }, [user, dictionary, getProgressId]);
+        loadProgress();
+    }, [user, dictionaryId]);
 
-    // Re-build study queue when the selected set or progress changes
+    // Save DICTIONARY-SPECIFIC progress to Firestore or Local Storage
     useEffect(() => {
-        if (selectedSetIndex === null || !dictionary) return;
+        if (isProgressLoading || !dictionaryId) {
+            return;
+        }
 
-        const currentSet = dictionary.sets[selectedSetIndex];
-        const now = new Date();
+        const handler = setTimeout(async () => {
+            const dataToSave = {
+                learnedWords: Object.fromEntries(learnedWords),
+                dontKnowWords: Object.fromEntries(dontKnowWords),
+            };
 
-        const wordsToReview = currentSet.words.filter(word => {
+            if (user) {
+                const docRef = doc(db, `users/${user.uid}/progress/${dictionaryId}`);
+                try {
+                    await setDoc(docRef, dataToSave, { merge: true });
+                } catch (error) {
+                    console.error("Error saving dictionary progress to Firestore:", error);
+                }
+            } else {
+                try {
+                    await saveLocalProgress(dictionaryId, dataToSave);
+                } catch (error) {
+                    console.error("Error saving local progress:", error);
+                }
+            }
+        }, 1500);
+
+        return () => clearTimeout(handler);
+    }, [learnedWords, dontKnowWords, user, dictionaryId, isProgressLoading]);
+
+
+    const currentSet = useMemo(() => selectedSetIndex !== null ? loadedDictionary?.sets[selectedSetIndex] : null, [selectedSetIndex, loadedDictionary]);
+
+    const generateGuessOptions = useCallback((correctWord: Word) => {
+        if (!currentSet || !loadedDictionary) return;
+
+        const isStandardMode = translationMode === 'standard';
+        const correctTranslation = isStandardMode ? correctWord.lang2 : correctWord.lang1;
+        const correctWordId = getWordId(correctWord);
+
+        const originalSetIndex = currentSet.originalSetIndex;
+        const allWordsInOriginalSet = loadedDictionary.sets
+            .filter(s => s.originalSetIndex === originalSetIndex)
+            .flatMap(s => s.words);
+
+        let distractors = allWordsInOriginalSet
+            .filter(w => getWordId(w) !== correctWordId)
+            .sort(() => 0.5 - Math.random())
+            .slice(0, 3);
+
+        if (distractors.length < 3) {
+            const fallbackDistractors = loadedDictionary.sets
+                .flatMap(s => s.words)
+                .filter(w => getWordId(w) !== correctWordId && !distractors.some(d => getWordId(d) === getWordId(w)))
+                .sort(() => 0.5 - Math.random())
+                .slice(0, 3 - distractors.length);
+            distractors.push(...fallbackDistractors);
+        }
+
+        const options = shuffleArray([
+            correctTranslation,
+            ...distractors.map(d => isStandardMode ? d.lang2 : d.lang1)
+        ]);
+        setGuessOptions(options);
+    }, [currentSet, loadedDictionary, translationMode]);
+
+    const updateWordIndex = () => {
+        const nextIndex = currentWordIndex + 1;
+        if (nextIndex < reviewWords.length) {
+            setCurrentWordIndex(nextIndex);
+            setSessionProgress(prev => prev + 1);
+            if (isDontKnowMode && trainingMode === 'guess') {
+                generateGuessOptions(reviewWords[nextIndex]);
+            }
+        } else {
+            setReviewWords([]);
+            setSessionActive(false); // End session
+        }
+    };
+
+    const startReviewSession = useCallback((setIndex: number) => {
+        if (!loadedDictionary) return;
+        const set = loadedDictionary.sets[setIndex];
+        const now = new Date().toISOString();
+        const wordsForReview = set.words.filter(word => {
             const wordId = getWordId(word);
-            const progress = learnedWords[wordId];
-            return !progress || new Date(progress.nextReviewDate) <= now;
+            const progress = learnedWords.get(wordId);
+            return !progress || progress.nextReviewDate <= now;
         });
 
-        setStudyQueue(shuffleArray(wordsToReview));
-        setCurrentWordIndex(0);
-        setIsFlipped(false);
+        if (wordsForReview.length > 0) {
+            setReviewWords(wordsForReview);
+            setSessionTotal(wordsForReview.length);
+            setSessionProgress(1);
+            setCurrentWordIndex(0);
+            setIsFlipped(false);
+            setIsDontKnowMode(false);
+            setSessionActive(true);
+        } else {
+            setReviewWords([]);
+            setSessionTotal(0);
+            setSessionProgress(0);
+            setSessionActive(false);
+        }
+    }, [loadedDictionary, learnedWords]);
 
-    }, [selectedSetIndex, dictionary, learnedWords]);
+    const currentWord = useMemo(() => reviewWords[currentWordIndex], [reviewWords, currentWordIndex]);
 
-    // Generate options for "guess" mode
     useEffect(() => {
-        const currentTrainingWord = dontKnowQueue[currentDontKnowIndex];
-        const currentSet = dictionary?.sets[selectedSetIndex!];
-
-        if (isTrainingDontKnow && trainingMode === 'guess' && currentTrainingWord && currentSet) {
-            const correctAnswer = translationMode === 'standard' ? currentTrainingWord.lang2 : currentTrainingWord.lang1;
-            const allWordsInSet = currentSet.words;
-            const options = new Set<string>([correctAnswer]);
-
-            const shuffledOthers = shuffleArray(allWordsInSet.filter(w => getWordId(w) !== getWordId(currentTrainingWord)));
-
-            while (options.size < 4 && shuffledOthers.length > 0) {
-                const otherWord = shuffledOthers.pop();
-                if(otherWord) options.add(translationMode === 'standard' ? otherWord.lang2 : otherWord.lang1);
-            }
-            setGuessOptions(shuffleArray(Array.from(options)));
+        if (selectedSetIndex !== null && !isProgressLoading && !sessionActive) {
+            startReviewSession(selectedSetIndex);
         }
-    }, [isTrainingDontKnow, trainingMode, currentDontKnowIndex, dontKnowQueue, selectedSetIndex, dictionary, translationMode]);
+    }, [selectedSetIndex, isProgressLoading, sessionActive, startReviewSession]);
 
-    // --- MEMOIZED VALUES ---
-
-    const currentSet = useMemo(() => {
-        return dictionary && selectedSetIndex !== null ? dictionary.sets[selectedSetIndex] : null;
-    }, [dictionary, selectedSetIndex]);
-
-    const currentWord = useMemo(() => {
-        if (isTrainingDontKnow) return dontKnowQueue[currentDontKnowIndex];
-        return studyQueue[currentWordIndex];
-    }, [studyQueue, currentWordIndex, isTrainingDontKnow, dontKnowQueue, currentDontKnowIndex]);
-
-    const allLearnedWordsList = useMemo(() => {
-        if (!dictionary) return [];
-        return Object.entries(learnedWords)
-            .map(([wordId, progress]) => {
-                const [lang1, lang2] = wordId.split('|');
-                return { lang1, lang2, progress };
-            })
-            .sort((a, b) => a.lang1.localeCompare(b.lang1));
-    }, [learnedWords, dictionary]);
-
-    const currentDontKnowCount = currentSet ? (dontKnowWords[currentSet.name] || []).length : 0;
-
-    // --- HANDLERS ---
-
-    const saveProgress = useCallback(async (newLearned: Record<string, WordProgress>, newDontKnow: Record<string, Word[]>) => {
-        const progressId = getProgressId();
-        if (!progressId) return;
-
-        try {
-            if (user) {
-                await setDoc(doc(db, 'progress', progressId), { learnedWords: newLearned, dontKnowWords: newDontKnow }, { merge: true });
-            } else {
-                await saveLocalProgress(progressId, { learnedWords: newLearned, dontKnowWords: newDontKnow });
+    useEffect(() => {
+        if (isDontKnowMode && trainingMode === 'guess' && currentWord) {
+            const currentCorrectAnswer = translationMode === 'standard' ? currentWord.lang2 : currentWord.lang1;
+            if (!guessOptions.includes(currentCorrectAnswer)) {
+                generateGuessOptions(currentWord);
             }
-        } catch (e) {
-            console.error("Failed to save progress:", e);
-            setError("Could not save your progress.");
         }
-    }, [user, getProgressId]);
+    }, [trainingMode, isDontKnowMode, currentWord, guessOptions, generateGuessOptions, translationMode]);
 
     const handleFilesSelect = async (name: string, wordsFile: File, sentencesFile?: File) => {
         setIsLoading(true);
-        setError(null);
-        setIsSourceModalOpen(false);
         try {
-            const parsedDictionary = await parseDictionaryFile(wordsFile);
-            setDictionary(parsedDictionary);
-            // Reset all session state
-            setSelectedSetIndex(null);
-            setStudyQueue([]);
-            setCurrentWordIndex(0);
-            setLearnedWords({});
-            setDontKnowWords({});
-            setSentences(null);
-
-            if(sentencesFile) {
-                // This logic is duplicated from SentenceUpload, ideally it would be in a util
-                const reader = new FileReader();
-                reader.onload = (e) => {
-                    const sentenceMap = new Map<string, string>();
-                    const text = e.target?.result as string;
-                    const jsonObj = JSON.parse(text);
-                    for (const key in jsonObj) {
-                        if (typeof jsonObj[key] === 'string') {
-                            sentenceMap.set(key.trim().toLowerCase(), jsonObj[key]);
-                        }
+            let sentenceMapFromFile: Map<string, string> | null = null;
+            if (sentencesFile) {
+                const text = await sentencesFile.text();
+                const jsonObj = JSON.parse(text);
+                sentenceMapFromFile = new Map<string, string>();
+                for (const key in jsonObj) {
+                    if (typeof jsonObj[key] === 'string') {
+                        sentenceMapFromFile.set(key.trim().toLowerCase(), jsonObj[key]);
                     }
-                    setSentences(sentenceMap);
-                };
-                reader.readAsText(sentencesFile);
+                }
             }
 
-        } catch (err) {
-            setError(err instanceof Error ? err.message : 'Failed to process file.');
+            setLearnedWords(new Map());
+            setDontKnowWords(new Map());
+            if (sentenceMapFromFile) {
+                setSentences(prev => new Map([...prev, ...sentenceMapFromFile]));
+            }
+
+            const dictionary = await parseDictionaryFile(wordsFile);
+            dictionary.name = name;
+            setLoadedDictionary(dictionary);
+            setSelectedSetIndex(0);
+            setFileSourceModalOpen(false);
+            setSessionActive(false);
+
+        } catch (error) {
+            alert((error as Error).message);
+            setLoadedDictionary(null);
         } finally {
             setIsLoading(false);
         }
     };
 
-    const handleSetSelect = (index: number) => {
-        setSelectedSetIndex(index);
-        setIsTrainingDontKnow(false);
-    };
+    const exampleSentence = useMemo(() => currentWord ? sentences.get(currentWord.lang2.toLowerCase()) : undefined, [currentWord, sentences]);
+    const totalLearnedCount = useMemo(() => learnedWords.size, [learnedWords]);
 
-    const handleFlipCard = () => setIsFlipped(!isFlipped);
+    const staticCardNumber = useMemo(() => {
+        if (!currentSet || !currentWord) return 0;
+        return currentSet.words.findIndex(w => getWordId(w) === getWordId(currentWord)) + 1;
+    }, [currentSet, currentWord]);
 
-    const proceedToNextWord = useCallback(() => {
-        setIsFlipped(false);
-        setIsInstantChange(true);
-        setTimeout(() => {
-            if (isTrainingDontKnow) {
-                if (currentDontKnowIndex < dontKnowQueue.length - 1) {
-                    setCurrentDontKnowIndex(prev => prev + 1);
-                    setUserAnswer('');
-                    setAnswerState('idle');
-                } else {
-                    setIsTrainingDontKnow(false); // End of training
-                }
-            } else {
-                if (currentWordIndex < studyQueue.length - 1) {
-                    setCurrentWordIndex(prev => prev + 1);
-                }
+    const staticTotalCards = useMemo(() => {
+        return currentSet ? currentSet.words.length : 0;
+    }, [currentSet]);
+
+    const learnedWordsWithDetails = useMemo(() => {
+        if (!loadedDictionary) return [];
+        const allWords = new Map<string, Word>();
+        for (const set of loadedDictionary.sets) {
+            for (const word of set.words) {
+                allWords.set(getWordId(word), word);
             }
-            setIsInstantChange(false);
-        }, 50);
-    }, [currentWordIndex, studyQueue.length, isTrainingDontKnow, currentDontKnowIndex, dontKnowQueue.length]);
+        }
+        return Array.from(learnedWords.entries())
+            .map(([id, progress]) => {
+                const word = allWords.get(id);
+                return word ? { ...word, progress } : null;
+            })
+            .filter((item): item is Word & { progress: WordProgress } => item !== null)
+            .sort((a, b) => a.lang2.localeCompare(b.lang2));
+    }, [learnedWords, loadedDictionary]);
 
-    const handleKnowWord = () => {
-        if (!currentWord || !currentSet) return;
-        const wordId = getWordId(currentWord);
+    const advanceToNextWord = (updateLogic: () => boolean, instant = false) => {
+        if (!currentWord || isChangingWord || isInstantChange) return;
+        if (!updateLogic()) return;
 
-        const currentProgress = learnedWords[wordId];
-        const newStage = currentProgress ? currentProgress.srsStage + 1 : 1;
-        const interval = srsIntervals[Math.min(newStage - 1, srsIntervals.length - 1)];
-        const nextReviewDate = new Date();
-        nextReviewDate.setDate(nextReviewDate.getDate() + interval);
+        if (instant) {
+            setIsInstantChange(true);
+            setIsFlipped(false);
+            updateWordIndex();
 
-        const newLearned = { ...learnedWords, [wordId]: { srsStage: newStage, nextReviewDate: nextReviewDate.toISOString() }};
-        setLearnedWords(newLearned);
-
-        const currentSetName = currentSet.name;
-        const updatedDontKnowList = (dontKnowWords[currentSetName] || []).filter(w => getWordId(w) !== wordId);
-        const newDontKnow = {...dontKnowWords, [currentSetName]: updatedDontKnowList };
-        setDontKnowWords(newDontKnow);
-
-        saveProgress(newLearned, newDontKnow);
-        proceedToNextWord();
-    };
-
-    const handleDontKnowWord = () => {
-        if (!currentWord || !currentSet) return;
-        const wordId = getWordId(currentWord);
-
-        const newLearned = { ...learnedWords };
-        delete newLearned[wordId];
-        setLearnedWords(newLearned);
-
-        const currentSetName = currentSet.name;
-        const currentList = dontKnowWords[currentSetName] || [];
-        const wordExists = currentList.some(w => getWordId(w) === wordId);
-        const newList = wordExists ? currentList : [...currentList, currentWord];
-        const newDontKnow = { ...dontKnowWords, [currentSetName]: newList };
-        setDontKnowWords(newDontKnow);
-
-        saveProgress(newLearned, newDontKnow);
-        proceedToNextWord();
-    };
-
-    const handleChangeDictionary = () => {
-        setDictionary(null);
-        setSelectedSetIndex(null);
-        setIsSourceModalOpen(true);
-    };
-
-    const handleResetProgress = async () => {
-        if (window.confirm('Are you sure you want to reset all progress for this dictionary? This cannot be undone.')) {
-            setLearnedWords({});
-            setDontKnowWords({});
-            const progressId = getProgressId();
-            if (!progressId) return;
-
-            try {
-                if (user) {
-                    await setDoc(doc(db, 'progress', progressId), { learnedWords: {}, dontKnowWords: {} });
-                } else {
-                    await deleteLocalProgress(progressId);
-                }
-                // Re-trigger queue build by re-setting the index
-                const currentIndex = selectedSetIndex;
-                setSelectedSetIndex(null);
-                setTimeout(() => setSelectedSetIndex(currentIndex), 0);
-            } catch (e) {
-                setError('Failed to reset progress.');
-                console.error(e);
-            }
+            requestAnimationFrame(() => {
+                setIsInstantChange(false);
+            });
+        } else {
+            setIsChangingWord(true);
+            setTimeout(() => {
+                updateWordIndex();
+                setIsFlipped(false);
+                setIsChangingWord(false);
+            }, 250);
         }
     };
 
-    const startDontKnowTraining = () => {
-        if (!currentSet) return;
-        const words = dontKnowWords[currentSet.name] || [];
+    const handleKnow = () => {
+        advanceToNextWord(() => {
+            const wordId = getWordId(currentWord);
+            const progress = learnedWords.get(wordId);
+            const currentStage = progress ? progress.srsStage : -1;
+            const nextStage = Math.min(currentStage + 1, SRS_INTERVALS.length - 1);
+            const nextReviewDate = new Date();
+            nextReviewDate.setDate(nextReviewDate.getDate() + SRS_INTERVALS[nextStage]);
+            setLearnedWords(prev => new Map(prev).set(wordId, { srsStage: nextStage, nextReviewDate: nextReviewDate.toISOString() }));
+
+            if (isDontKnowMode && selectedSetIndex !== null) {
+                setDontKnowWords((prev: Map<number, Word[]>) => {
+                    const newMap = new Map(prev);
+                    const words = newMap.get(selectedSetIndex)?.filter(w => getWordId(w) !== wordId) || [];
+                    if (words.length > 0) newMap.set(selectedSetIndex, words);
+                    else newMap.delete(selectedSetIndex);
+                    return newMap;
+                });
+            }
+            return true;
+        }, isFlipped);
+    };
+
+    const handleDontKnow = () => {
+        advanceToNextWord(() => {
+            if (selectedSetIndex === null) return false;
+            const wordId = getWordId(currentWord);
+
+            if (learnedWords.has(wordId)) {
+                setLearnedWords(prev => {
+                    const newMap = new Map(prev);
+                    newMap.delete(wordId);
+                    return newMap;
+                });
+            }
+            if (!isDontKnowMode) {
+                setDontKnowWords((prev: Map<number, Word[]>) => {
+                    const newMap = new Map(prev);
+                    const currentList = newMap.get(selectedSetIndex) || [];
+                    if (!currentList.some(w => getWordId(w) === wordId)) {
+                        newMap.set(selectedSetIndex, [...currentList, currentWord]);
+                    }
+                    return newMap;
+                });
+            }
+            return true;
+        });
+    };
+
+    const handleFlip = () => {
+        if (isDontKnowMode && answerState !== 'idle' && trainingMode === 'write') return;
+        if (isDontKnowMode && trainingMode === 'guess' && isFlipped) return; // Don't allow flipping back in guess mode
+        setIsFlipped(prev => !prev);
+    };
+
+    const handleSelectSet = (index: number) => {
+        if (index !== selectedSetIndex) {
+            setSessionActive(false);
+            setSelectedSetIndex(index);
+        }
+    };
+
+    const handleShuffle = () => setReviewWords(shuffleArray(reviewWords));
+
+    const startDontKnowSession = () => {
+        if (selectedSetIndex === null) return;
+        const words = dontKnowWords.get(selectedSetIndex) || [];
         if (words.length > 0) {
-            setDontKnowQueue(shuffleArray(words));
-            setCurrentDontKnowIndex(0);
-            setIsTrainingDontKnow(true);
+            const shuffledWords = shuffleArray(words);
+            setReviewWords(shuffledWords);
+            setSessionTotal(words.length);
+            setSessionProgress(words.length > 0 ? 1 : 0);
+            setCurrentWordIndex(0);
+            setIsFlipped(false);
             setAnswerState('idle');
             setUserAnswer('');
+            setIsDontKnowMode(true);
+            setSessionActive(true);
+            if (trainingMode === 'guess') {
+                generateGuessOptions(shuffledWords[0]);
+            }
         }
     };
 
-    const handleCheckAnswer = () => {
-        if (!currentWord) return;
+    const handleTrainingAnswer = () => {
+        if (!currentWord || answerState !== 'idle') return;
+
         const correctAnswer = translationMode === 'standard' ? currentWord.lang2 : currentWord.lang1;
-        if (userAnswer.trim().toLowerCase() === correctAnswer.toLowerCase()) {
+        const isCorrect = userAnswer.trim().toLowerCase() === correctAnswer.toLowerCase();
+
+        if (isCorrect) {
             setAnswerState('correct');
+            handleKnow();
+
+            setTimeout(() => {
+                setIsFlipped(false);
+                setAnswerState('idle');
+                setUserAnswer('');
+            }, 1000);
         } else {
             setAnswerState('incorrect');
+            setIsFlipped(true);
         }
+    };
+
+    const handleTrainingNext = () => {
+        setAnswerState('idle');
+        setUserAnswer('');
+        setIsFlipped(false);
+        updateWordIndex();
     };
 
     const handleGuess = (isCorrect: boolean) => {
         if (isCorrect) {
-            // Correct guess, remove from this training queue
-            setDontKnowQueue(q => q.filter(w => getWordId(w) !== getWordId(currentWord!)));
-            setCurrentDontKnowIndex(i => i - 1); // Adjust index since array is now shorter
+            const wordId = getWordId(currentWord);
+            const progress = learnedWords.get(wordId);
+            const currentStage = progress ? progress.srsStage : -1;
+            const nextStage = Math.min(currentStage + 1, SRS_INTERVALS.length - 1);
+            const nextReviewDate = new Date();
+            nextReviewDate.setDate(nextReviewDate.getDate() + SRS_INTERVALS[nextStage]);
+            setLearnedWords(prev => new Map(prev).set(wordId, { srsStage: nextStage, nextReviewDate: nextReviewDate.toISOString() }));
+
+            if (isDontKnowMode && selectedSetIndex !== null) {
+                setDontKnowWords((prev: Map<number, Word[]>) => {
+                    const newMap = new Map(prev);
+                    const words = newMap.get(selectedSetIndex)?.filter(w => getWordId(w) !== wordId) || [];
+                    if (words.length > 0) newMap.set(selectedSetIndex, words);
+                    else newMap.delete(selectedSetIndex);
+                    return newMap;
+                });
+            }
+        } else {
+            setIsFlipped(true);
         }
     };
 
-    const handleShuffle = () => {
-        setStudyQueue(shuffleArray(studyQueue));
-        setCurrentWordIndex(0);
-        setIsFlipped(false);
+
+    const handleResetProgress = async () => {
+        if (globalThis.confirm('Are you sure you want to reset learning progress for this dictionary? This action cannot be undone.')) {
+            // Clearing state will trigger the save effect, which overwrites Firestore data for logged-in users.
+            // For logged-out users, we need to explicitly delete from IndexedDB.
+            if (!user && dictionaryId) {
+                try {
+                    await deleteLocalProgress(dictionaryId);
+                } catch (error) {
+                    console.error("Error deleting local progress:", error);
+                    alert("Could not delete local progress. Please try again.");
+                }
+            }
+            setLearnedWords(new Map());
+            setDontKnowWords(new Map());
+            setSessionActive(false); // This will trigger a re-start of the session
+        }
     };
 
-    // --- RENDER LOGIC ---
+    const handleChangeDictionary = () => {
+        setLoadedDictionary(null);
+        setSelectedSetIndex(null);
+        setSessionActive(false);
+        setFileSourceModalOpen(true);
+    };
 
-    const renderHeader = () => (
-        <header className="p-4 flex justify-between items-center">
-            <h1 className="text-xl font-bold text-slate-800 dark:text-white">
-                Flashcards
-            </h1>
-            <div className="flex items-center gap-2">
-                <button onClick={() => setIsInstructionsModalOpen(true)} className="p-2 rounded-full text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">
-                    <HelpCircle size={20} />
-                </button>
-                <ThemeToggle theme={theme} setTheme={setTheme} />
-                <Auth user={user} />
-            </div>
-        </header>
-    );
+    const renderContent = () => {
+        if (isProgressLoading) {
+            return (
+                <div className="w-full aspect-[3/2] flex justify-center items-center text-slate-500 dark:text-slate-400">
+                    <Loader2 className="animate-spin h-8 w-8 mr-3" />
+                    <span>Loading progress...</span>
+                </div>
+            );
+        }
 
-    if (authLoading) {
-        return <div className="bg-slate-100 dark:bg-slate-900 min-h-screen flex justify-center items-center text-slate-500">Loading...</div>;
-    }
+        if (reviewWords.length > 0 && currentWord && currentSet) {
+            const counterText = isDontKnowMode
+                ? `${sessionProgress} / ${sessionTotal}`
+                : (staticCardNumber > 0 ? `${staticCardNumber} / ${staticTotalCards}` : '...');
 
-    if (!dictionary) {
-        return (
-            <div className="bg-slate-100 dark:bg-slate-900 min-h-screen">
-                {renderHeader()}
-                <main className="flex flex-col items-center justify-center text-center p-8">
-                    <h2 className="text-3xl font-bold text-slate-900 dark:text-white mb-4">Master New Words</h2>
-                    <p className="max-w-md text-slate-600 dark:text-slate-400 mb-8">
-                        Use spaced repetition to learn vocabulary more effectively. Upload your own list or use a pre-packaged one to start.
-                    </p>
-                    <button onClick={() => setIsSourceModalOpen(true)} className="px-6 py-3 bg-indigo-600 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-700 transition-colors">
-                        Get Started
-                    </button>
-                    {error && <p className="mt-4 text-red-500">{error}</p>}
-                </main>
-                <FileSourceModal isOpen={isSourceModalOpen} onClose={() => setIsSourceModalOpen(false)} onFilesSelect={handleFilesSelect} isLoading={isLoading} />
-                <InstructionsModal isOpen={isInstructionsModalOpen} onClose={() => setIsInstructionsModalOpen(false)} />
-            </div>
-        );
-    }
+            const placeholderLang = translationMode === 'standard' ? currentSet.lang2 : currentSet.lang1;
+            const correctAnswer = translationMode === 'standard' ? currentWord.lang2 : currentWord.lang1;
 
-    if (selectedSetIndex === null) {
-        return (
-            <div className="bg-slate-100 dark:bg-slate-900 min-h-screen">
-                {renderHeader()}
-                <main className="p-8">
-                    <div className="max-w-2xl mx-auto">
-                        <div className="flex justify-between items-center mb-6">
-                            <h2 className="text-2xl font-bold text-slate-900 dark:text-white truncate pr-4" title={dictionary.name}>
-                                {dictionary.name}
-                            </h2>
-                            <button onClick={handleChangeDictionary} className="text-sm text-indigo-600 dark:text-indigo-400 hover:underline">
-                                Change
-                            </button>
-                        </div>
-                        <SetSelector sets={dictionary.sets} selectedSetIndex={selectedSetIndex} onSelectSet={handleSetSelect} />
+            return (
+                <div className="w-full flex flex-col items-center">
+                    <div className="w-full grid grid-cols-3 items-center gap-3 h-8 mb-2">
+                        {isDontKnowMode ? (
+                            <>
+                                <p className="text-slate-500 dark:text-slate-400 text-sm text-left">{counterText}</p>
+                                <TrainingModeToggle mode={trainingMode} onModeChange={(mode) => {
+                                    setTrainingMode(mode);
+                                    setIsFlipped(false);
+                                    setAnswerState('idle');
+                                    setUserAnswer('');
+                                }} />
+                                <div /> {/* Placeholder for grid */}
+                            </>
+                        ) : (
+                            <p className="text-slate-500 dark:text-slate-400 text-sm col-span-3 text-center">{counterText}</p>
+                        )}
                     </div>
-                </main>
-                <InstructionsModal isOpen={isInstructionsModalOpen} onClose={() => setIsInstructionsModalOpen(false)} />
-            </div>
-        );
-    }
-
-    const isSessionFinished = currentWordIndex >= studyQueue.length -1;
-
-    return (
-        <div className="bg-slate-100 dark:bg-slate-900 min-h-screen flex flex-col">
-            {renderHeader()}
-            <main className="flex-grow flex flex-col items-center justify-center p-4">
-                <div className="w-full max-w-lg mx-auto">
-                    {/* Top Controls */}
-                    <div className="flex justify-between items-center mb-4 text-slate-500 dark:text-slate-400">
-                        <button onClick={() => setSelectedSetIndex(null)} className="flex items-center gap-1 text-sm hover:text-white">
-                            <ArrowLeft size={16} /> Back to sets
-                        </button>
-                        {currentSet && <TranslationModeToggle mode={translationMode} onModeChange={setTranslationMode} lang1={currentSet.lang1} lang2={currentSet.lang2} />}
+                    <ProgressBar current={sessionProgress} total={sessionTotal} />
+                    <div className={`w-full transition-opacity duration-200 ${isChangingWord ? 'opacity-0' : 'opacity-100'}`}>
+                        <Flashcard word={currentWord} isFlipped={isFlipped} onFlip={handleFlip} exampleSentence={exampleSentence} isChanging={isChangingWord} isInstantChange={isInstantChange} translationMode={translationMode} lang1={currentSet.lang1} lang2={currentSet.lang2} />
                     </div>
-
-                    {/* Main Content: Flashcard or Completion message */}
-                    {!currentWord && !isTrainingDontKnow && (
-                        <div className="text-center p-8 bg-white dark:bg-slate-800 rounded-lg shadow-md">
-                            <h3 className="text-2xl font-bold text-slate-800 dark:text-white mb-2">All done for now!</h3>
-                            <p className="text-slate-600 dark:text-slate-400 mb-6">You've reviewed all due cards in this set.</p>
-                            {currentDontKnowCount > 0 && (
-                                <button onClick={startDontKnowTraining} className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-amber-500 text-white font-semibold rounded-lg hover:bg-amber-600 transition-colors">
-                                    <Sparkles size={18} /> Train {currentDontKnowCount} tricky words
-                                </button>
-                            )}
-                        </div>
-                    )}
-
-                    {currentWord && (
-                        <>
-                            {isTrainingDontKnow ? (
-                                <>
-                                    <div className="text-center p-6 mb-4 bg-white dark:bg-slate-800 rounded-lg shadow-md">
-                                        <p className="text-slate-500 dark:text-slate-400 text-sm mb-1">{translationMode === 'standard' ? currentSet?.lang1 : currentSet?.lang2}</p>
-                                        <p className="text-3xl font-bold text-slate-900 dark:text-white">
-                                            {translationMode === 'standard' ? currentWord.lang1 : currentWord.lang2}
-                                        </p>
-                                        {answerState === 'incorrect' && (
-                                            <p className="mt-2 text-emerald-600 dark:text-emerald-400">
-                                                Correct: <span className="font-semibold">{translationMode === 'standard' ? currentWord.lang2 : currentWord.lang1}</span>
-                                            </p>
-                                        )}
-                                    </div>
-                                    <div className="mb-4 flex justify-between items-center">
-                                        <p className="text-sm text-slate-500 dark:text-slate-400">Word {currentDontKnowIndex + 1} of {dontKnowQueue.length}</p>
-                                        <TrainingModeToggle mode={trainingMode} onModeChange={setTrainingMode}/>
-                                    </div>
-
-                                    {trainingMode === 'write' ? (
-                                        <TrainingModeInput
-                                            answer={userAnswer}
-                                            setAnswer={setUserAnswer}
-                                            onCheck={handleCheckAnswer}
-                                            onNext={proceedToNextWord}
-                                            answerState={answerState}
-                                            placeholder={`Type the ${translationMode === 'standard' ? currentSet?.lang2 : currentSet?.lang1} translation`}
-                                        />
-                                    ) : (
-                                        <TrainingModeGuess
-                                            options={guessOptions}
-                                            correctAnswer={translationMode === 'standard' ? currentWord.lang2 : currentWord.lang1}
-                                            onGuess={handleGuess}
-                                            onNext={proceedToNextWord}
-                                        />
-                                    )}
-                                </>
+                    <div className="flex justify-center gap-4 mt-6 w-full">
+                        {isDontKnowMode ? (
+                            trainingMode === 'write' ? (
+                                <TrainingModeInput
+                                    answer={userAnswer}
+                                    setAnswer={setUserAnswer}
+                                    onCheck={handleTrainingAnswer}
+                                    onNext={handleTrainingNext}
+                                    answerState={answerState}
+                                    placeholder={`Type the ${placeholderLang} translation...`}
+                                />
                             ) : (
-                                <>
-                                    <ProgressBar current={currentWordIndex} total={studyQueue.length} />
-                                    <Flashcard
-                                        word={currentWord}
-                                        isFlipped={isFlipped}
-                                        onFlip={handleFlipCard}
-                                        exampleSentence={sentences?.get(currentWord.lang2.toLowerCase())}
-                                        isInstantChange={isInstantChange}
-                                        translationMode={translationMode}
-                                        lang1={currentSet?.lang1 || 'Lang1'}
-                                        lang2={currentSet?.lang2 || 'Lang2'}
-                                    />
-
-                                    {/* Action Buttons */}
-                                    <div className="grid grid-cols-2 gap-4 mt-6">
-                                        <button onClick={handleDontKnowWord} className="py-3 bg-rose-500 text-white font-semibold rounded-lg shadow-md hover:bg-rose-600 transition-transform transform hover:scale-105 disabled:opacity-50" disabled={!isFlipped}>
-                                            Don't know
-                                        </button>
-                                        <button onClick={handleKnowWord} className="py-3 bg-emerald-500 text-white font-semibold rounded-lg shadow-md hover:bg-emerald-600 transition-transform transform hover:scale-105 disabled:opacity-50" disabled={!isFlipped}>
-                                            Know
-                                        </button>
-                                    </div>
-                                </>
-                            )}
-                        </>
-                    )}
-
-                    {/* Bottom Toolbar */}
-                    <div className="mt-8 pt-4 border-t border-slate-200 dark:border-slate-700">
-                        {isTrainingDontKnow ? (
-                            <button onClick={() => setIsTrainingDontKnow(false)} className="w-full text-center text-sm text-slate-500 hover:text-white">
-                                Back to main session
-                            </button>
+                                <TrainingModeGuess
+                                    options={guessOptions}
+                                    correctAnswer={correctAnswer}
+                                    onGuess={handleGuess}
+                                    onNext={handleTrainingNext}
+                                />
+                            )
                         ) : (
                             <>
-                                <div className="flex justify-between items-center mb-4">
-                                    <div className="flex gap-4">
-                                        <button onClick={handleShuffle} title="Shuffle" className="p-2 rounded-full text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">
-                                            <Shuffle size={18} />
-                                        </button>
-                                        <button onClick={() => setIsWordListVisible(!isWordListVisible)} title="Show Word List" className="p-2 rounded-full text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">
-                                            <List size={18} />
-                                        </button>
-                                        <button onClick={() => setIsLearnedWordsModalOpen(true)} title="Learned Words" className="p-2 rounded-full text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">
-                                            <GraduationCap size={18} />
-                                        </button>
-                                    </div>
-                                    <div className="flex items-center gap-4">
-                                        <button onClick={handleResetProgress} title="Reset Progress" className="p-2 rounded-full text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">
-                                            <RotateCw size={18} />
-                                        </button>
-                                        <button onClick={handleChangeDictionary} title="Change Dictionary" className="p-2 rounded-full text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">
-                                            <FileText size={18} />
-                                        </button>
-                                    </div>
-                                </div>
-                                <SentenceUpload
-                                    onSentencesLoaded={setSentences}
-                                    onClearSentences={() => setSentences(null)}
-                                    hasSentences={!!sentences}
-                                />
+                                <button onClick={handleDontKnow} disabled={isProgressLoading || isChangingWord} className="w-full py-3 text-lg font-semibold text-white bg-rose-600 hover:bg-rose-700 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-wait">Don't know</button>
+                                <button onClick={handleKnow} disabled={isProgressLoading || isChangingWord} className="w-full py-3 text-lg font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-wait">Know</button>
                             </>
                         )}
                     </div>
-                    <WordList words={currentSet?.words || []} isVisible={isWordListVisible} lang1={currentSet?.lang1 || ''} lang2={currentSet?.lang2 || ''} />
+                </div>
+            );
+        }
+
+        return (
+            <div className="text-center my-16">
+                <h2 className="text-2xl font-semibold mb-4 text-slate-800 dark:text-slate-300">Session Complete!</h2>
+                <p className="text-slate-500 dark:text-slate-400">You've reviewed all available cards for this set.</p>
+                {selectedSetIndex !== null && dontKnowWords.get(selectedSetIndex) && dontKnowWords.get(selectedSetIndex)!.length > 0 && (
+                    <button onClick={startDontKnowSession} className="mt-6 px-5 py-2.5 text-white bg-amber-600 hover:bg-amber-700 rounded-lg font-semibold transition-colors flex items-center gap-2 mx-auto">
+                        <Repeat size={18} />
+                        Review {dontKnowWords.get(selectedSetIndex)?.length} Mistake(s)
+                    </button>
+                )}
+            </div>
+        );
+    };
+
+    if (!loadedDictionary) {
+        return (
+            <main className="min-h-screen flex flex-col items-center justify-center p-4">
+                <FileSourceModal isOpen={isFileSourceModalOpen} onClose={() => setFileSourceModalOpen(false)} onFilesSelect={handleFilesSelect} isLoading={isLoading} />
+                <div className="text-center">
+                    <h1 className="text-5xl font-bold mb-4">Flashcard App</h1>
+                    <p className="text-slate-500 dark:text-slate-400 mb-8">Your personal language learning assistant.</p>
+                    <button onClick={() => setFileSourceModalOpen(true)} className="px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-semibold transition-colors">
+                        Get Started
+                    </button>
                 </div>
             </main>
+        );
+    }
 
-            <FileSourceModal isOpen={isSourceModalOpen} onClose={() => setIsSourceModalOpen(false)} onFilesSelect={handleFilesSelect} isLoading={isLoading} />
-            <LearnedWordsModal isOpen={isLearnedWordsModalOpen} onClose={() => setIsLearnedWordsModalOpen(false)} learnedWords={allLearnedWordsList} lang1={currentSet?.lang1 || 'Lang1'} lang2={currentSet?.lang2 || 'Lang2'} />
-            <InstructionsModal isOpen={isInstructionsModalOpen} onClose={() => setIsInstructionsModalOpen(false)} />
-        </div>
+    return (
+        <main className="min-h-screen flex flex-col items-center p-4 sm:p-6">
+            <header className="w-full max-w-5xl flex justify-between items-center mb-6">
+                <div className="flex items-center gap-2 sm:gap-4">
+                    <button onClick={handleChangeDictionary} className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors">
+                        <Library size={18} />
+                        <span className="hidden sm:inline">Change</span>
+                    </button>
+                    <button onClick={() => setInstructionsModalOpen(true)} className="text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors">
+                        <Info size={20} />
+                    </button>
+                </div>
+                <div className="text-center">
+                    <h1 className="text-lg sm:text-xl font-bold truncate max-w-[200px] sm:max-w-xs" title={loadedDictionary.name}>{loadedDictionary.name}</h1>
+                </div>
+                <div className="flex items-center gap-2">
+                    <ThemeToggle theme={theme} setTheme={setTheme} />
+                    <Auth user={user} />
+                </div>
+            </header>
+
+            <div className="w-full max-w-md flex flex-col items-center">
+                <div className="w-full flex items-center justify-center gap-4 text-sm mb-4">
+                    <button onClick={() => setLearnedWordsModalOpen(true)} className="flex items-center gap-2 py-1 px-3 bg-white dark:bg-slate-800 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors shadow-sm dark:shadow-none border border-slate-200 dark:border-slate-700">
+                        <BookUser size={16} /> Learned: {totalLearnedCount}
+                    </button>
+                    <button onClick={handleResetProgress} className="flex items-center gap-2 py-1 px-3 bg-white dark:bg-slate-800 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors shadow-sm dark:shadow-none border border-slate-200 dark:border-slate-700">
+                        <Trash2 size={16} /> Reset
+                    </button>
+                </div>
+
+                <SetSelector sets={loadedDictionary.sets} selectedSetIndex={selectedSetIndex} onSelectSet={handleSelectSet} />
+
+                {renderContent()}
+
+                <div className="w-full mt-8 p-3 bg-white/50 dark:bg-slate-800/50 rounded-lg shadow-sm dark:shadow-none border border-slate-200 dark:border-slate-700">
+                    <SentenceUpload onSentencesLoaded={(newMap) => setSentences(prev => new Map([...prev, ...newMap]))} onClearSentences={() => setSentences(new Map())} hasSentences={sentences.size > 0}/>
+                </div>
+
+                {currentSet && (
+                    <div className="flex items-center justify-center gap-6 mt-6">
+                        <button onClick={handleShuffle} disabled={reviewWords.length <= 1} className="flex items-center gap-2 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                            <Shuffle size={18} /> Shuffle
+                        </button>
+                        <TranslationModeToggle mode={translationMode} onModeChange={setTranslationMode} lang1={currentSet.lang1} lang2={currentSet.lang2} />
+                        <button onClick={() => setIsWordListVisible(v => !v)} className="flex items-center gap-2 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors">
+                            <ChevronsUpDown size={18} /> List
+                        </button>
+                    </div>
+                )}
+
+                {currentSet && <WordList words={currentSet.words} isVisible={isWordListVisible} lang1={currentSet.lang1} lang2={currentSet.lang2} />}
+            </div>
+
+            <FileSourceModal isOpen={isFileSourceModalOpen && !loadedDictionary} onClose={() => setFileSourceModalOpen(false)} onFilesSelect={handleFilesSelect} isLoading={isLoading} />
+            <InstructionsModal isOpen={isInstructionsModalOpen} onClose={() => setInstructionsModalOpen(false)} />
+            <LearnedWordsModal isOpen={isLearnedWordsModalOpen} onClose={() => setLearnedWordsModalOpen(false)} learnedWords={learnedWordsWithDetails} lang1={currentSet?.lang1 || 'Language 1'} lang2={currentSet?.lang2 || 'Language 2'} />
+        </main>
     );
 };
 
