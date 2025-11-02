@@ -21,11 +21,9 @@ export const MultipleChoice: React.FC<MultipleChoiceProps> = ({
     if (!selectedOption) {
       return 'bg-slate-700 hover:bg-slate-600';
     }
-    // FIX: Property 'en' does not exist on type 'Word'. Use 'lang2' instead.
     if (option.lang2 === correctOption.lang2) {
       return 'bg-emerald-600 ring-2 ring-emerald-400 scale-105';
     }
-    // FIX: Property 'en' does not exist on type 'Word'. Use 'lang2' instead.
     if (option.lang2 === selectedOption.lang2) {
       return 'bg-rose-600 ring-2 ring-rose-400';
     }
