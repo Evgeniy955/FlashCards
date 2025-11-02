@@ -33,12 +33,12 @@ const App: React.FC = () => {
     const [currentWordIndex, setCurrentWordIndex] = useState(0);
     const [isFlipped, setIsFlipped] = useState(false);
     const [reviewWords, setReviewWords] = useState<Word[]>([]);
-    
+
     // States for session progress tracking
     const [sessionProgress, setSessionProgress] = useState(0);
     const [sessionTotal, setSessionTotal] = useState(0);
     const [sessionActive, setSessionActive] = useState(false);
-    
+
     const [learnedWords, setLearnedWords] = useState<Map<string, WordProgress>>(new Map());
     const [dontKnowWords, setDontKnowWords] = useState<Map<number, Word[]>>(new Map());
     const [sentences, setSentences] = useState<Map<string, string>>(new Map());
@@ -49,14 +49,14 @@ const App: React.FC = () => {
     const [isDontKnowMode, setIsDontKnowMode] = useState(false);
     const [isChangingWord, setIsChangingWord] = useState(false); // For fade animation
     const [isInstantChange, setIsInstantChange] = useState(false); // For instant card change
-    
+
     // State for Training Mode input
     const [userAnswer, setUserAnswer] = useState('');
     const [answerState, setAnswerState] = useState<AnswerState>('idle');
     const [trainingMode, setTrainingMode] = useState<'write' | 'guess'>('write');
     const [translationMode, setTranslationMode] = useState<TranslationMode>('standard');
     const [guessOptions, setGuessOptions] = useState<string[]>([]);
-    
+
     const [isFileSourceModalOpen, setFileSourceModalOpen] = useState(true);
     const [isInstructionsModalOpen, setInstructionsModalOpen] = useState(false);
     const [isLearnedWordsModalOpen, setLearnedWordsModalOpen] = useState(false);
@@ -66,7 +66,7 @@ const App: React.FC = () => {
     useEffect(() => {
         const savedTheme = localStorage.getItem('theme') as Theme | null;
         const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-        
+
         if (savedTheme) {
             setTheme(savedTheme);
         } else if (systemPrefersDark) {
@@ -90,7 +90,7 @@ const App: React.FC = () => {
 
     // FIX: Replaced `replaceAll` with `replace` with a global regex for wider compatibility.
     const dictionaryId = useMemo(() => loadedDictionary?.name.replace(/[./]/g, '_'), [loadedDictionary]);
-    
+
     // Load global sentences from Firestore user document
     useEffect(() => {
         const loadGlobalSentences = async () => {
@@ -227,32 +227,32 @@ const App: React.FC = () => {
 
     const generateGuessOptions = useCallback((correctWord: Word) => {
         if (!currentSet || !loadedDictionary) return;
-    
+
         const isStandardMode = translationMode === 'standard';
         const correctTranslation = isStandardMode ? correctWord.lang2 : correctWord.lang1;
         const correctWordId = getWordId(correctWord);
-    
+
         const originalSetIndex = currentSet.originalSetIndex;
         const allWordsInOriginalSet = loadedDictionary.sets
             .filter(s => s.originalSetIndex === originalSetIndex)
             .flatMap(s => s.words);
-    
+
         let distractors = allWordsInOriginalSet
             .filter(w => getWordId(w) !== correctWordId)
             .sort(() => 0.5 - Math.random())
-            .slice(0, 2);
-    
-        if (distractors.length < 2) {
+            .slice(0, 3);
+
+        if (distractors.length < 3) {
             const fallbackDistractors = loadedDictionary.sets
                 .flatMap(s => s.words)
                 .filter(w => getWordId(w) !== correctWordId && !distractors.some(d => getWordId(d) === getWordId(w)))
                 .sort(() => 0.5 - Math.random())
-                .slice(0, 2 - distractors.length);
+                .slice(0, 3 - distractors.length);
             distractors.push(...fallbackDistractors);
         }
-    
+
         const options = shuffleArray([
-            correctTranslation, 
+            correctTranslation,
             ...distractors.map(d => isStandardMode ? d.lang2 : d.lang1)
         ]);
         setGuessOptions(options);
@@ -310,11 +310,11 @@ const App: React.FC = () => {
         if (isDontKnowMode && trainingMode === 'guess' && currentWord) {
             const currentCorrectAnswer = translationMode === 'standard' ? currentWord.lang2 : currentWord.lang1;
             if (!guessOptions.includes(currentCorrectAnswer)) {
-                 generateGuessOptions(currentWord);
+                generateGuessOptions(currentWord);
             }
         }
     }, [trainingMode, isDontKnowMode, currentWord, guessOptions, generateGuessOptions, translationMode]);
-    
+
     const handleFilesSelect = async (name: string, wordsFile: File, sentencesFile?: File) => {
         setIsLoading(true);
         try {
@@ -337,7 +337,7 @@ const App: React.FC = () => {
             }
 
             const dictionary = await parseDictionaryFile(wordsFile);
-            dictionary.name = name; 
+            dictionary.name = name;
             setLoadedDictionary(dictionary);
             setSelectedSetIndex(0);
             setFileSourceModalOpen(false);
@@ -350,7 +350,7 @@ const App: React.FC = () => {
             setIsLoading(false);
         }
     };
-    
+
     const exampleSentence = useMemo(() => currentWord ? sentences.get(currentWord.lang2.toLowerCase()) : undefined, [currentWord, sentences]);
     const totalLearnedCount = useMemo(() => learnedWords.size, [learnedWords]);
 
@@ -379,16 +379,16 @@ const App: React.FC = () => {
             .filter((item): item is Word & { progress: WordProgress } => item !== null)
             .sort((a, b) => a.lang2.localeCompare(b.lang2));
     }, [learnedWords, loadedDictionary]);
-    
+
     const advanceToNextWord = (updateLogic: () => boolean, instant = false) => {
         if (!currentWord || isChangingWord || isInstantChange) return;
         if (!updateLogic()) return;
-        
+
         if (instant) {
             setIsInstantChange(true);
             setIsFlipped(false);
             updateWordIndex();
-            
+
             requestAnimationFrame(() => {
                 setIsInstantChange(false);
             });
@@ -411,7 +411,7 @@ const App: React.FC = () => {
             const nextReviewDate = new Date();
             nextReviewDate.setDate(nextReviewDate.getDate() + SRS_INTERVALS[nextStage]);
             setLearnedWords(prev => new Map(prev).set(wordId, { srsStage: nextStage, nextReviewDate: nextReviewDate.toISOString() }));
-            
+
             if (isDontKnowMode && selectedSetIndex !== null) {
                 setDontKnowWords((prev: Map<number, Word[]>) => {
                     const newMap = new Map(prev);
@@ -456,7 +456,7 @@ const App: React.FC = () => {
         if (isDontKnowMode && trainingMode === 'guess' && isFlipped) return; // Don't allow flipping back in guess mode
         setIsFlipped(prev => !prev);
     };
-    
+
     const handleSelectSet = (index: number) => {
         if (index !== selectedSetIndex) {
             setSessionActive(false);
@@ -465,7 +465,7 @@ const App: React.FC = () => {
     };
 
     const handleShuffle = () => setReviewWords(shuffleArray(reviewWords));
-    
+
     const startDontKnowSession = () => {
         if (selectedSetIndex === null) return;
         const words = dontKnowWords.get(selectedSetIndex) || [];
@@ -491,11 +491,11 @@ const App: React.FC = () => {
 
         const correctAnswer = translationMode === 'standard' ? currentWord.lang2 : currentWord.lang1;
         const isCorrect = userAnswer.trim().toLowerCase() === correctAnswer.toLowerCase();
-        
+
         if (isCorrect) {
             setAnswerState('correct');
             handleKnow();
-            
+
             setTimeout(() => {
                 setIsFlipped(false);
                 setAnswerState('idle');
@@ -523,7 +523,7 @@ const App: React.FC = () => {
             const nextReviewDate = new Date();
             nextReviewDate.setDate(nextReviewDate.getDate() + SRS_INTERVALS[nextStage]);
             setLearnedWords(prev => new Map(prev).set(wordId, { srsStage: nextStage, nextReviewDate: nextReviewDate.toISOString() }));
-            
+
             if (isDontKnowMode && selectedSetIndex !== null) {
                 setDontKnowWords((prev: Map<number, Word[]>) => {
                     const newMap = new Map(prev);
@@ -578,7 +578,7 @@ const App: React.FC = () => {
             const counterText = isDontKnowMode
                 ? `${sessionProgress} / ${sessionTotal}`
                 : (staticCardNumber > 0 ? `${staticCardNumber} / ${staticTotalCards}` : '...');
-            
+
             const placeholderLang = translationMode === 'standard' ? currentSet.lang2 : currentSet.lang1;
             const correctAnswer = translationMode === 'standard' ? currentWord.lang2 : currentWord.lang1;
 
@@ -639,7 +639,7 @@ const App: React.FC = () => {
                 <h2 className="text-2xl font-semibold mb-4 text-slate-800 dark:text-slate-300">Session Complete!</h2>
                 <p className="text-slate-500 dark:text-slate-400">You've reviewed all available cards for this set.</p>
                 {selectedSetIndex !== null && dontKnowWords.get(selectedSetIndex) && dontKnowWords.get(selectedSetIndex)!.length > 0 && (
-                     <button onClick={startDontKnowSession} className="mt-6 px-5 py-2.5 text-white bg-amber-600 hover:bg-amber-700 rounded-lg font-semibold transition-colors flex items-center gap-2 mx-auto">
+                    <button onClick={startDontKnowSession} className="mt-6 px-5 py-2.5 text-white bg-amber-600 hover:bg-amber-700 rounded-lg font-semibold transition-colors flex items-center gap-2 mx-auto">
                         <Repeat size={18} />
                         Review {dontKnowWords.get(selectedSetIndex)?.length} Mistake(s)
                     </button>
@@ -662,12 +662,12 @@ const App: React.FC = () => {
             </main>
         );
     }
-    
+
     return (
         <main className="min-h-screen flex flex-col items-center p-4 sm:p-6">
             <header className="w-full max-w-5xl flex justify-between items-center mb-6">
                 <div className="flex items-center gap-2 sm:gap-4">
-                     <button onClick={handleChangeDictionary} className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors">
+                    <button onClick={handleChangeDictionary} className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors">
                         <Library size={18} />
                         <span className="hidden sm:inline">Change</span>
                     </button>
@@ -685,7 +685,7 @@ const App: React.FC = () => {
             </header>
 
             <div className="w-full max-w-md flex flex-col items-center">
-                 <div className="w-full flex items-center justify-center gap-4 text-sm mb-4">
+                <div className="w-full flex items-center justify-center gap-4 text-sm mb-4">
                     <button onClick={() => setLearnedWordsModalOpen(true)} className="flex items-center gap-2 py-1 px-3 bg-white dark:bg-slate-800 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors shadow-sm dark:shadow-none border border-slate-200 dark:border-slate-700">
                         <BookUser size={16} /> Learned: {totalLearnedCount}
                     </button>
@@ -695,15 +695,15 @@ const App: React.FC = () => {
                 </div>
 
                 <SetSelector sets={loadedDictionary.sets} selectedSetIndex={selectedSetIndex} onSelectSet={handleSelectSet} />
-                
+
                 {renderContent()}
-                
+
                 <div className="w-full mt-8 p-3 bg-white/50 dark:bg-slate-800/50 rounded-lg shadow-sm dark:shadow-none border border-slate-200 dark:border-slate-700">
                     <SentenceUpload onSentencesLoaded={(newMap) => setSentences(prev => new Map([...prev, ...newMap]))} onClearSentences={() => setSentences(new Map())} hasSentences={sentences.size > 0}/>
                 </div>
 
                 {currentSet && (
-                     <div className="flex items-center justify-center gap-6 mt-6">
+                    <div className="flex items-center justify-center gap-6 mt-6">
                         <button onClick={handleShuffle} disabled={reviewWords.length <= 1} className="flex items-center gap-2 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
                             <Shuffle size={18} /> Shuffle
                         </button>
@@ -713,7 +713,7 @@ const App: React.FC = () => {
                         </button>
                     </div>
                 )}
-                
+
                 {currentSet && <WordList words={currentSet.words} isVisible={isWordListVisible} lang1={currentSet.lang1} lang2={currentSet.lang2} />}
             </div>
 
