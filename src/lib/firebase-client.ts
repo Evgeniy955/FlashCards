@@ -10,7 +10,7 @@ const app = initializeApp(firebaseConfig);
 // Get auth and firestore instances using the v9+ modular functions
 const auth = getAuth(app);
 const db = getFirestore(app);
-// With the corrected storageBucket in firebaseConfig, we can rely on the default.
-const storage = getStorage(app);
+// Explicitly provide the storage bucket URL to getStorage to prevent ambiguity.
+const storage = getStorage(app, `gs://${firebaseConfig.storageBucket}`);
 
 export { auth, db, storage };
