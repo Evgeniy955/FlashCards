@@ -274,9 +274,8 @@ const App: React.FC = () => {
         }
     }, [trainingMode, isDontKnowMode, currentWord, guessOptions, generateGuessOptions, translationMode]);
 
-    const autoSaveDictionary = async (fileToSave: File, dictionaryName: string) => {
-        if (!user) return;
-        setIsLoading(true);
+    const autoSaveDictionary = async (fileToSave: File, dictionaryName: string): Promise<UserDictionary | null> => {
+        if (!user) return null;
         try {
             const trimmedName = dictionaryName.trim();
             const storagePath = `users/${user.uid}/dictionaries/${Date.now()}_${fileToSave.name}`;
@@ -288,13 +287,53 @@ const App: React.FC = () => {
                 storagePath: storagePath,
                 createdAt: new Date(),
             });
-            setCurrentUserDictionaryInfo({ id: docRef.id, storagePath: storagePath });
+
+            const newDictionary: UserDictionary = { id: docRef.id, name: trimmedName, storagePath: storagePath };
+            setCurrentUserDictionaryInfo(newDictionary);
+            return newDictionary;
         } catch (err) {
-            alert("Failed to auto-save dictionary.");
-            console.error(err);
+            alert("Failed to auto-save dictionary. Please check your connection and Firebase Storage rules.");
+            console.error("Auto-save error:", err);
+            return null;
+        }
+    };
+
+    const handleLoadUserDictionary = async (dictionary: UserDictionary) => {
+        setFileSourceModalOpen(false);
+        try {
+            const storageRef = ref(storage, dictionary.storagePath);
+            const bytes = await getBytes(storageRef);
+            const blob = new Blob([bytes], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+            const file = new File([blob], dictionary.name + ".xlsx", { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+
+            setLearnedWords(new Map());
+            setDontKnowWords(new Map());
+            setReviewWords([]);
+            setSessionActive(false);
+            setSessionProgress(0);
+            setSessionTotal(0);
+            setCurrentWordIndex(0);
+            setIsDontKnowMode(false);
+
+            const parsedDictionary = await parseDictionaryFile(file);
+            parsedDictionary.name = dictionary.name;
+
+            setLoadedDictionary(parsedDictionary);
+            setSelectedSetIndex(0);
+
+            setCurrentUserDictionaryInfo({ id: dictionary.id, storagePath: dictionary.storagePath });
+        } catch (err) {
+            alert(err instanceof Error ? err.message : "Could not load dictionary. The file might be missing or there could be a permissions issue.");
+            console.error("Load user dictionary error:", err);
+            setFileSourceModalOpen(true);
         } finally {
             setIsLoading(false);
         }
+    };
+
+    const loadUserDictionary = async (dictionary: UserDictionary) => {
+        setIsLoading(true);
+        await handleLoadUserDictionary(dictionary);
     };
 
     const handleFilesSelect = async (name: string, wordsFile: File, sentencesFile?: File) => {
@@ -313,75 +352,42 @@ const App: React.FC = () => {
                     }
                 }
             }
-
-            // --- Fully reset state for the new dictionary ---
-            setLearnedWords(new Map());
-            setDontKnowWords(new Map());
-            setReviewWords([]);
-            setSessionActive(false);
-            setSessionProgress(0);
-            setSessionTotal(0);
-            setCurrentWordIndex(0);
-            setIsDontKnowMode(false);
-            setCurrentUserDictionaryInfo(null); // Reset for new dictionaries
-
             if (sentenceMapFromFile) {
                 setSentences(prev => new Map([...prev, ...sentenceMapFromFile]));
             }
 
-            const dictionary = await parseDictionaryFile(wordsFile);
-            dictionary.name = name;
-            setLoadedDictionary(dictionary);
-            setSelectedSetIndex(0); // This sets the stage for the useEffect to start the session
-            setFileSourceModalOpen(false);
+            setCurrentUserDictionaryInfo(null);
 
             if (isLocalFile && user) {
-                await autoSaveDictionary(wordsFile, name);
+                const savedDictionary = await autoSaveDictionary(wordsFile, name);
+                if (savedDictionary) {
+                    await handleLoadUserDictionary(savedDictionary);
+                } else {
+                    setFileSourceModalOpen(true);
+                    setIsLoading(false);
+                }
+            } else {
+                setLearnedWords(new Map());
+                setDontKnowWords(new Map());
+                setReviewWords([]);
+                setSessionActive(false);
+                setSessionProgress(0);
+                setSessionTotal(0);
+                setCurrentWordIndex(0);
+                setIsDontKnowMode(false);
+
+                const dictionary = await parseDictionaryFile(wordsFile);
+                dictionary.name = name;
+                setLoadedDictionary(dictionary);
+                setSelectedSetIndex(0);
+                setFileSourceModalOpen(false);
+                setIsLoading(false);
             }
 
         } catch (error) {
             alert((error as Error).message);
             setLoadedDictionary(null);
-        } finally {
             setIsLoading(false);
-        }
-    };
-
-    const handleLoadUserDictionary = async (dictionary: UserDictionary) => {
-        setIsLoading(true);
-        setFileSourceModalOpen(false);
-        try {
-            const storageRef = ref(storage, dictionary.storagePath);
-            const bytes = await getBytes(storageRef);
-            const blob = new Blob([bytes], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-            const file = new File([blob], dictionary.name + ".xlsx", { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-
-            // Reset state before loading new dictionary
-            setLearnedWords(new Map());
-            setDontKnowWords(new Map());
-            setReviewWords([]);
-            setSessionActive(false);
-            setSessionProgress(0);
-            setSessionTotal(0);
-            setCurrentWordIndex(0);
-            setIsDontKnowMode(false);
-
-            const parsedDictionary = await parseDictionaryFile(file);
-            parsedDictionary.name = dictionary.name;
-
-            setLoadedDictionary(parsedDictionary);
-            setSelectedSetIndex(0); // Triggers session start effect
-
-            // Set user dictionary info after successful load
-            setCurrentUserDictionaryInfo({ id: dictionary.id, storagePath: dictionary.storagePath });
-
-        } catch (err) {
-            alert(err instanceof Error ? err.message : "Could not load dictionary.");
-            console.error(err);
-            setIsLoading(false);
-            setFileSourceModalOpen(true); // Re-open modal on failure
-        } finally {
-            // isLoading will be handled by the main loading logic after this
         }
     };
 
@@ -391,18 +397,14 @@ const App: React.FC = () => {
         if (confirm(`Are you sure you want to delete "${loadedDictionary.name}"? This action will also delete your learning progress for this dictionary and cannot be undone.`)) {
             setIsLoading(true);
             try {
-                // Delete file from Storage
                 const storageRef = ref(storage, currentUserDictionaryInfo.storagePath);
                 await deleteObject(storageRef);
 
-                // Delete document from Firestore
                 await deleteDoc(doc(db, `users/${user.uid}/dictionaries`, currentUserDictionaryInfo.id));
 
-                // Delete progress document from Firestore
                 const progressDocRef = doc(db, `users/${user.uid}/progress/${loadedDictionary.name.replace(/[./]/g, '_')}`);
                 await deleteDoc(progressDocRef);
 
-                // Reset UI
                 handleChangeDictionary();
             } catch (err) {
                 alert("Failed to delete dictionary.");
@@ -710,7 +712,7 @@ const App: React.FC = () => {
     if (!loadedDictionary) {
         return (
             <main className="min-h-screen bg-slate-900 text-white flex flex-col items-center justify-center p-4">
-                <FileSourceModal isOpen={isFileSourceModalOpen} onClose={() => setFileSourceModalOpen(false)} onFilesSelect={handleFilesSelect} onUserDictionaryLoad={handleLoadUserDictionary} isLoading={isLoading} user={user} />
+                <FileSourceModal isOpen={isFileSourceModalOpen} onClose={() => setFileSourceModalOpen(false)} onFilesSelect={handleFilesSelect} onUserDictionaryLoad={loadUserDictionary} isLoading={isLoading} user={user} />
                 <div className="text-center">
                     <h1 className="text-5xl font-bold mb-4">Flashcard App</h1>
                     <p className="text-slate-400 mb-8">Your personal language learning assistant.</p>
@@ -779,7 +781,7 @@ const App: React.FC = () => {
                 {currentSet && <WordList words={currentSet.words} isVisible={isWordListVisible} lang1={currentSet.lang1} lang2={currentSet.lang2} />}
             </div>
 
-            <FileSourceModal isOpen={isFileSourceModalOpen && !loadedDictionary} onClose={() => setFileSourceModalOpen(false)} onFilesSelect={handleFilesSelect} onUserDictionaryLoad={handleLoadUserDictionary} isLoading={isLoading} user={user} />
+            <FileSourceModal isOpen={isFileSourceModalOpen && !loadedDictionary} onClose={() => setFileSourceModalOpen(false)} onFilesSelect={handleFilesSelect} onUserDictionaryLoad={loadUserDictionary} isLoading={isLoading} user={user} />
             <InstructionsModal isOpen={isInstructionsModalOpen} onClose={() => setInstructionsModalOpen(false)} />
             <LearnedWordsModal isOpen={isLearnedWordsModalOpen} onClose={() => setLearnedWordsModalOpen(false)} learnedWords={learnedWordsWithDetails} lang1={currentSet?.lang1 || 'Language 1'} lang2={currentSet?.lang2 || 'Language 2'} />
         </main>
