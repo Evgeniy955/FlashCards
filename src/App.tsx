@@ -622,7 +622,7 @@ const App: React.FC = () => {
 
     if (!loadedDictionary) {
         return (
-            <main className="min-h-screen bg-slate-900 text-white flex flex-col items-center justify-center p-4">
+            <main className="min-h-screen text-white flex flex-col items-center justify-center p-4">
                 <FileSourceModal isOpen={isFileSourceModalOpen} onClose={() => setFileSourceModalOpen(false)} onFilesSelect={handleFilesSelect} isLoading={isLoading} />
                 <div className="text-center">
                     <h1 className="text-5xl font-bold mb-4">Flashcard App</h1>
@@ -636,7 +636,7 @@ const App: React.FC = () => {
     }
     
     return (
-        <main className="min-h-screen bg-slate-900 text-white flex flex-col items-center p-4 sm:p-6">
+        <main className="min-h-screen text-white flex flex-col items-center p-4 sm:p-6">
             <header className="w-full max-w-5xl flex justify-between items-center mb-6">
                 <div className="flex items-center gap-4">
                      <button onClick={handleChangeDictionary} className="flex items-center gap-2 text-sm text-slate-400 hover:text-white transition-colors">

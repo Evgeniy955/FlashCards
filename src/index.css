@@ -10,6 +10,7 @@ html, body, #root {
 body {
     font-family: 'Poppins', sans-serif;
     background-color: #0f172a;
+    background-image: radial-gradient(circle at top, hsl(222, 47%, 18%) 0%, hsl(222, 47%, 11%) 100%);
     color: #e2e8f0;
     margin: 0;
 }
