@@ -20,7 +20,7 @@ export const TranslationModeToggle: React.FC<TranslationModeToggleProps> = ({ mo
   return (
     <button
       onClick={handleToggle}
-      className="flex items-center gap-2 text-slate-400 hover:text-white transition-colors"
+      className="flex items-center gap-2 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors"
       aria-label={`Current mode: ${firstLang} to ${secondLang}. Click to switch.`}
     >
       <span className="text-sm font-medium">{firstLang}</span>
