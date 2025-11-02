@@ -17,7 +17,8 @@ export const InstructionsModal: React.FC<InstructionsModalProps> = ({ isOpen, on
           </p>
           <ul className="list-disc list-inside space-y-2 mt-3">
             <li><strong>Built-in:</strong> Select from pre-packaged dictionaries. Some include example sentence files.</li>
-            <li><strong>From Computer:</strong> Upload your own word file in Excel (.xlsx) format.</li>
+            <li><strong>My Dictionaries:</strong> Choose from dictionaries you have previously uploaded from your computer.</li>
+            <li><strong>From Computer:</strong> Upload your own word file in Excel (.xlsx) format. It will be saved for future sessions.</li>
           </ul>
         </section>
 
@@ -91,8 +92,12 @@ export const InstructionsModal: React.FC<InstructionsModalProps> = ({ isOpen, on
         <section>
           <h2 className="text-xl font-semibold mb-2 text-indigo-400">5. Managing Progress</h2>
           <p>
-            All your progress (learned and unknown words) is stored in your account, linked to the specific dictionary file.
+            Your progress (learned and unknown words) is saved automatically.
           </p>
+          <ul className="list-disc list-inside space-y-2 mt-3">
+              <li><strong>Signed In:</strong> If you sign in with a Google account, your progress is stored in the cloud, allowing you to continue on any device.</li>
+              <li><strong>Not Signed In:</strong> If you are not signed in, your progress is saved locally in your browser. You can pick up where you left off on the same computer, but your progress won't be available on other devices.</li>
+          </ul>
            <ul className="list-disc list-inside space-y-2 mt-3">
                 <li><strong>Learned:</strong> Opens a window listing all words you've marked as "Know," showing their current learning stage.</li>
                 <li><strong>Reset:</strong> Completely erases all saved progress for the current dictionary. This is irreversible.</li>
