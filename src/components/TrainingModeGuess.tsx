@@ -1,8 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { ArrowRight } from 'lucide-react';
 
-export type GuessState = 'idle' | 'correct' | 'incorrect';
-
 interface TrainingModeGuessProps {
   options: string[];
   correctAnswer: string;
@@ -12,60 +10,64 @@ interface TrainingModeGuessProps {
 
 export const TrainingModeGuess: React.FC<TrainingModeGuessProps> = ({ options, correctAnswer, onGuess, onNext }) => {
   const [selectedAnswer, setSelectedAnswer] = useState<string | null>(null);
-  const [guessState, setGuessState] = useState<GuessState>('idle');
+  const [isAnswered, setIsAnswered] = useState(false);
 
-  // Reset state when options change (i.e., new word)
+  // Reset state when the correct answer changes (i.e., new word)
   useEffect(() => {
     setSelectedAnswer(null);
-    setGuessState('idle');
-  }, [options, correctAnswer]);
+    setIsAnswered(false);
+  }, [correctAnswer]);
 
   const handleOptionClick = (option: string) => {
-    if (guessState !== 'idle') return;
+    if (isAnswered) return;
 
-    const isCorrect = option === correctAnswer;
     setSelectedAnswer(option);
-    setGuessState(isCorrect ? 'correct' : 'incorrect');
+    setIsAnswered(true);
+    const isCorrect = option === correctAnswer;
     onGuess(isCorrect);
   };
 
   const getButtonClass = (option: string) => {
-    if (guessState === 'idle') {
-      return 'bg-slate-700 hover:bg-slate-600';
+    if (!isAnswered) {
+      return 'bg-white dark:bg-slate-700 hover:bg-slate-100 dark:hover:bg-slate-600 border-slate-300 dark:border-slate-600';
     }
-    // If an answer is selected, highlight correct and incorrect choices
-    if (option === correctAnswer) {
-      return 'bg-emerald-600 ring-2 ring-emerald-400';
+
+    const isCorrect = option === correctAnswer;
+    const isSelected = option === selectedAnswer;
+
+    if (isCorrect) {
+      return 'bg-emerald-500/20 dark:bg-emerald-500/30 border-emerald-500 text-emerald-700 dark:text-emerald-300 ring-2 ring-emerald-500';
     }
-    if (option === selectedAnswer && option !== correctAnswer) {
-      return 'bg-rose-600 ring-2 ring-rose-400';
+    if (isSelected && !isCorrect) {
+      return 'bg-rose-500/20 dark:bg-rose-500/30 border-rose-500 text-rose-700 dark:text-rose-300';
     }
-    // Fade out other options
-    return 'bg-slate-700 opacity-50';
+
+    return 'bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-600 opacity-60';
   };
 
   return (
-    <div className="w-full flex flex-col items-center gap-4">
-      <div className="w-full space-y-3">
-        {options.map((option, index) => (
-          <button
-            key={`${option}-${index}`}
-            onClick={() => handleOptionClick(option)}
-            disabled={guessState !== 'idle'}
-            className={`w-full p-3 text-lg font-semibold rounded-lg transition-all duration-300 ${getButtonClass(option)}`}
-          >
-            {option}
-          </button>
-        ))}
+      <div className="w-full flex flex-col items-center gap-4">
+        <div className="w-full grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {options.map((option) => (
+              <button
+                  key={option}
+                  onClick={() => handleOptionClick(option)}
+                  disabled={isAnswered}
+                  className={`w-full p-3 text-lg font-semibold rounded-lg border-2 transition-colors duration-200 disabled:cursor-not-allowed ${getButtonClass(option)}`}
+              >
+                {option}
+              </button>
+          ))}
+        </div>
+
+        {isAnswered && (
+            <button
+                onClick={onNext}
+                className="w-full mt-2 py-3 text-lg font-semibold rounded-lg transition-colors flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white"
+            >
+              Next <ArrowRight />
+            </button>
+        )}
       </div>
-      {guessState !== 'idle' && (
-        <button
-          onClick={onNext}
-          className="w-full mt-2 py-3 text-lg font-semibold rounded-lg transition-colors flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700"
-        >
-          Next <ArrowRight />
-        </button>
-      )}
-    </div>
   );
 };

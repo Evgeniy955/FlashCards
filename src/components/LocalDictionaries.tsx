@@ -68,19 +68,19 @@ export const LocalDictionaries: React.FC<LocalDictionariesProps> = ({ onSelect }
   }
   
   if (savedDicts.length === 0) {
-    return <p className="text-center text-slate-400">No dictionaries saved locally. Upload one from your computer to save it here.</p>;
+    return <p className="text-center text-slate-500 dark:text-slate-400">No dictionaries saved locally. Upload one from your computer to save it here.</p>;
   }
 
   return (
     <div className="space-y-3">
-        <h3 className="text-sm font-medium text-slate-400">Select a locally saved dictionary:</h3>
+        <h3 className="text-sm font-medium text-slate-500 dark:text-slate-400">Select a locally saved dictionary:</h3>
         <ul className="max-h-64 overflow-y-auto space-y-2 pr-2">
             {savedDicts.map(name => (
                 <li key={name} className="flex items-center gap-2">
                     <button
                         onClick={() => handleSelect(name)}
                         disabled={!!actionInProgress}
-                        className="w-full flex items-center gap-3 p-3 text-left text-sm text-slate-300 bg-slate-700 hover:bg-slate-600 rounded-md transition-colors disabled:opacity-50"
+                        className="w-full flex items-center gap-3 p-3 text-left text-sm text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 rounded-md transition-colors disabled:opacity-50"
                     >
                          {actionInProgress === name && !window.confirm ? (
                             <Loader2 className="animate-spin h-5 w-5 flex-shrink-0" />
@@ -92,7 +92,7 @@ export const LocalDictionaries: React.FC<LocalDictionariesProps> = ({ onSelect }
                     <button 
                         onClick={() => handleDelete(name)} 
                         disabled={!!actionInProgress}
-                        className="p-3 text-slate-400 bg-slate-700 hover:bg-rose-700 hover:text-white rounded-md transition-colors disabled:opacity-50 flex-shrink-0"
+                        className="p-3 text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-700 hover:bg-rose-500 hover:text-white rounded-md transition-colors disabled:opacity-50 flex-shrink-0"
                         aria-label={`Delete ${name}`}
                     >
                          {actionInProgress === name && window.confirm ? (

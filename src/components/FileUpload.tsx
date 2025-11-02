@@ -32,16 +32,16 @@ export const FileUpload: React.FC<FileUploadProps> = ({ onFileUpload, isLoading 
         htmlFor="file-upload"
         onDragOver={onDragOver}
         onDrop={onDrop}
-        className="relative flex flex-col items-center justify-center w-full h-64 border-2 border-dashed rounded-lg cursor-pointer bg-slate-800 border-slate-600 hover:bg-slate-700 transition-colors"
+        className="relative flex flex-col items-center justify-center w-full h-64 border-2 border-dashed rounded-lg cursor-pointer bg-slate-50 dark:bg-slate-800 border-slate-300 dark:border-slate-600 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
       >
         <div className="flex flex-col items-center justify-center pt-5 pb-6">
-          <UploadCloud className="w-10 h-10 mb-3 text-slate-500" />
-          <p className="mb-2 text-sm text-slate-400"><span className="font-semibold">Click to upload</span> or drag and drop</p>
-          <p className="text-xs text-slate-500">Excel file (.xlsx)</p>
+          <UploadCloud className="w-10 h-10 mb-3 text-slate-400 dark:text-slate-500" />
+          <p className="mb-2 text-sm text-slate-500 dark:text-slate-400"><span className="font-semibold text-indigo-600 dark:text-indigo-400">Click to upload</span> or drag and drop</p>
+          <p className="text-xs text-slate-400 dark:text-slate-500">Excel file (.xlsx)</p>
         </div>
         <input id="file-upload" type="file" className="hidden" onChange={handleFileChange} accept=".xlsx" disabled={isLoading} />
       </label>
-      {isLoading && <p className="mt-4 text-indigo-400 animate-pulse">Processing file...</p>}
+      {isLoading && <p className="mt-4 text-indigo-500 dark:text-indigo-400 animate-pulse">Processing file...</p>}
     </div>
   );
 };

@@ -9,9 +9,9 @@ interface InstructionsModalProps {
 export const InstructionsModal: React.FC<InstructionsModalProps> = ({ isOpen, onClose }) => {
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="Instruction Manual">
-      <div className="text-slate-300 max-h-[70vh] overflow-y-auto pr-2 space-y-6">
+      <div className="text-slate-600 dark:text-slate-300 max-h-[70vh] overflow-y-auto pr-2 space-y-6">
         <section>
-          <h2 className="text-xl font-semibold mb-2 text-indigo-400">1. Getting Started</h2>
+          <h2 className="text-xl font-semibold mb-2 text-indigo-600 dark:text-indigo-400">1. Getting Started</h2>
           <p>
             On the main screen, click the <strong>"Get Started"</strong> button. A window will open where you can choose your word source:
           </p>
@@ -23,9 +23,9 @@ export const InstructionsModal: React.FC<InstructionsModalProps> = ({ isOpen, on
         </section>
 
         <section>
-          <h2 className="text-xl font-semibold mb-2 text-indigo-400">2. Preparing Your Files</h2>
+          <h2 className="text-xl font-semibold mb-2 text-indigo-600 dark:text-indigo-400">2. Preparing Your Files</h2>
           
-          <h3 className="text-lg font-semibold mb-1 text-slate-100">Word Dictionary (.xlsx)</h3>
+          <h3 className="text-lg font-semibold mb-1 text-slate-800 dark:text-slate-100">Word Dictionary (.xlsx)</h3>
           <p className="mb-3">
             To create your own flashcard set, your Excel file should follow a clear structure. For language auto-detection, add a header in the first row:
           </p>
@@ -40,9 +40,9 @@ export const InstructionsModal: React.FC<InstructionsModalProps> = ({ isOpen, on
                 </ul>
             </li>
           </ul>
-          <div className="mt-4 p-3 bg-slate-900 rounded-lg">
-            <p className="font-mono text-xs text-slate-400">Example structure for multiple sets:</p>
-            <pre className="text-slate-300 whitespace-pre-wrap text-xs"><code>
+          <div className="mt-4 p-3 bg-slate-100 dark:bg-slate-900 rounded-lg">
+            <p className="font-mono text-xs text-slate-500 dark:text-slate-400">Example structure for multiple sets:</p>
+            <pre className="text-slate-700 dark:text-slate-300 whitespace-pre-wrap text-xs"><code>
 {`|     A     | B |      C      | D |      E     | F |       G      |
 |-----------|---|-------------|---|------------|---|--------------|
 |  Spanish  |   |   English   |   |   German   |   |   English    | <-- Header Row
@@ -58,7 +58,7 @@ export const InstructionsModal: React.FC<InstructionsModalProps> = ({ isOpen, on
             <strong>Note:</strong> If you upload a file without a header row, it will still work, but languages will be named generically (e.g., "Language A", "Language C").
           </p>
 
-          <h3 className="text-lg font-semibold mt-4 mb-1 text-slate-100">Example Sentences (Optional)</h3>
+          <h3 className="text-lg font-semibold mt-4 mb-1 text-slate-800 dark:text-slate-100">Example Sentences (Optional)</h3>
           <p className="mb-3">
             To see words in context, you can upload a file with examples on the training screen. This file should be for English examples.
           </p>
@@ -69,7 +69,7 @@ export const InstructionsModal: React.FC<InstructionsModalProps> = ({ isOpen, on
         </section>
 
         <section>
-          <h2 className="text-xl font-semibold mb-2 text-indigo-400">3. The Training Process</h2>
+          <h2 className="text-xl font-semibold mb-2 text-indigo-600 dark:text-indigo-400">3. The Training Process</h2>
           <ul className="list-disc list-inside space-y-2">
             <li><strong>Set Selection:</strong> After uploading a file, choose one of the available word sets to begin.</li>
             <li><strong>Spaced Repetition:</strong> The app only shows words that are new or due for review.</li>
@@ -83,14 +83,14 @@ export const InstructionsModal: React.FC<InstructionsModalProps> = ({ isOpen, on
         </section>
 
         <section>
-          <h2 className="text-xl font-semibold mb-2 text-indigo-400">4. Training Unknown Words</h2>
+          <h2 className="text-xl font-semibold mb-2 text-indigo-600 dark:text-indigo-400">4. Training Unknown Words</h2>
           <p>
             Words you mark as <strong>"Don't know"</strong> are saved in a separate list for each set. After completing the main session, a button will appear to train these words, allowing you to focus on the most challenging material in either "Write" or "Guess" mode.
           </p>
         </section>
         
         <section>
-          <h2 className="text-xl font-semibold mb-2 text-indigo-400">5. Managing Progress</h2>
+          <h2 className="text-xl font-semibold mb-2 text-indigo-600 dark:text-indigo-400">5. Managing Progress</h2>
           <p>
             Your progress (learned and unknown words) is saved automatically.
           </p>

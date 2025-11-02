@@ -22,3 +22,5 @@ export interface WordProgress {
 }
 
 export type TranslationMode = 'standard' | 'reverse'; // standard: lang1 -> lang2, reverse: lang2 -> lang1
+
+export type Theme = 'light' | 'dark';
