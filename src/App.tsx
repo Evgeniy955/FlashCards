@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useAuthState } from 'react-firebase-hooks/auth';
 import { auth, db, storage } from './lib/firebase-client';
-import { doc, getDoc, setDoc, collection, addDoc } from 'firebase/firestore';
-import { ref, uploadBytes, getBytes } from 'firebase/storage';
+import { doc, getDoc, setDoc, collection, addDoc, deleteDoc } from 'firebase/firestore';
+import { ref, uploadBytes, getBytes, deleteObject } from 'firebase/storage';
 import { Flashcard } from './components/Flashcard';
 import { ProgressBar } from './components/ProgressBar';
 import { SetSelector } from './components/SetSelector';
@@ -14,7 +14,7 @@ import { SentenceUpload } from './components/SentenceUpload';
 import { Auth } from './components/Auth';
 import { Word, LoadedDictionary, WordProgress, TranslationMode, UserDictionary } from './types';
 import { parseDictionaryFile, shuffleArray, getWordId } from './utils/dictionaryUtils';
-import { Shuffle, ChevronsUpDown, Info, BookUser, Trash2, Repeat, Library, Loader2, Save } from 'lucide-react';
+import { Shuffle, ChevronsUpDown, Info, BookUser, Trash2, Repeat, Library, Loader2 } from 'lucide-react';
 import { TrainingModeInput, AnswerState } from './components/TrainingModeInput';
 import { TrainingModeGuess } from './components/TrainingModeGuess';
 import { TrainingModeToggle } from './components/TrainingModeToggle';
@@ -32,6 +32,8 @@ const App: React.FC = () => {
     const [currentWordIndex, setCurrentWordIndex] = useState(0);
     const [isFlipped, setIsFlipped] = useState(false);
     const [reviewWords, setReviewWords] = useState<Word[]>([]);
+    const [currentUserDictionaryInfo, setCurrentUserDictionaryInfo] = useState<{ id: string; storagePath: string } | null>(null);
+
 
     // States for session progress tracking
     const [sessionProgress, setSessionProgress] = useState(0);
@@ -59,8 +61,6 @@ const App: React.FC = () => {
     const [isFileSourceModalOpen, setFileSourceModalOpen] = useState(true);
     const [isInstructionsModalOpen, setInstructionsModalOpen] = useState(false);
     const [isLearnedWordsModalOpen, setLearnedWordsModalOpen] = useState(false);
-
-    const [localFile, setLocalFile] = useState<File | null>(null); // To hold a newly uploaded file for saving
 
     const dictionaryId = useMemo(() => loadedDictionary?.name.replace(/[./]/g, '_'), [loadedDictionary]);
 
@@ -274,14 +274,32 @@ const App: React.FC = () => {
         }
     }, [trainingMode, isDontKnowMode, currentWord, guessOptions, generateGuessOptions, translationMode]);
 
+    const autoSaveDictionary = async (fileToSave: File, dictionaryName: string) => {
+        if (!user) return;
+        setIsLoading(true);
+        try {
+            const trimmedName = dictionaryName.trim();
+            const storagePath = `users/${user.uid}/dictionaries/${Date.now()}_${fileToSave.name}`;
+            const storageRef = ref(storage, storagePath);
+            await uploadBytes(storageRef, fileToSave);
+
+            const docRef = await addDoc(collection(db, `users/${user.uid}/dictionaries`), {
+                name: trimmedName,
+                storagePath: storagePath,
+                createdAt: new Date(),
+            });
+            setCurrentUserDictionaryInfo({ id: docRef.id, storagePath: storagePath });
+        } catch (err) {
+            alert("Failed to auto-save dictionary.");
+            console.error(err);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
     const handleFilesSelect = async (name: string, wordsFile: File, sentencesFile?: File) => {
         setIsLoading(true);
-        // Distinguish between local file upload and other sources
-        if (wordsFile.lastModified) { // A simple heuristic for local files vs. fetched blobs
-            setLocalFile(wordsFile);
-        } else {
-            setLocalFile(null);
-        }
+        const isLocalFile = !!wordsFile.lastModified;
 
         try {
             let sentenceMapFromFile: Map<string, string> | null = null;
@@ -305,6 +323,7 @@ const App: React.FC = () => {
             setSessionTotal(0);
             setCurrentWordIndex(0);
             setIsDontKnowMode(false);
+            setCurrentUserDictionaryInfo(null); // Reset for new dictionaries
 
             if (sentenceMapFromFile) {
                 setSentences(prev => new Map([...prev, ...sentenceMapFromFile]));
@@ -315,6 +334,10 @@ const App: React.FC = () => {
             setLoadedDictionary(dictionary);
             setSelectedSetIndex(0); // This sets the stage for the useEffect to start the session
             setFileSourceModalOpen(false);
+
+            if (isLocalFile && user) {
+                await autoSaveDictionary(wordsFile, name);
+            }
 
         } catch (error) {
             alert((error as Error).message);
@@ -333,48 +356,63 @@ const App: React.FC = () => {
             const blob = new Blob([bytes], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
             const file = new File([blob], dictionary.name + ".xlsx", { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
 
-            await handleFilesSelect(dictionary.name, file);
+            // Reset state before loading new dictionary
+            setLearnedWords(new Map());
+            setDontKnowWords(new Map());
+            setReviewWords([]);
+            setSessionActive(false);
+            setSessionProgress(0);
+            setSessionTotal(0);
+            setCurrentWordIndex(0);
+            setIsDontKnowMode(false);
+
+            const parsedDictionary = await parseDictionaryFile(file);
+            parsedDictionary.name = dictionary.name;
+
+            setLoadedDictionary(parsedDictionary);
+            setSelectedSetIndex(0); // Triggers session start effect
+
+            // Set user dictionary info after successful load
+            setCurrentUserDictionaryInfo({ id: dictionary.id, storagePath: dictionary.storagePath });
+
         } catch (err) {
             alert(err instanceof Error ? err.message : "Could not load dictionary.");
             console.error(err);
             setIsLoading(false);
-        }
-    };
-
-    const handleSaveDictionary = async () => {
-        if (!user || !localFile || !loadedDictionary) return;
-
-        const defaultName = loadedDictionary.name.endsWith('.xlsx')
-            ? loadedDictionary.name.slice(0, -5)
-            : loadedDictionary.name;
-
-        const dictionaryName = prompt("Enter a name for this dictionary:", defaultName);
-        if (!dictionaryName || !dictionaryName.trim()) {
-            return;
-        }
-
-        setIsLoading(true);
-        try {
-            const storagePath = `users/${user.uid}/dictionaries/${Date.now()}_${localFile.name}`;
-            const storageRef = ref(storage, storagePath);
-
-            await uploadBytes(storageRef, localFile);
-
-            await addDoc(collection(db, `users/${user.uid}/dictionaries`), {
-                name: dictionaryName.trim(),
-                storagePath: storagePath,
-                createdAt: new Date(),
-            });
-
-            setLocalFile(null);
-            alert(`Dictionary "${dictionaryName.trim()}" saved successfully!`);
-        } catch (err) {
-            alert("Failed to save dictionary.");
-            console.error(err);
+            setFileSourceModalOpen(true); // Re-open modal on failure
         } finally {
-            setIsLoading(false);
+            // isLoading will be handled by the main loading logic after this
         }
     };
+
+    const handleDeleteDictionary = async () => {
+        if (!user || !currentUserDictionaryInfo || !loadedDictionary) return;
+
+        if (confirm(`Are you sure you want to delete "${loadedDictionary.name}"? This action will also delete your learning progress for this dictionary and cannot be undone.`)) {
+            setIsLoading(true);
+            try {
+                // Delete file from Storage
+                const storageRef = ref(storage, currentUserDictionaryInfo.storagePath);
+                await deleteObject(storageRef);
+
+                // Delete document from Firestore
+                await deleteDoc(doc(db, `users/${user.uid}/dictionaries`, currentUserDictionaryInfo.id));
+
+                // Delete progress document from Firestore
+                const progressDocRef = doc(db, `users/${user.uid}/progress/${loadedDictionary.name.replace(/[./]/g, '_')}`);
+                await deleteDoc(progressDocRef);
+
+                // Reset UI
+                handleChangeDictionary();
+            } catch (err) {
+                alert("Failed to delete dictionary.");
+                console.error(err);
+            } finally {
+                setIsLoading(false);
+            }
+        }
+    };
+
 
     const exampleSentence = useMemo(() => currentWord ? sentences.get(currentWord.lang2.toLowerCase()) : undefined, [currentWord, sentences]);
     const totalLearnedCount = useMemo(() => learnedWords.size, [learnedWords]);
@@ -579,6 +617,7 @@ const App: React.FC = () => {
         setLoadedDictionary(null);
         setSelectedSetIndex(null);
         setSessionActive(false);
+        setCurrentUserDictionaryInfo(null);
         setFileSourceModalOpen(true);
     };
 
@@ -687,10 +726,10 @@ const App: React.FC = () => {
         <main className="min-h-screen bg-slate-900 text-white flex flex-col items-center p-4 sm:p-6">
             <header className="w-full max-w-5xl flex justify-between items-center mb-6">
                 <div className="flex items-center gap-4">
-                    {user && localFile && loadedDictionary && (
-                        <button onClick={handleSaveDictionary} disabled={isLoading} className="flex items-center gap-2 text-sm text-slate-400 hover:text-white transition-colors disabled:opacity-50" title="Save current dictionary to your account">
-                            <Save size={18} />
-                            <span className="hidden sm:inline">Save</span>
+                    {user && currentUserDictionaryInfo && (
+                        <button onClick={handleDeleteDictionary} disabled={isLoading} className="flex items-center gap-2 text-sm text-slate-400 hover:text-rose-400 transition-colors disabled:opacity-50" title="Delete this dictionary from your account">
+                            <Trash2 size={18} />
+                            <span className="hidden sm:inline">Delete</span>
                         </button>
                     )}
                     <button onClick={handleChangeDictionary} className="flex items-center gap-2 text-sm text-slate-400 hover:text-white transition-colors">
