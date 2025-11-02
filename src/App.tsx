@@ -19,6 +19,7 @@ import { TrainingModeInput, AnswerState } from './components/TrainingModeInput';
 import { TrainingModeGuess } from './components/TrainingModeGuess';
 import { TrainingModeToggle } from './components/TrainingModeToggle';
 import { TranslationModeToggle } from './components/TranslationModeToggle';
+import { saveDictionaryLocally } from './lib/localDb';
 
 
 // --- Constants ---
@@ -244,21 +245,17 @@ const App: React.FC = () => {
                 generateGuessOptions(reviewWords[nextIndex]);
             }
         } else {
-            // Session over for this batch. Set session to inactive.
-            // The useEffect will then determine if a new session should start, preventing stale state issues.
             setReviewWords([]);
             setSessionActive(false);
             if (isDontKnowMode) {
-                setIsDontKnowMode(false); // Exit training mode context
+                setIsDontKnowMode(false);
             }
         }
     };
 
     const currentWord = useMemo(() => reviewWords[currentWordIndex], [reviewWords, currentWordIndex]);
 
-    // Effect to start a new session when one is needed (e.g., after loading or after a previous session ends)
     useEffect(() => {
-        // Only attempt to start a session if one is not already active and all initial data is loaded.
         if (selectedSetIndex !== null && !isProgressLoading && !sessionActive) {
             startReviewSession(selectedSetIndex);
         }
@@ -295,7 +292,7 @@ const App: React.FC = () => {
             return null;
         }
     };
-
+    
     const loadUserDictionary = async (dictionary: UserDictionary) => {
         setIsLoading(true);
         setFileSourceModalOpen(false);
@@ -313,17 +310,42 @@ const App: React.FC = () => {
             setSessionTotal(0);
             setCurrentWordIndex(0);
             setIsDontKnowMode(false);
-
+            
             const parsedDictionary = await parseDictionaryFile(file);
             parsedDictionary.name = dictionary.name;
-
+            
             setLoadedDictionary(parsedDictionary);
             setSelectedSetIndex(0);
-
+            
             setCurrentUserDictionaryInfo({ id: dictionary.id, storagePath: dictionary.storagePath });
         } catch (err) {
             alert(err instanceof Error ? err.message : "Could not load dictionary. The file might be missing or there could be a permissions issue.");
             console.error("Load user dictionary error:", err);
+            setFileSourceModalOpen(true);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+    
+    const loadLocalDictionary = (dictionary: LoadedDictionary) => {
+        setIsLoading(true);
+        setFileSourceModalOpen(false);
+        try {
+            setLearnedWords(new Map());
+            setDontKnowWords(new Map());
+            setReviewWords([]);
+            setSessionActive(false);
+            setSessionProgress(0);
+            setSessionTotal(0);
+            setCurrentWordIndex(0);
+            setIsDontKnowMode(false);
+            
+            setLoadedDictionary(dictionary);
+            setSelectedSetIndex(0);
+            setCurrentUserDictionaryInfo(null);
+        } catch (err) {
+            alert(err instanceof Error ? err.message : "Could not load local dictionary.");
+            console.error("Load local dictionary error:", err);
             setFileSourceModalOpen(true);
         } finally {
             setIsLoading(false);
@@ -335,7 +357,6 @@ const App: React.FC = () => {
         const isLocalFile = !!wordsFile.lastModified;
 
         try {
-            // 1. Handle optional sentences file
             let sentenceMapFromFile: Map<string, string> | null = null;
             if (sentencesFile) {
                 const text = await sentencesFile.text();
@@ -351,7 +372,6 @@ const App: React.FC = () => {
                 setSentences(prev => new Map([...prev, ...sentenceMapFromFile]));
             }
 
-            // 2. Reset all states for the new dictionary
             setLearnedWords(new Map());
             setDontKnowWords(new Map());
             setReviewWords([]);
@@ -360,19 +380,26 @@ const App: React.FC = () => {
             setSessionTotal(0);
             setCurrentWordIndex(0);
             setIsDontKnowMode(false);
-            setCurrentUserDictionaryInfo(null);
+            setCurrentUserDictionaryInfo(null); 
 
-            // 3. If it's a local file from the user's computer, save it automatically
             if (isLocalFile && user) {
                 const savedDictionary = await autoSaveDictionary(wordsFile, name);
                 if (savedDictionary) {
                     setCurrentUserDictionaryInfo(savedDictionary);
                 }
             }
-
-            // 4. Parse the dictionary file (either local or built-in) and load it into the app
+            
             const dictionary = await parseDictionaryFile(wordsFile);
             dictionary.name = name;
+
+            if (isLocalFile) {
+                try {
+                    await saveDictionaryLocally(dictionary);
+                } catch (localDbError) {
+                    console.warn("Could not save dictionary locally.", localDbError);
+                }
+            }
+
             setLoadedDictionary(dictionary);
             setSelectedSetIndex(0);
             setFileSourceModalOpen(false);
@@ -395,7 +422,7 @@ const App: React.FC = () => {
                 await deleteObject(storageRef);
 
                 await deleteDoc(doc(db, `users/${user.uid}/dictionaries`, currentUserDictionaryInfo.id));
-
+                
                 const progressDocRef = doc(db, `users/${user.uid}/progress/${loadedDictionary.name.replace(/[./]/g, '_')}`);
                 await deleteDoc(progressDocRef);
 
@@ -512,14 +539,13 @@ const App: React.FC = () => {
 
     const handleFlip = () => {
         if (isDontKnowMode && answerState !== 'idle' && trainingMode === 'write') return;
-        if (isDontKnowMode && trainingMode === 'guess' && isFlipped) return; // Don't allow flipping back in guess mode
+        if (isDontKnowMode && trainingMode === 'guess' && isFlipped) return;
         setIsFlipped(prev => !prev);
     };
 
     const handleSelectSet = (index: number) => {
         if (index !== selectedSetIndex) {
             setSelectedSetIndex(index);
-            // The useEffect will handle starting the session when selectedSetIndex changes
             setSessionActive(false);
         }
     };
@@ -604,7 +630,7 @@ const App: React.FC = () => {
             setLearnedWords(new Map());
             setDontKnowWords(new Map());
             if (selectedSetIndex !== null) {
-                setSessionActive(false); // Trigger useEffect to restart session
+                setSessionActive(false);
             }
         }
     };
@@ -706,7 +732,7 @@ const App: React.FC = () => {
     if (!loadedDictionary) {
         return (
             <main className="min-h-screen bg-slate-900 text-white flex flex-col items-center justify-center p-4">
-                <FileSourceModal isOpen={isFileSourceModalOpen} onClose={() => setFileSourceModalOpen(false)} onFilesSelect={handleFilesSelect} onUserDictionaryLoad={loadUserDictionary} isLoading={isLoading} user={user} />
+                <FileSourceModal isOpen={isFileSourceModalOpen} onClose={() => setFileSourceModalOpen(false)} onFilesSelect={handleFilesSelect} onUserDictionaryLoad={loadUserDictionary} onLocalDictionaryLoad={loadLocalDictionary} isLoading={isLoading} user={user} />
                 <div className="text-center">
                     <h1 className="text-5xl font-bold mb-4">Flashcard App</h1>
                     <p className="text-slate-400 mb-8">Your personal language learning assistant.</p>
@@ -723,7 +749,7 @@ const App: React.FC = () => {
             <header className="w-full max-w-5xl flex justify-between items-center mb-6">
                 <div className="flex items-center gap-4">
                     {user && currentUserDictionaryInfo && (
-                        <button onClick={handleDeleteDictionary} disabled={isLoading} className="flex items-center gap-2 text-sm text-slate-400 hover:text-rose-400 transition-colors disabled:opacity-50" title="Delete this dictionary from your account">
+                         <button onClick={handleDeleteDictionary} disabled={isLoading} className="flex items-center gap-2 text-sm text-slate-400 hover:text-rose-400 transition-colors disabled:opacity-50" title="Delete this dictionary from your account">
                             <Trash2 size={18} />
                             <span className="hidden sm:inline">Delete</span>
                         </button>
@@ -775,7 +801,7 @@ const App: React.FC = () => {
                 {currentSet && <WordList words={currentSet.words} isVisible={isWordListVisible} lang1={currentSet.lang1} lang2={currentSet.lang2} />}
             </div>
 
-            <FileSourceModal isOpen={isFileSourceModalOpen && !loadedDictionary} onClose={() => setFileSourceModalOpen(false)} onFilesSelect={handleFilesSelect} onUserDictionaryLoad={loadUserDictionary} isLoading={isLoading} user={user} />
+            <FileSourceModal isOpen={isFileSourceModalOpen && !loadedDictionary} onClose={() => setFileSourceModalOpen(false)} onFilesSelect={handleFilesSelect} onUserDictionaryLoad={loadUserDictionary} onLocalDictionaryLoad={loadLocalDictionary} isLoading={isLoading} user={user} />
             <InstructionsModal isOpen={isInstructionsModalOpen} onClose={() => setInstructionsModalOpen(false)} />
             <LearnedWordsModal isOpen={isLearnedWordsModalOpen} onClose={() => setLearnedWordsModalOpen(false)} learnedWords={learnedWordsWithDetails} lang1={currentSet?.lang1 || 'Language 1'} lang2={currentSet?.lang2 || 'Language 2'} />
         </main>
