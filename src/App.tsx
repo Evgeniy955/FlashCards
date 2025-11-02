@@ -292,7 +292,7 @@ const App: React.FC = () => {
             return null;
         }
     };
-    
+
     const loadUserDictionary = async (dictionary: UserDictionary) => {
         setIsLoading(true);
         setFileSourceModalOpen(false);
@@ -310,13 +310,13 @@ const App: React.FC = () => {
             setSessionTotal(0);
             setCurrentWordIndex(0);
             setIsDontKnowMode(false);
-            
+
             const parsedDictionary = await parseDictionaryFile(file);
             parsedDictionary.name = dictionary.name;
-            
+
             setLoadedDictionary(parsedDictionary);
             setSelectedSetIndex(0);
-            
+
             setCurrentUserDictionaryInfo({ id: dictionary.id, storagePath: dictionary.storagePath });
         } catch (err) {
             alert(err instanceof Error ? err.message : "Could not load dictionary. The file might be missing or there could be a permissions issue.");
@@ -326,7 +326,7 @@ const App: React.FC = () => {
             setIsLoading(false);
         }
     };
-    
+
     const loadLocalDictionary = (dictionary: LoadedDictionary) => {
         setIsLoading(true);
         setFileSourceModalOpen(false);
@@ -339,7 +339,7 @@ const App: React.FC = () => {
             setSessionTotal(0);
             setCurrentWordIndex(0);
             setIsDontKnowMode(false);
-            
+
             setLoadedDictionary(dictionary);
             setSelectedSetIndex(0);
             setCurrentUserDictionaryInfo(null);
@@ -380,7 +380,7 @@ const App: React.FC = () => {
             setSessionTotal(0);
             setCurrentWordIndex(0);
             setIsDontKnowMode(false);
-            setCurrentUserDictionaryInfo(null); 
+            setCurrentUserDictionaryInfo(null);
 
             if (isLocalFile && user) {
                 const savedDictionary = await autoSaveDictionary(wordsFile, name);
@@ -388,7 +388,7 @@ const App: React.FC = () => {
                     setCurrentUserDictionaryInfo(savedDictionary);
                 }
             }
-            
+
             const dictionary = await parseDictionaryFile(wordsFile);
             dictionary.name = name;
 
@@ -422,7 +422,7 @@ const App: React.FC = () => {
                 await deleteObject(storageRef);
 
                 await deleteDoc(doc(db, `users/${user.uid}/dictionaries`, currentUserDictionaryInfo.id));
-                
+
                 const progressDocRef = doc(db, `users/${user.uid}/progress/${loadedDictionary.name.replace(/[./]/g, '_')}`);
                 await deleteDoc(progressDocRef);
 
@@ -749,7 +749,7 @@ const App: React.FC = () => {
             <header className="w-full max-w-5xl flex justify-between items-center mb-6">
                 <div className="flex items-center gap-4">
                     {user && currentUserDictionaryInfo && (
-                         <button onClick={handleDeleteDictionary} disabled={isLoading} className="flex items-center gap-2 text-sm text-slate-400 hover:text-rose-400 transition-colors disabled:opacity-50" title="Delete this dictionary from your account">
+                        <button onClick={handleDeleteDictionary} disabled={isLoading} className="flex items-center gap-2 text-sm text-slate-400 hover:text-rose-400 transition-colors disabled:opacity-50" title="Delete this dictionary from your account">
                             <Trash2 size={18} />
                             <span className="hidden sm:inline">Delete</span>
                         </button>
