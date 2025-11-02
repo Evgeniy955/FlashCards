@@ -4,21 +4,22 @@ import { Modal } from './Modal';
 import { FileUpload } from './FileUpload';
 import { BuiltInDictionaries } from './BuiltInDictionaries';
 import { UserDictionaries } from './UserDictionaries';
-import { Library, Upload, User as UserIcon } from 'lucide-react';
-import { UserDictionary } from '../types';
+import { LocalDictionaries } from './LocalDictionaries';
+import { Library, Upload, User as UserIcon, HardDrive } from 'lucide-react';
+import { UserDictionary, LoadedDictionary } from '../types';
 
 interface FileSourceModalProps {
   isOpen: boolean;
   onClose: () => void;
   onFilesSelect: (name: string, wordsFile: File, sentencesFile?: File) => void;
   onUserDictionaryLoad: (dictionary: UserDictionary) => void;
+  onLocalDictionaryLoad: (dictionary: LoadedDictionary) => void;
   isLoading: boolean;
   user: User | null | undefined;
 }
 
-type Tab = 'built-in' | 'computer' | 'user';
+type Tab = 'built-in' | 'local' | 'computer' | 'user';
 
-// Moved TabButton outside the component to prevent re-creation on each render.
 const TabButton = ({ activeTab, tab, onClick, children }: React.PropsWithChildren<{ activeTab: Tab, tab: Tab, onClick: (tab: Tab) => void }>) => (
   <button
     onClick={() => onClick(tab)}
@@ -33,11 +34,10 @@ const TabButton = ({ activeTab, tab, onClick, children }: React.PropsWithChildre
 );
 
 
-export const FileSourceModal: React.FC<FileSourceModalProps> = ({ isOpen, onClose, onFilesSelect, onUserDictionaryLoad, isLoading, user }) => {
+export const FileSourceModal: React.FC<FileSourceModalProps> = ({ isOpen, onClose, onFilesSelect, onUserDictionaryLoad, onLocalDictionaryLoad, isLoading, user }) => {
   const [activeTab, setActiveTab] = useState<Tab>('built-in');
 
   const handleLocalFileSelect = (file: File) => {
-    // Use filename as the dictionary name, removing the extension
     const dictionaryName = file.name.endsWith('.xlsx') ? file.name.slice(0, -5) : file.name;
     onFilesSelect(dictionaryName, file);
   };
@@ -50,7 +50,8 @@ export const FileSourceModal: React.FC<FileSourceModalProps> = ({ isOpen, onClos
     <Modal isOpen={isOpen} onClose={onClose} title="Select File Source">
       <div className="flex border-b border-slate-700">
         <TabButton activeTab={activeTab} tab="built-in" onClick={setActiveTab}><Library size={16} /> Built-in</TabButton>
-        <TabButton activeTab={activeTab} tab="computer" onClick={setActiveTab}><Upload size={16} /> From Computer</TabButton>
+        <TabButton activeTab={activeTab} tab="local" onClick={setActiveTab}><HardDrive size={16} /> On Device</TabButton>
+        <TabButton activeTab={activeTab} tab="computer" onClick={setActiveTab}><Upload size={16} /> Upload New</TabButton>
         {user && (
            <TabButton activeTab={activeTab} tab="user" onClick={setActiveTab}><UserIcon size={16} /> My Dictionaries</TabButton>
         )}
@@ -58,6 +59,9 @@ export const FileSourceModal: React.FC<FileSourceModalProps> = ({ isOpen, onClos
       <div className="pt-6">
         {activeTab === 'built-in' && (
           <BuiltInDictionaries onSelect={handleBuiltInSelect} />
+        )}
+        {activeTab === 'local' && (
+            <LocalDictionaries onLoad={onLocalDictionaryLoad} />
         )}
         {activeTab === 'computer' && (
           <FileUpload onFileUpload={handleLocalFileSelect} isLoading={isLoading} />
