@@ -2,7 +2,9 @@ import React, { useState } from 'react';
 import { Modal } from './Modal';
 import { FileUpload } from './FileUpload';
 import { BuiltInDictionaries } from './BuiltInDictionaries';
-import { Library, Upload } from 'lucide-react';
+import { LocalDictionaries } from './LocalDictionaries';
+import { saveDictionary } from '../lib/indexedDB';
+import { Library, Upload, Database } from 'lucide-react';
 
 interface FileSourceModalProps {
   isOpen: boolean;
@@ -11,7 +13,7 @@ interface FileSourceModalProps {
   isLoading: boolean;
 }
 
-type Tab = 'built-in' | 'computer';
+type Tab = 'built-in' | 'local' | 'computer';
 
 // Moved TabButton outside the component to prevent re-creation on each render.
 const TabButton = ({ activeTab, tab, onClick, children }: React.PropsWithChildren<{ activeTab: Tab, tab: Tab, onClick: (tab: Tab) => void }>) => (
@@ -31,25 +33,39 @@ const TabButton = ({ activeTab, tab, onClick, children }: React.PropsWithChildre
 export const FileSourceModal: React.FC<FileSourceModalProps> = ({ isOpen, onClose, onFilesSelect, isLoading }) => {
   const [activeTab, setActiveTab] = useState<Tab>('built-in');
 
-  const handleLocalFileSelect = (file: File) => {
-    // Use filename as the dictionary name, removing the extension
+  const handleLocalFileSelect = async (file: File) => {
     const dictionaryName = file.name.endsWith('.xlsx') ? file.name.slice(0, -5) : file.name;
+    
+    try {
+      await saveDictionary(dictionaryName, file);
+    } catch (error) {
+        console.error("Failed to save dictionary to IndexedDB:", error);
+        alert("Could not save the dictionary for future sessions, but it will be loaded for the current one.");
+    }
     onFilesSelect(dictionaryName, file);
   };
 
   const handleBuiltInSelect = (name: string, wordsFile: File, sentencesFile?: File) => {
     onFilesSelect(name, wordsFile, sentencesFile);
   };
+  
+  const handleLocalDictionarySelect = (name: string, wordsFile: File) => {
+    onFilesSelect(name, wordsFile);
+  };
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="Select File Source">
       <div className="flex border-b border-slate-700">
         <TabButton activeTab={activeTab} tab="built-in" onClick={setActiveTab}><Library size={16} /> Built-in</TabButton>
+        <TabButton activeTab={activeTab} tab="local" onClick={setActiveTab}><Database size={16} /> My Dictionaries</TabButton>
         <TabButton activeTab={activeTab} tab="computer" onClick={setActiveTab}><Upload size={16} /> From Computer</TabButton>
       </div>
       <div className="pt-6">
         {activeTab === 'built-in' && (
           <BuiltInDictionaries onSelect={handleBuiltInSelect} />
+        )}
+        {activeTab === 'local' && (
+          <LocalDictionaries onSelect={handleLocalDictionarySelect} />
         )}
         {activeTab === 'computer' && (
           <FileUpload onFileUpload={handleLocalFileSelect} isLoading={isLoading} />
