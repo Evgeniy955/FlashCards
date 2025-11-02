@@ -63,13 +63,13 @@ const RussianContent: React.FC = () => (
         </ul>
         <div className="mt-4 p-3 bg-slate-100 dark:bg-slate-900 rounded-lg">
           <p className="font-mono text-xs text-slate-500 dark:text-slate-400">Пример структуры для нескольких наборов:</p>
-          <pre className="text-slate-700 dark:text-slate-300 whitespace-pre-wrap text-xs"><code>
-{`|      А      | B |       C       | D |      E      | F |        G       |
-|-------------|---|---------------|---|-------------|---|----------------|
-|   Русский   |   |   Английский  |   |  Немецкий   |   |   Английский   | <-- Строка заголовка
-|-------------|---|---------------|---|-------------|---|----------------|
-|     кот     |   |      cat      |   |    Katze    |   |      cat       | <-- Строки со словами
-|    собака   |   |      dog      |   |     Hund    |   |      dog       |`}
+          <pre className="font-mono text-slate-700 dark:text-slate-300 whitespace-pre-wrap text-xs leading-relaxed"><code>
+{`|      А      | B |      C       | D |      E      | F |       G        |
+|-------------|---|--------------|---|-------------|---|----------------|
+|   Русский   |   |  Английский  |   |  Немецкий   |   |   Английский   | <-- Строка заголовка
+|-------------|---|--------------|---|-------------|---|----------------|
+|     кот     |   |     cat      |   |    Katze    |   |       cat      | <-- Строки со словами
+|    собака   |   |     dog      |   |     Hund    |   |       dog      |`}
         </code></pre>
         </div>
         <p className="mt-3">
@@ -166,13 +166,13 @@ const UkrainianContent: React.FC = () => (
         </ul>
         <div className="mt-4 p-3 bg-slate-100 dark:bg-slate-900 rounded-lg">
           <p className="font-mono text-xs text-slate-500 dark:text-slate-400">Приклад структури для кількох наборів:</p>
-          <pre className="text-slate-700 dark:text-slate-300 whitespace-pre-wrap text-xs"><code>
-{`|      А      | B |       C       | D |      E      | F |        G       |
-|-------------|---|---------------|---|-------------|---|----------------|
-| Українська  |   |  Англійська   |   |   Німецька  |   |   Англійська   | <-- Рядок заголовка
-|-------------|---|---------------|---|-------------|---|----------------|
-|      кіт    |   |      cat      |   |    Katze    |   |      cat       | <-- Рядки зі словами
-|    собака   |   |      dog      |   |     Hund    |   |      dog       |`}
+          <pre className="font-mono text-slate-700 dark:text-slate-300 whitespace-pre-wrap text-xs leading-relaxed"><code>
+{`|      А      | B |      C       | D |      E      | F |       G        |
+|-------------|---|--------------|---|-------------|---|----------------|
+| Українська  |   |  Англійська  |   |   Німецька  |   |   Англійська   | <-- Рядок заголовка
+|-------------|---|--------------|---|-------------|---|----------------|
+|      кіт    |   |     cat      |   |    Katze    |   |       cat      | <-- Рядки зі словами
+|    собака   |   |     dog      |   |     Hund    |   |       dog      |`}
         </code></pre>
         </div>
         <p className="mt-3">
