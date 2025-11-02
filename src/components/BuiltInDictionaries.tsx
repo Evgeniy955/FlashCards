@@ -44,7 +44,7 @@ export const BuiltInDictionaries: React.FC<BuiltInDictionariesProps> = ({ onSele
             console.warn(`Could not load optional sentences file: ${dict.sentencesPath}`);
         }
       }
-
+      
       onSelect(dict.name, wordsFile, sentencesFile);
 
     } catch (err) {
