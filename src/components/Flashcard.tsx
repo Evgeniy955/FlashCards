@@ -15,10 +15,10 @@ interface FlashcardProps {
 }
 
 export const Flashcard: React.FC<FlashcardProps> = ({ word, isFlipped, onFlip, exampleSentence, isChanging, isInstantChange, translationMode, lang1, lang2 }) => {
-
+  
   const handlePlayAudioSequence = (e: React.MouseEvent) => {
     e.stopPropagation(); // Prevent card from flipping when clicking the button
-
+    
     if (!('speechSynthesis' in window)) {
       alert('Sorry, your browser does not support text-to-speech.');
       return;
@@ -67,52 +67,52 @@ export const Flashcard: React.FC<FlashcardProps> = ({ word, isFlipped, onFlip, e
 
 
   const frontContent = (
-      <div
-          className={`absolute w-full h-full ${isStandardMode ? 'bg-white dark:bg-slate-800' : 'bg-indigo-500 dark:bg-indigo-700'} rounded-2xl shadow-xl flex flex-col justify-center items-center p-6 text-center`}
-          style={{ backfaceVisibility: 'hidden', WebkitBackfaceVisibility: 'hidden' }}
-      >
-        <span className={`${getFontSizeClass(frontWord)} font-bold ${isStandardMode ? 'text-slate-900 dark:text-white' : 'text-white'}`}>{frontWord}</span>
-      </div>
+    <div 
+        className={`absolute w-full h-full ${isStandardMode ? 'bg-white dark:bg-slate-800' : 'bg-indigo-500 dark:bg-indigo-700'} rounded-2xl shadow-xl flex flex-col justify-center items-center p-6 text-center`}
+        style={{ backfaceVisibility: 'hidden', WebkitBackfaceVisibility: 'hidden' }}
+    >
+      <span className={`${getFontSizeClass(frontWord)} font-bold ${isStandardMode ? 'text-slate-900 dark:text-white' : 'text-white'}`}>{frontWord}</span>
+    </div>
   );
 
   const backContent = (
-      <div
-          className={`absolute w-full h-full ${isStandardMode ? 'bg-indigo-500 dark:bg-indigo-700' : 'bg-white dark:bg-slate-800'} rounded-2xl shadow-xl flex flex-col justify-center items-center p-6 text-center`}
-          style={{ backfaceVisibility: 'hidden', WebkitBackfaceVisibility: 'hidden', transform: 'rotateY(180deg)' }}
-      >
-        <div>
-          <span className={`${getFontSizeClass(backWord)} font-bold ${isStandardMode ? 'text-white' : 'text-slate-900 dark:text-white'}`}>{backWord}</span>
-          {exampleSentence && (
-              <p className={`${isStandardMode ? 'text-indigo-100 dark:text-indigo-200' : 'text-slate-600 dark:text-slate-300'} mt-4 text-sm sm:text-base italic`}>"{exampleSentence}"</p>
-          )}
-        </div>
-        <button
-            onClick={handlePlayAudioSequence}
-            className={`absolute top-4 right-4 p-2 ${isStandardMode ? 'text-indigo-100 dark:text-indigo-200 hover:text-white hover:bg-indigo-600 dark:hover:bg-indigo-600' : 'text-slate-600 dark:text-slate-300 hover:text-slate-800 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-slate-700'} transition-colors rounded-full`}
-            aria-label="Play English pronunciation"
-        >
-          <Volume2 size={24} />
-        </button>
+    <div 
+        className={`absolute w-full h-full ${isStandardMode ? 'bg-indigo-500 dark:bg-indigo-700' : 'bg-white dark:bg-slate-800'} rounded-2xl shadow-xl flex flex-col justify-center items-center p-6 text-center`}
+        style={{ backfaceVisibility: 'hidden', WebkitBackfaceVisibility: 'hidden', transform: 'rotateY(180deg)' }}
+    >
+      <div>
+        <span className={`${getFontSizeClass(backWord)} font-bold ${isStandardMode ? 'text-white' : 'text-slate-900 dark:text-white'}`}>{backWord}</span>
+        {exampleSentence && (
+          <p className={`${isStandardMode ? 'text-indigo-100 dark:text-indigo-200' : 'text-slate-600 dark:text-slate-300'} mt-4 text-sm sm:text-base italic`}>"{exampleSentence}"</p>
+        )}
       </div>
+      <button
+        onClick={handlePlayAudioSequence}
+        className={`absolute top-4 right-4 p-2 ${isStandardMode ? 'text-indigo-100 dark:text-indigo-200 hover:text-white hover:bg-indigo-600 dark:hover:bg-indigo-600' : 'text-slate-600 dark:text-slate-300 hover:text-slate-800 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-slate-700'} transition-colors rounded-full`}
+        aria-label="Play English pronunciation"
+      >
+        <Volume2 size={24} />
+      </button>
+    </div>
   );
 
   return (
-      <div
-          className="w-full aspect-[3/2] cursor-pointer group"
-          style={{ perspective: '1000px' }}
-          onClick={handleFlipDuringChange}
-          role="button"
-          tabIndex={0}
-          aria-label={`Flashcard for ${lang1} word ${word.lang1}. Click to flip.`}
-          onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && handleFlipDuringChange()}
+    <div 
+        className="w-full aspect-[3/2] cursor-pointer group" 
+        style={{ perspective: '1000px' }}
+        onClick={handleFlipDuringChange}
+        role="button"
+        tabIndex={0}
+        aria-label={`Flashcard for ${lang1} word ${word.lang1}. Click to flip.`}
+        onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && handleFlipDuringChange()}
+    >
+      <div 
+        className={`relative w-full h-full ${!isInstantChange ? 'transition-transform duration-500' : ''}`}
+        style={{ transformStyle: 'preserve-3d', transform: isFlipped ? 'rotateY(180deg)' : 'rotateY(0deg)' }}
       >
-        <div
-            className={`relative w-full h-full ${!isInstantChange ? 'transition-transform duration-500' : ''}`}
-            style={{ transformStyle: 'preserve-3d', transform: isFlipped ? 'rotateY(180deg)' : 'rotateY(0deg)' }}
-        >
-          {frontContent}
-          {backContent}
-        </div>
+        {frontContent}
+        {backContent}
       </div>
+    </div>
   );
 };

@@ -41,33 +41,33 @@ export const TrainingModeGuess: React.FC<TrainingModeGuessProps> = ({ options, c
     if (isSelected && !isCorrect) {
       return 'bg-rose-500/20 dark:bg-rose-500/30 border-rose-500 text-rose-700 dark:text-rose-300';
     }
-
+    
     return 'bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-600 opacity-60';
   };
 
   return (
-      <div className="w-full flex flex-col items-center gap-4">
-        <div className="w-full grid grid-cols-1 sm:grid-cols-2 gap-3">
-          {options.map((option) => (
-              <button
-                  key={option}
-                  onClick={() => handleOptionClick(option)}
-                  disabled={isAnswered}
-                  className={`w-full p-3 text-lg font-semibold rounded-lg border-2 transition-colors duration-200 disabled:cursor-not-allowed ${getButtonClass(option)}`}
-              >
-                {option}
-              </button>
-          ))}
-        </div>
-
-        {isAnswered && (
-            <button
-                onClick={onNext}
-                className="w-full mt-2 py-3 text-lg font-semibold rounded-lg transition-colors flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white"
-            >
-              Next <ArrowRight />
-            </button>
-        )}
+    <div className="w-full flex flex-col items-center gap-4">
+      <div className="w-full grid grid-cols-1 sm:grid-cols-2 gap-3">
+        {options.map((option) => (
+          <button
+            key={option}
+            onClick={() => handleOptionClick(option)}
+            disabled={isAnswered}
+            className={`w-full p-3 text-lg font-semibold rounded-lg border-2 transition-colors duration-200 disabled:cursor-not-allowed ${getButtonClass(option)}`}
+          >
+            {option}
+          </button>
+        ))}
       </div>
+      
+      {isAnswered && (
+        <button 
+          onClick={onNext} 
+          className="w-full mt-2 py-3 text-lg font-semibold rounded-lg transition-colors flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white"
+        >
+          Next <ArrowRight />
+        </button>
+      )}
+    </div>
   );
 };
