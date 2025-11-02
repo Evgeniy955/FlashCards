@@ -56,14 +56,14 @@ export const BuiltInDictionaries: React.FC<BuiltInDictionariesProps> = ({ onSele
 
   return (
     <div className="space-y-3">
-        <h3 className="text-sm font-medium text-slate-400">Select a pre-packaged dictionary:</h3>
+        <h3 className="text-sm font-medium text-slate-500 dark:text-slate-400">Select a pre-packaged dictionary:</h3>
         <ul className="max-h-64 overflow-y-auto space-y-2 pr-2">
             {dictionaries.map(dict => (
                 <li key={dict.name}>
                     <button
                         onClick={() => handleSelect(dict)}
                         disabled={!!isDownloading}
-                        className="w-full flex items-center gap-3 p-3 text-left text-sm text-slate-300 bg-slate-700 hover:bg-slate-600 rounded-md transition-colors disabled:opacity-50"
+                        className="w-full flex items-center gap-3 p-3 text-left text-sm text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 rounded-md transition-colors disabled:opacity-50"
                     >
                          {isDownloading === dict.name ? (
                             <Loader2 className="animate-spin h-5 w-5 flex-shrink-0" />

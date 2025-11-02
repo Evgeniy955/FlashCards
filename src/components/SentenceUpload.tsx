@@ -89,20 +89,20 @@ export const SentenceUpload: React.FC<SentenceUploadProps> = ({ onSentencesLoade
     <div className="w-full">
       {hasSentences ? (
         <div className="flex items-center justify-between">
-          <span className="text-emerald-400 flex items-center gap-2">
+          <span className="text-emerald-600 dark:text-emerald-400 flex items-center gap-2">
             <BookText size={16} /> Sentences loaded
           </span>
           <div className="flex items-center gap-4">
-            <label htmlFor="sentence-upload" className="text-sm text-slate-400 hover:text-white transition-colors cursor-pointer">
+            <label htmlFor="sentence-upload" className="text-sm text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors cursor-pointer">
               {isLoading ? 'Loading...' : 'Update'}
             </label>
-            <button onClick={onClearSentences} className="text-sm text-slate-400 hover:text-white transition-colors">
+            <button onClick={onClearSentences} className="text-sm text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors">
               Clear
             </button>
           </div>
         </div>
       ) : (
-        <label htmlFor="sentence-upload" className="w-full flex justify-center items-center gap-2 py-2 text-slate-400 hover:text-white transition-colors cursor-pointer">
+        <label htmlFor="sentence-upload" className="w-full flex justify-center items-center gap-2 py-2 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors cursor-pointer">
           <UploadCloud size={16}/> {isLoading ? 'Loading...' : 'Upload Sentences (Optional)'}
         </label>
       )}

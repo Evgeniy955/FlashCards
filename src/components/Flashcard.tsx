@@ -56,27 +56,27 @@ export const Flashcard: React.FC<FlashcardProps> = ({ word, isFlipped, onFlip, e
 
   const frontContent = (
     <div 
-        className={`absolute w-full h-full ${isStandardMode ? 'bg-slate-800' : 'bg-indigo-700'} rounded-2xl shadow-xl flex flex-col justify-center items-center p-6 text-center`}
+        className={`absolute w-full h-full ${isStandardMode ? 'bg-white dark:bg-slate-800' : 'bg-indigo-500 dark:bg-indigo-700'} rounded-2xl shadow-xl flex flex-col justify-center items-center p-6 text-center`}
         style={{ backfaceVisibility: 'hidden', WebkitBackfaceVisibility: 'hidden' }}
     >
-      <span className="text-4xl sm:text-5xl font-bold text-white">{frontWord}</span>
+      <span className={`text-4xl sm:text-5xl font-bold ${isStandardMode ? 'text-slate-900 dark:text-white' : 'text-white'}`}>{frontWord}</span>
     </div>
   );
 
   const backContent = (
     <div 
-        className={`absolute w-full h-full ${isStandardMode ? 'bg-indigo-700' : 'bg-slate-800'} rounded-2xl shadow-xl flex flex-col justify-center items-center p-6 text-center`}
+        className={`absolute w-full h-full ${isStandardMode ? 'bg-indigo-500 dark:bg-indigo-700' : 'bg-white dark:bg-slate-800'} rounded-2xl shadow-xl flex flex-col justify-center items-center p-6 text-center`}
         style={{ backfaceVisibility: 'hidden', WebkitBackfaceVisibility: 'hidden', transform: 'rotateY(180deg)' }}
     >
       <div>
-        <span className="text-4xl sm:text-5xl font-bold text-white">{backWord}</span>
+        <span className={`text-4xl sm:text-5xl font-bold ${isStandardMode ? 'text-white' : 'text-slate-900 dark:text-white'}`}>{backWord}</span>
         {exampleSentence && (
-          <p className={`${isStandardMode ? 'text-indigo-200' : 'text-slate-300'} mt-4 text-sm sm:text-base italic`}>"{exampleSentence}"</p>
+          <p className={`${isStandardMode ? 'text-indigo-100 dark:text-indigo-200' : 'text-slate-600 dark:text-slate-300'} mt-4 text-sm sm:text-base italic`}>"{exampleSentence}"</p>
         )}
       </div>
       <button
         onClick={handlePlayAudioSequence}
-        className={`absolute top-4 right-4 p-2 ${isStandardMode ? 'text-indigo-200 hover:text-white hover:bg-indigo-600' : 'text-slate-300 hover:text-white hover:bg-slate-700'} transition-colors rounded-full`}
+        className={`absolute top-4 right-4 p-2 ${isStandardMode ? 'text-indigo-100 dark:text-indigo-200 hover:text-white hover:bg-indigo-600 dark:hover:bg-indigo-600' : 'text-slate-600 dark:text-slate-300 hover:text-slate-800 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-slate-700'} transition-colors rounded-full`}
         aria-label="Play English pronunciation"
       >
         <Volume2 size={24} />
