@@ -59,7 +59,8 @@ const App: React.FC = () => {
     const [isInstructionsModalOpen, setInstructionsModalOpen] = useState(false);
     const [isLearnedWordsModalOpen, setLearnedWordsModalOpen] = useState(false);
 
-    const dictionaryId = useMemo(() => loadedDictionary?.name.replaceAll(/[./]/g, '_'), [loadedDictionary]);
+    // FIX: Replaced `replaceAll` with `replace` with a global regex for wider compatibility.
+    const dictionaryId = useMemo(() => loadedDictionary?.name.replace(/[./]/g, '_'), [loadedDictionary]);
     
     // Load global sentences from Firestore user document
     useEffect(() => {
