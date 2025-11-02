@@ -62,14 +62,14 @@ const RussianContent: React.FC = () => (
           </li>
         </ul>
         <div className="mt-4 p-3 bg-slate-100 dark:bg-slate-900 rounded-lg">
-          <p className="font-mono text-xs text-slate-500 dark:text-slate-400">Пример структуры для нескольких наборов:</p>
+          <p className="font-mono text-xs text-slate-500 dark:text-slate-400">Пример структуры:</p>
           <pre className="font-mono text-slate-700 dark:text-slate-300 whitespace-pre-wrap text-xs leading-relaxed"><code>
-{`|      А      | B |      C       | D |      E      | F |       G        |
-|-------------|---|--------------|---|-------------|---|----------------|
-|   Русский   |   |  Английский  |   |  Немецкий   |   |   Английский   | <-- Строка заголовка
-|-------------|---|--------------|---|-------------|---|----------------|
-|     кот     |   |     cat      |   |    Katze    |   |       cat      | <-- Строки со словами
-|    собака   |   |     dog      |   |     Hund    |   |       dog      |`}
+{`|      А      | B |      C       |
+|-------------|---|--------------|
+|   Русский   |   |  Английский  | <-- Строка заголовка
+|-------------|---|--------------|
+|     кот     |   |     cat      | <-- Строки со словами
+|    собака   |   |     dog      |`}
         </code></pre>
         </div>
         <p className="mt-3">
@@ -165,14 +165,14 @@ const UkrainianContent: React.FC = () => (
           </li>
         </ul>
         <div className="mt-4 p-3 bg-slate-100 dark:bg-slate-900 rounded-lg">
-          <p className="font-mono text-xs text-slate-500 dark:text-slate-400">Приклад структури для кількох наборів:</p>
+          <p className="font-mono text-xs text-slate-500 dark:text-slate-400">Приклад структури:</p>
           <pre className="font-mono text-slate-700 dark:text-slate-300 whitespace-pre-wrap text-xs leading-relaxed"><code>
-{`|      А      | B |      C       | D |      E      | F |       G        |
-|-------------|---|--------------|---|-------------|---|----------------|
-| Українська  |   |  Англійська  |   |   Німецька  |   |   Англійська   | <-- Рядок заголовка
-|-------------|---|--------------|---|-------------|---|----------------|
-|      кіт    |   |     cat      |   |    Katze    |   |       cat      | <-- Рядки зі словами
-|    собака   |   |     dog      |   |     Hund    |   |       dog      |`}
+{`|      А      | B |      C       |
+|-------------|---|--------------|
+| Українська  |   |  Англійська  | <-- Рядок заголовка
+|-------------|---|--------------|
+|      кіт    |   |     cat      | <-- Рядки зі словами
+|    собака   |   |     dog      |`}
         </code></pre>
         </div>
         <p className="mt-3">
