@@ -33,6 +33,8 @@ const App: React.FC = () => {
     const [currentWordIndex, setCurrentWordIndex] = useState(0);
     const [isFlipped, setIsFlipped] = useState(false);
     const [reviewWords, setReviewWords] = useState<Word[]>([]);
+    const [isShuffled, setIsShuffled] = useState(false);
+
 
     // States for session progress tracking
     const [sessionProgress, setSessionProgress] = useState(0);
@@ -282,6 +284,7 @@ const App: React.FC = () => {
             return !progress || progress.nextReviewDate <= now;
         });
 
+        setIsShuffled(false);
         if (wordsForReview.length > 0) {
             setReviewWords(wordsForReview);
             setSessionTotal(wordsForReview.length);
@@ -464,7 +467,10 @@ const App: React.FC = () => {
         }
     };
 
-    const handleShuffle = () => setReviewWords(shuffleArray(reviewWords));
+    const handleShuffle = () => {
+        setReviewWords(shuffleArray(reviewWords));
+        setIsShuffled(true);
+    };
 
     const startDontKnowSession = () => {
         if (selectedSetIndex === null) return;
@@ -480,6 +486,7 @@ const App: React.FC = () => {
             setUserAnswer('');
             setIsDontKnowMode(true);
             setSessionActive(true);
+            setIsShuffled(false);
             if (trainingMode === 'guess') {
                 generateGuessOptions(shuffledWords[0]);
             }
@@ -663,6 +670,10 @@ const App: React.FC = () => {
         );
     }
 
+    const shuffleButtonClasses = isShuffled
+        ? 'text-indigo-600 dark:text-indigo-400 font-semibold'
+        : 'text-slate-500 dark:text-slate-400';
+
     return (
         <main className="min-h-screen flex flex-col items-center p-4 sm:p-6">
             <header className="w-full max-w-5xl flex justify-between items-center mb-6">
@@ -704,7 +715,7 @@ const App: React.FC = () => {
 
                 {currentSet && (
                     <div className="flex items-center justify-center gap-6 mt-6">
-                        <button onClick={handleShuffle} disabled={reviewWords.length <= 1} className="flex items-center gap-2 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                        <button onClick={handleShuffle} disabled={reviewWords.length <= 1} className={`flex items-center gap-2 hover:text-slate-900 dark:hover:text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${shuffleButtonClasses}`}>
                             <Shuffle size={18} /> Shuffle
                         </button>
                         <TranslationModeToggle mode={translationMode} onModeChange={setTranslationMode} lang1={currentSet.lang1} lang2={currentSet.lang2} />
