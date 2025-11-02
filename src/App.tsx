@@ -288,9 +288,7 @@ const App: React.FC = () => {
                 createdAt: new Date(),
             });
 
-            const newDictionary: UserDictionary = { id: docRef.id, name: trimmedName, storagePath: storagePath };
-            setCurrentUserDictionaryInfo(newDictionary);
-            return newDictionary;
+            return { id: docRef.id, name: trimmedName, storagePath: storagePath };
         } catch (err) {
             alert("Failed to auto-save dictionary. Please check your connection and Firebase Storage rules.");
             console.error("Auto-save error:", err);
@@ -298,7 +296,8 @@ const App: React.FC = () => {
         }
     };
 
-    const handleLoadUserDictionary = async (dictionary: UserDictionary) => {
+    const loadUserDictionary = async (dictionary: UserDictionary) => {
+        setIsLoading(true);
         setFileSourceModalOpen(false);
         try {
             const storageRef = ref(storage, dictionary.storagePath);
@@ -331,16 +330,12 @@ const App: React.FC = () => {
         }
     };
 
-    const loadUserDictionary = async (dictionary: UserDictionary) => {
-        setIsLoading(true);
-        await handleLoadUserDictionary(dictionary);
-    };
-
     const handleFilesSelect = async (name: string, wordsFile: File, sentencesFile?: File) => {
         setIsLoading(true);
         const isLocalFile = !!wordsFile.lastModified;
 
         try {
+            // 1. Handle optional sentences file
             let sentenceMapFromFile: Map<string, string> | null = null;
             if (sentencesFile) {
                 const text = await sentencesFile.text();
@@ -356,37 +351,36 @@ const App: React.FC = () => {
                 setSentences(prev => new Map([...prev, ...sentenceMapFromFile]));
             }
 
+            // 2. Reset all states for the new dictionary
+            setLearnedWords(new Map());
+            setDontKnowWords(new Map());
+            setReviewWords([]);
+            setSessionActive(false);
+            setSessionProgress(0);
+            setSessionTotal(0);
+            setCurrentWordIndex(0);
+            setIsDontKnowMode(false);
             setCurrentUserDictionaryInfo(null);
 
+            // 3. If it's a local file from the user's computer, save it automatically
             if (isLocalFile && user) {
                 const savedDictionary = await autoSaveDictionary(wordsFile, name);
                 if (savedDictionary) {
-                    await handleLoadUserDictionary(savedDictionary);
-                } else {
-                    setFileSourceModalOpen(true);
-                    setIsLoading(false);
+                    setCurrentUserDictionaryInfo(savedDictionary);
                 }
-            } else {
-                setLearnedWords(new Map());
-                setDontKnowWords(new Map());
-                setReviewWords([]);
-                setSessionActive(false);
-                setSessionProgress(0);
-                setSessionTotal(0);
-                setCurrentWordIndex(0);
-                setIsDontKnowMode(false);
-
-                const dictionary = await parseDictionaryFile(wordsFile);
-                dictionary.name = name;
-                setLoadedDictionary(dictionary);
-                setSelectedSetIndex(0);
-                setFileSourceModalOpen(false);
-                setIsLoading(false);
             }
+
+            // 4. Parse the dictionary file (either local or built-in) and load it into the app
+            const dictionary = await parseDictionaryFile(wordsFile);
+            dictionary.name = name;
+            setLoadedDictionary(dictionary);
+            setSelectedSetIndex(0);
+            setFileSourceModalOpen(false);
 
         } catch (error) {
             alert((error as Error).message);
             setLoadedDictionary(null);
+        } finally {
             setIsLoading(false);
         }
     };
