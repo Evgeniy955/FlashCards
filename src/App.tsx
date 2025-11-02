@@ -18,6 +18,7 @@ import { TrainingModeInput, AnswerState } from './components/TrainingModeInput';
 import { TrainingModeGuess } from './components/TrainingModeGuess';
 import { TrainingModeToggle } from './components/TrainingModeToggle';
 import { TranslationModeToggle } from './components/TranslationModeToggle';
+import { saveLocalProgress, loadLocalProgress, deleteLocalProgress } from './lib/localProgress';
 
 
 // --- Constants ---
@@ -107,10 +108,10 @@ const App: React.FC = () => {
     }, [sentences, user]);
 
 
-    // Load DICTIONARY-SPECIFIC progress from Firestore
+    // Load DICTIONARY-SPECIFIC progress from Firestore or Local Storage
     useEffect(() => {
         const loadProgress = async () => {
-            if (!user || !dictionaryId) {
+            if (!dictionaryId) {
                 setLearnedWords(new Map());
                 setDontKnowWords(new Map());
                 setIsProgressLoading(false);
@@ -118,28 +119,40 @@ const App: React.FC = () => {
             }
 
             setIsProgressLoading(true);
-            const docRef = doc(db, `users/${user.uid}/progress/${dictionaryId}`);
             try {
-                const docSnap = await getDoc(docRef);
-                if (docSnap.exists()) {
-                    const data = docSnap.data();
-                    const learnedData = data?.learnedWords || {};
-                    setLearnedWords(new Map(Object.entries(learnedData)));
-                    
-                    const dontKnowData = data?.dontKnowWords || {};
-                    const dontKnowMap = new Map(
-                        Object.entries(dontKnowData).map(([key, value]) => [
-                            Number(key),
-                            value as Word[],
-                        ])
-                    );
-                    setDontKnowWords(dontKnowMap);
-                } else {
-                    setLearnedWords(new Map());
-                    setDontKnowWords(new Map());
+                if (user) { // User is logged in, use Firestore
+                    const docRef = doc(db, `users/${user.uid}/progress/${dictionaryId}`);
+                    const docSnap = await getDoc(docRef);
+                    if (docSnap.exists()) {
+                        const data = docSnap.data();
+                        const learnedData = data?.learnedWords || {};
+                        setLearnedWords(new Map(Object.entries(learnedData)));
+                        const dontKnowData = data?.dontKnowWords || {};
+                        const dontKnowMap = new Map(
+                            Object.entries(dontKnowData).map(([key, value]) => [Number(key), value as Word[]])
+                        );
+                        setDontKnowWords(dontKnowMap);
+                    } else {
+                        setLearnedWords(new Map());
+                        setDontKnowWords(new Map());
+                    }
+                } else { // User is not logged in, use IndexedDB
+                    const localProgress = await loadLocalProgress(dictionaryId);
+                    if (localProgress) {
+                        const learnedData = localProgress.learnedWords || {};
+                        setLearnedWords(new Map(Object.entries(learnedData)));
+                        const dontKnowData = localProgress.dontKnowWords || {};
+                        const dontKnowMap = new Map(
+                            Object.entries(dontKnowData).map(([key, value]) => [Number(key), value as Word[]])
+                        );
+                        setDontKnowWords(dontKnowMap);
+                    } else {
+                        setLearnedWords(new Map());
+                        setDontKnowWords(new Map());
+                    }
                 }
             } catch (error) {
-                console.error("Error loading dictionary progress from Firestore:", error);
+                console.error("Error loading progress:", error);
                 setLearnedWords(new Map());
                 setDontKnowWords(new Map());
             } finally {
@@ -150,27 +163,37 @@ const App: React.FC = () => {
         loadProgress();
     }, [user, dictionaryId]);
 
-    // Save DICTIONARY-SPECIFIC progress to Firestore
+    // Save DICTIONARY-SPECIFIC progress to Firestore or Local Storage
     useEffect(() => {
-        if (isProgressLoading || !user || !dictionaryId) {
+        if (isProgressLoading || !dictionaryId) {
             return;
         }
 
         const handler = setTimeout(async () => {
-            const docRef = doc(db, `users/${user.uid}/progress/${dictionaryId}`);
             const dataToSave = {
                 learnedWords: Object.fromEntries(learnedWords),
                 dontKnowWords: Object.fromEntries(dontKnowWords),
             };
-            try {
-                await setDoc(docRef, dataToSave, { merge: true });
-            } catch (error) {
-                console.error("Error saving dictionary progress to Firestore:", error);
+
+            if (user) {
+                const docRef = doc(db, `users/${user.uid}/progress/${dictionaryId}`);
+                try {
+                    await setDoc(docRef, dataToSave, { merge: true });
+                } catch (error) {
+                    console.error("Error saving dictionary progress to Firestore:", error);
+                }
+            } else {
+                try {
+                    await saveLocalProgress(dictionaryId, dataToSave);
+                } catch (error) {
+                    console.error("Error saving local progress:", error);
+                }
             }
         }, 1500);
 
         return () => clearTimeout(handler);
     }, [learnedWords, dontKnowWords, user, dictionaryId, isProgressLoading]);
+
 
     const currentSet = useMemo(() => selectedSetIndex !== null ? loadedDictionary?.sets[selectedSetIndex] : null, [selectedSetIndex, loadedDictionary]);
 
@@ -488,11 +511,21 @@ const App: React.FC = () => {
     };
 
 
-    const handleResetProgress = () => {
-        if (globalThis.confirm('Are you sure you want to reset learning progress for this dictionary? Your global sentence list will not be affected.')) {
+    const handleResetProgress = async () => {
+        if (globalThis.confirm('Are you sure you want to reset learning progress for this dictionary? This action cannot be undone.')) {
+            // Clearing state will trigger the save effect, which overwrites Firestore data for logged-in users.
+            // For logged-out users, we need to explicitly delete from IndexedDB.
+            if (!user && dictionaryId) {
+                try {
+                    await deleteLocalProgress(dictionaryId);
+                } catch (error) {
+                    console.error("Error deleting local progress:", error);
+                    alert("Could not delete local progress. Please try again.");
+                }
+            }
             setLearnedWords(new Map());
             setDontKnowWords(new Map());
-            setSessionActive(false);
+            setSessionActive(false); // This will trigger a re-start of the session
         }
     };
 

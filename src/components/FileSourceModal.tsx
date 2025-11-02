@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Modal } from './Modal';
 import { FileUpload } from './FileUpload';
 import { BuiltInDictionaries } from './BuiltInDictionaries';
-import { LocalDictionaries } from './LocalDictionaries';
+import { LocalDictionaries } from './LocalDictionaries.tsx';
 import { saveDictionary } from '../lib/indexedDB';
 import { Library, Upload, Database } from 'lucide-react';
 
