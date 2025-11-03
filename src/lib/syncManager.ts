@@ -1,6 +1,6 @@
 import { User } from 'firebase/auth';
-import { ref, listAll, uploadBytes } from 'firebase/storage';
 import { storage } from './firebase-client';
+import { ref, listAll, uploadBytes } from 'firebase/storage';
 import { getDictionaries, getDictionary } from './indexedDB';
 
 /**
