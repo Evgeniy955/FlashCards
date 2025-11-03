@@ -5,7 +5,6 @@ import { BuiltInDictionaries } from './BuiltInDictionaries';
 import { LocalDictionaries } from './LocalDictionaries';
 import { saveDictionary } from '../lib/indexedDB';
 import { Library, Upload, Database } from 'lucide-react';
-import { User } from 'firebase/auth';
 
 
 interface FileSourceModalProps {
@@ -13,7 +12,6 @@ interface FileSourceModalProps {
   onClose: () => void;
   onFilesSelect: (name: string, wordsFile: File, sentencesFile?: File) => void;
   isLoading: boolean;
-  user: User | null | undefined;
 }
 
 type Tab = 'built-in' | 'local' | 'computer';
@@ -33,7 +31,7 @@ const TabButton = ({ activeTab, tab, onClick, children }: React.PropsWithChildre
 );
 
 
-export const FileSourceModal: React.FC<FileSourceModalProps> = ({ isOpen, onClose, onFilesSelect, isLoading, user }) => {
+export const FileSourceModal: React.FC<FileSourceModalProps> = ({ isOpen, onClose, onFilesSelect, isLoading }) => {
   const [activeTab, setActiveTab] = useState<Tab>('built-in');
   const [isUploading, setIsUploading] = useState(false);
   const [uploadCounter, setUploadCounter] = useState(0);
@@ -43,7 +41,6 @@ export const FileSourceModal: React.FC<FileSourceModalProps> = ({ isOpen, onClos
     setIsUploading(true);
     
     try {
-      // The dictionary is now only saved locally. The cloud sync is handled by a separate background process.
       await saveDictionary(dictionaryName, file);
 
       setIsUploading(false);
@@ -78,7 +75,7 @@ export const FileSourceModal: React.FC<FileSourceModalProps> = ({ isOpen, onClos
           <BuiltInDictionaries onSelect={handleBuiltInSelect} />
         )}
         {activeTab === 'local' && (
-          <LocalDictionaries key={uploadCounter} onSelect={handleLocalDictionarySelect} user={user} />
+          <LocalDictionaries key={uploadCounter} onSelect={handleLocalDictionarySelect} />
         )}
         {activeTab === 'computer' && (
           <FileUpload onFileUpload={handleFileUpload} isLoading={isUploading} />

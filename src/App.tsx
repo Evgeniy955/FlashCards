@@ -20,7 +20,6 @@ import { TrainingModeToggle } from './components/TrainingModeToggle';
 import { TranslationModeToggle } from './components/TranslationModeToggle';
 import { saveLocalProgress, loadLocalProgress, deleteLocalProgress } from './lib/localProgress';
 import { ThemeToggle } from './components/ThemeToggle';
-import { syncLocalDictionariesToCloud } from './lib/syncManager';
 
 
 // --- Constants ---
@@ -93,13 +92,6 @@ const App: React.FC = () => {
 
     // FIX: Replaced `replaceAll` with `replace` with a global regex for wider compatibility.
     const dictionaryId = useMemo(() => loadedDictionary?.name.replace(/[./]/g, '_'), [loadedDictionary]);
-
-    // Effect to sync local dictionaries to the cloud on login
-    useEffect(() => {
-        if (user) {
-            syncLocalDictionariesToCloud(user);
-        }
-    }, [user]);
 
     // Load global sentences from Firestore user document
     useEffect(() => {
@@ -666,7 +658,7 @@ const App: React.FC = () => {
     if (!loadedDictionary) {
         return (
             <main className="min-h-screen flex flex-col items-center justify-center p-4">
-                <FileSourceModal isOpen={isFileSourceModalOpen} onClose={() => setFileSourceModalOpen(false)} onFilesSelect={handleFilesSelect} isLoading={isLoading} user={user} />
+                <FileSourceModal isOpen={isFileSourceModalOpen} onClose={() => setFileSourceModalOpen(false)} onFilesSelect={handleFilesSelect} isLoading={isLoading} />
                 <div className="text-center">
                     <h1 className="text-5xl font-bold mb-4">Flashcard App</h1>
                     <p className="text-slate-500 dark:text-slate-400 mb-8">Your personal language learning assistant.</p>
@@ -736,7 +728,7 @@ const App: React.FC = () => {
                 {currentSet && <WordList words={currentSet.words} isVisible={isWordListVisible} lang1={currentSet.lang1} lang2={currentSet.lang2} />}
             </div>
 
-            <FileSourceModal isOpen={isFileSourceModalOpen && !loadedDictionary} onClose={() => setFileSourceModalOpen(false)} onFilesSelect={handleFilesSelect} isLoading={isLoading} user={user} />
+            <FileSourceModal isOpen={isFileSourceModalOpen && !loadedDictionary} onClose={() => setFileSourceModalOpen(false)} onFilesSelect={handleFilesSelect} isLoading={isLoading} />
             <InstructionsModal isOpen={isInstructionsModalOpen} onClose={() => setInstructionsModalOpen(false)} />
             <LearnedWordsModal isOpen={isLearnedWordsModalOpen} onClose={() => setLearnedWordsModalOpen(false)} learnedWords={learnedWordsWithDetails} lang1={currentSet?.lang1 || 'Language 1'} lang2={currentSet?.lang2 || 'Language 2'} />
         </main>
