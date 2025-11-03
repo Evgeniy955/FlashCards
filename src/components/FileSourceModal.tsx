@@ -6,8 +6,9 @@ import { LocalDictionaries } from './LocalDictionaries';
 import { saveDictionary } from '../lib/indexedDB';
 import { Library, Upload, Database } from 'lucide-react';
 import { User } from 'firebase/auth';
-import { storage } from '../lib/firebase-client';
-import { ref, uploadBytes } from 'firebase/storage';
+import { db } from '../lib/firebase-client';
+import { doc, setDoc } from 'firebase/firestore';
+import { fileToBase64 } from '../utils/fileUtils';
 
 
 interface FileSourceModalProps {
@@ -19,6 +20,8 @@ interface FileSourceModalProps {
 }
 
 type Tab = 'built-in' | 'local' | 'computer';
+
+const FIRESTORE_DOC_SIZE_LIMIT = 950 * 1024; // 950 KB to be safe from 1 MiB limit
 
 // Moved TabButton outside the component to prevent re-creation on each render.
 const TabButton = ({ activeTab, tab, onClick, children }: React.PropsWithChildren<{ activeTab: Tab, tab: Tab, onClick: (tab: Tab) => void }>) => (
@@ -47,18 +50,25 @@ export const FileSourceModal: React.FC<FileSourceModalProps> = ({ isOpen, onClos
     try {
       await saveDictionary(dictionaryName, file);
 
-      // If user is logged in, save to Firebase Storage after a delay.
-      // This is a "fire and forget" operation from the user's perspective.
+      // Sync to Firestore if user is logged in and file is within size limits
       if (user) {
-        setTimeout(async () => {
+        if (file.size > FIRESTORE_DOC_SIZE_LIMIT) {
+          console.warn(`File ${file.name} is too large (${file.size} bytes) to sync to Firestore. It's saved locally.`);
+        } else {
           try {
-            const storageRef = ref(storage, `users/${user.uid}/dictionaries/${file.name}`);
-            await uploadBytes(storageRef, file);
+            const base64Content = await fileToBase64(file);
+            const dictionaryDocRef = doc(db, `users/${user.uid}/dictionaries/${file.name}`);
+            await setDoc(dictionaryDocRef, {
+              name: file.name,
+              content: base64Content,
+              mimeType: file.type,
+              lastModified: new Date(),
+            });
           } catch (error) {
-            console.error("Background dictionary sync to Firebase failed:", error);
-            // We don't alert the user as this is a background task.
+            console.error("Firestore dictionary sync failed:", error);
+            // Non-blocking, as it's saved locally. Could show a non-modal notification.
           }
-        }, 5000);
+        }
       }
 
       setIsUploading(false);
