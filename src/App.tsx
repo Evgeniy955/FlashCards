@@ -1,8 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useAuthState } from 'react-firebase-hooks/auth';
 import { auth, db } from './lib/firebase-client';
-// FIX: Updated firestore imports to v8 syntax. `doc`, `getDoc`, `setDoc` are no longer needed.
-import { DocumentReference, DocumentData } from 'firebase/firestore';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { Flashcard } from './components/Flashcard';
 import { ProgressBar } from './components/ProgressBar';
 import { SetSelector } from './components/SetSelector';
@@ -109,12 +108,10 @@ const App: React.FC = () => {
                 setSentences(new Map());
                 return;
             }
-            // FIX: Use v8 syntax for Firestore document reference.
-            const userDocRef = db.collection('users').doc(user.uid);
+            const userDocRef = doc(db, 'users', user.uid);
             try {
-                // FIX: Use v8 syntax for getting a document.
-                const docSnap = await userDocRef.get();
-                if (docSnap.exists) {
+                const docSnap = await getDoc(userDocRef);
+                if (docSnap.exists()) {
                     const data = docSnap.data();
                     if (data?.globalSentences) {
                         setSentences(new Map(Object.entries(data.globalSentences)));
@@ -135,11 +132,9 @@ const App: React.FC = () => {
         if (!user) return;
 
         const handler = setTimeout(async () => {
-            // FIX: Use v8 syntax for Firestore document reference.
-            const userDocRef = db.collection('users').doc(user.uid);
+            const userDocRef = doc(db, 'users', user.uid);
             try {
-                // FIX: Use v8 syntax for setting a document.
-                await userDocRef.set({
+                await setDoc(userDocRef, {
                     globalSentences: Object.fromEntries(sentences)
                 }, { merge: true });
             } catch (error) {
@@ -164,11 +159,9 @@ const App: React.FC = () => {
             setIsProgressLoading(true);
             try {
                 if (user) { // User is logged in, use Firestore
-                    // FIX: Use v8 syntax for Firestore document reference.
-                    const docRef = db.doc(`users/${user.uid}/progress/${dictionaryId}`);
-                    // FIX: Use v8 syntax for getting a document.
-                    const docSnap = await docRef.get();
-                    if (docSnap.exists) {
+                    const docRef = doc(db, `users/${user.uid}/progress/${dictionaryId}`);
+                    const docSnap = await getDoc(docRef);
+                    if (docSnap.exists()) {
                         const data = docSnap.data();
                         const learnedData = data?.learnedWords || {};
                         setLearnedWords(new Map(Object.entries(learnedData)));
@@ -221,11 +214,9 @@ const App: React.FC = () => {
             };
 
             if (user) {
-                // FIX: Use v8 syntax for Firestore document reference.
-                const docRef = db.doc(`users/${user.uid}/progress/${dictionaryId}`);
+                const docRef = doc(db, `users/${user.uid}/progress/${dictionaryId}`);
                 try {
-                    // FIX: Use v8 syntax for setting a document.
-                    await docRef.set(dataToSave, { merge: true });
+                    await setDoc(docRef, dataToSave, { merge: true });
                 } catch (error) {
                     console.error("Error saving dictionary progress to Firestore:", error);
                 }

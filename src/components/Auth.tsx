@@ -1,8 +1,5 @@
 import React from 'react';
-// FIX: Updated to use Firebase v8 syntax. `GoogleAuthProvider` is now accessed via the firebase namespace. `signInWithPopup` and `signOut` are methods on the auth instance.
-import firebase from 'firebase/app';
-import 'firebase/auth';
-import { User } from 'firebase/auth';
+import { GoogleAuthProvider, signInWithPopup, signOut, User } from 'firebase/auth';
 import { auth } from '../lib/firebase-client';
 
 const GoogleIcon = () => (
@@ -22,11 +19,9 @@ interface AuthProps {
 export const Auth: React.FC<AuthProps> = ({ user }) => {
     
     const handleSignIn = async () => {
-        // FIX: Use v8 syntax for GoogleAuthProvider.
-        const provider = new firebase.auth.GoogleAuthProvider();
+        const provider = new GoogleAuthProvider();
         try {
-            // FIX: Use v8 syntax for signInWithPopup.
-            await auth.signInWithPopup(provider);
+            await signInWithPopup(auth, provider);
         } catch (error) {
             console.error("Authentication failed:", error);
         }
@@ -34,8 +29,7 @@ export const Auth: React.FC<AuthProps> = ({ user }) => {
 
     const handleSignOut = async () => {
         try {
-            // FIX: Use v8 syntax for signOut.
-            await auth.signOut();
+            await signOut(auth);
         } catch (error) {
             console.error("Sign out failed:", error);
         }

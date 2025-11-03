@@ -3,8 +3,7 @@ import { Database, Loader2, Trash2, Cloud, AlertTriangle } from 'lucide-react';
 import { getDictionaries, getDictionary, deleteDictionary, saveDictionary } from '../lib/indexedDB';
 import { User } from 'firebase/auth';
 import { storage } from '../lib/firebase-client';
-// FIX: Updated to use Firebase v8 syntax. `ref`, `listAll`, etc. are now methods on the storage instance.
-import 'firebase/storage';
+import { ref, listAll, getDownloadURL, deleteObject } from 'firebase/storage';
 
 interface LocalDictionariesProps {
   onSelect: (name: string, wordsFile: File) => void;
@@ -47,11 +46,9 @@ export const LocalDictionaries: React.FC<LocalDictionariesProps> = ({ onSelect, 
 
       // Attempt to fetch from the cloud ONLY if logged in and a fetch hasn't failed yet in this session.
       if (uid && !cloudFetchFailed) {
-        // FIX: Use v8 syntax for storage reference.
-        const listRef = storage.ref(`user_dictionaries/${uid}`);
+        const listRef = ref(storage, `user_dictionaries/${uid}`);
         try {
-          // FIX: Use v8 syntax for listing files.
-          const res = await listRef.listAll();
+          const res = await listAll(listRef);
           for (const itemRef of res.items) {
               const cleanName = itemRef.name.endsWith('.xlsx') ? itemRef.name.slice(0, -5) : itemRef.name;
               // Cloud source takes precedence if it exists
@@ -92,10 +89,8 @@ export const LocalDictionaries: React.FC<LocalDictionariesProps> = ({ onSelect, 
 
       // If not local and user is logged in, try fetching from Storage
       if (user) {
-        // FIX: Use v8 syntax for storage reference.
-        const fileRef = storage.ref(`user_dictionaries/${user.uid}/${name}.xlsx`);
-        // FIX: Use v8 syntax for getting download URL.
-        const url = await fileRef.getDownloadURL();
+        const fileRef = ref(storage, `user_dictionaries/${user.uid}/${name}.xlsx`);
+        const url = await getDownloadURL(fileRef);
         const response = await fetch(url);
         if (!response.ok) throw new Error('Download failed.');
         
@@ -123,12 +118,11 @@ export const LocalDictionaries: React.FC<LocalDictionariesProps> = ({ onSelect, 
         await deleteDictionary(name);
         
         if (user) {
-            // FIX: Use v8 syntax for storage reference.
-            const fileRef = storage.ref(`user_dictionaries/${user.uid}/${name}.xlsx`);
-            // FIX: Use v8 syntax for deleting an object.
+            const fileRef = ref(storage, `user_dictionaries/${user.uid}/${name}.xlsx`);
             // deleteObject will not throw an error if the file doesn't exist.
-            await fileRef.delete().catch(error => {
+            await deleteObject(fileRef).catch(error => {
                 // We can ignore 'object-not-found' as it might have been only local.
+                // @ts-ignore
                 if (error.code !== 'storage/object-not-found') throw error;
             });
         }
