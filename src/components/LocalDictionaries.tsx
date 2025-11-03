@@ -70,23 +70,28 @@ export const LocalDictionaries: React.FC<LocalDictionariesProps> = ({ onSelect }
     if (window.confirm(`Are you sure you want to delete "${name}"? This will permanently remove it from this device and from the cloud if synced.`)) {
       setActionInProgress({ name, type: 'delete' });
       setError(null);
+      let fileNameToDelete: string | null = null;
+  
       try {
-        let fileNameToDelete: string | null = null;
+        // Step 1: Get the full filename BEFORE any deletion attempts.
+        // This also verifies that the local data is readable.
         const dictFromDb = await getDictionary(name);
-        if (dictFromDb) {
-            fileNameToDelete = dictFromDb.file.name;
+        if (!dictFromDb?.file?.name) {
+            throw new Error("Could not retrieve dictionary details from the local database. It might be corrupted or outdated.");
         }
-
-        await deleteDictionary(name); // Deletes from IndexedDB
-
+        fileNameToDelete = dictFromDb.file.name;
+  
+        // Step 2: Perform deletions now that we have the full filename.
+        await deleteDictionary(name); // Delete from IndexedDB
+  
         if (user && fileNameToDelete) {
-            const dictionaryDocRef = doc(db, `users/${user.uid}/dictionaries/${fileNameToDelete}`);
-            await deleteDoc(dictionaryDocRef);
+          const dictionaryDocRef = doc(db, `users/${user.uid}/dictionaries/${fileNameToDelete}`);
+          await deleteDoc(dictionaryDocRef);
         }
-
+  
         setSavedDicts(prev => prev.filter(d => d !== name));
       } catch (err) {
-        setError(`Failed to delete dictionary: ${name}`);
+        setError(`Failed to delete "${name}". This can happen after an app update. Please reload the page and try again.`);
         console.error(err);
       } finally {
         setActionInProgress(null);
