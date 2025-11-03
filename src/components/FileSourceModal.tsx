@@ -3,12 +3,12 @@ import { Modal } from './Modal';
 import { FileUpload } from './FileUpload';
 import { BuiltInDictionaries } from './BuiltInDictionaries';
 import { LocalDictionaries } from './LocalDictionaries';
-import { saveDictionary as saveDictionaryLocally } from '../lib/indexedDB';
-import { db, storage } from '../lib/firebase-client';
-import { ref, uploadBytes } from 'firebase/storage';
-import { doc, setDoc } from 'firebase/firestore';
-import { User } from 'firebase/auth';
+import { saveDictionary } from '../lib/indexedDB';
 import { Library, Upload, Database } from 'lucide-react';
+import { User } from 'firebase/auth';
+import { ref, uploadBytes } from 'firebase/storage';
+import { storage } from '../lib/firebase-client';
+
 
 interface FileSourceModalProps {
   isOpen: boolean;
@@ -20,6 +20,7 @@ interface FileSourceModalProps {
 
 type Tab = 'built-in' | 'local' | 'computer';
 
+// Moved TabButton outside the component to prevent re-creation on each render.
 const TabButton = ({ activeTab, tab, onClick, children }: React.PropsWithChildren<{ activeTab: Tab, tab: Tab, onClick: (tab: Tab) => void }>) => (
   <button
     onClick={() => onClick(tab)}
@@ -36,35 +37,29 @@ const TabButton = ({ activeTab, tab, onClick, children }: React.PropsWithChildre
 
 export const FileSourceModal: React.FC<FileSourceModalProps> = ({ isOpen, onClose, onFilesSelect, isLoading, user }) => {
   const [activeTab, setActiveTab] = useState<Tab>('built-in');
-  const [refreshKey, setRefreshKey] = useState(0);
 
-  const handleFileUploaded = async (file: File) => {
+  const handleLocalFileSelect = async (file: File) => {
     const dictionaryName = file.name.endsWith('.xlsx') ? file.name.slice(0, -5) : file.name;
     
+    // Always save to IndexedDB for offline access and speed
     try {
-      if (user) {
-        // Logged-in user: save to Firebase Storage and Firestore
-        const storageRef = ref(storage, `user_dictionaries/${user.uid}/${file.name}`);
-        await uploadBytes(storageRef, file);
-        
-        const docRef = doc(db, `users/${user.uid}/dictionaries/${dictionaryName}`);
-        await setDoc(docRef, {
-            fileName: file.name,
-            createdAt: new Date().toISOString()
-        });
-        
-      } else {
-        // Anonymous user: save to IndexedDB
-        await saveDictionaryLocally(dictionaryName, file);
-      }
-      
-      setRefreshKey(k => k + 1); // Trigger refresh in LocalDictionaries
-      setActiveTab('local'); // Switch to local tab to show the new entry
-
+      await saveDictionary(dictionaryName, file);
     } catch (error) {
-        console.error("Failed to save dictionary:", error);
-        alert("Could not save the dictionary for future sessions, but it will be loaded for the current one.");
+        console.error("Failed to save dictionary to IndexedDB:", error);
+        // This is not a critical failure, so we just log it and continue.
     }
+
+    // If user is logged in, also upload to Firebase Storage
+    if (user) {
+        const storageRef = ref(storage, `user_dictionaries/${user.uid}/${file.name}`);
+        try {
+            await uploadBytes(storageRef, file);
+        } catch (error) {
+            console.error("Failed to upload dictionary to Firebase Storage:", error);
+            alert(`Failed to upload dictionary to your account due to an error: ${(error as Error).message}. It will be available on this device only.`);
+        }
+    }
+
     onFilesSelect(dictionaryName, file);
   };
 
@@ -88,10 +83,10 @@ export const FileSourceModal: React.FC<FileSourceModalProps> = ({ isOpen, onClos
           <BuiltInDictionaries onSelect={handleBuiltInSelect} />
         )}
         {activeTab === 'local' && (
-          <LocalDictionaries onSelect={handleLocalDictionarySelect} refreshKey={refreshKey} user={user} />
+          <LocalDictionaries onSelect={handleLocalDictionarySelect} user={user} />
         )}
         {activeTab === 'computer' && (
-          <FileUpload onFileUpload={handleFileUploaded} isLoading={isLoading} />
+          <FileUpload onFileUpload={handleLocalFileSelect} isLoading={isLoading} />
         )}
       </div>
     </Modal>
