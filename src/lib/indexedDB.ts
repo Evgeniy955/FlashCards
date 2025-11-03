@@ -5,7 +5,7 @@ const STORE_NAME = 'dictionaries';
 const DB_VERSION = 2; // Incremented version to trigger schema update
 
 // The object structure stored in IndexedDB
-interface StoredDictionaryObject {
+export interface StoredDictionaryObject {
     name: string; // The keyPath, e.g., "MyList"
     fileName: string; // The full original filename, e.g., "MyList.xlsx"
     mimeType: string;
@@ -16,25 +16,25 @@ interface StoredDictionaryObject {
 
 // The convenient structure returned to the app
 export interface StoredDictionary {
-  name: string;
-  file: File;
+    name: string;
+    file: File;
 }
 
 const openDB = (): Promise<IDBDatabase> => {
-  return new Promise((resolve, reject) => {
-    const request = indexedDB.open(DB_NAME, DB_VERSION);
-    request.onerror = () => reject(new Error('Failed to open IndexedDB.'));
-    request.onsuccess = () => resolve(request.result);
-    request.onupgradeneeded = (event) => {
-      const db = (event.target as IDBOpenDBRequest).result;
-      // If the object store exists, it might be an old version.
-      // Delete it and create a new one to ensure schema compatibility.
-      if (db.objectStoreNames.contains(STORE_NAME)) {
-        db.deleteObjectStore(STORE_NAME);
-      }
-      db.createObjectStore(STORE_NAME, { keyPath: 'name' });
-    };
-  });
+    return new Promise((resolve, reject) => {
+        const request = indexedDB.open(DB_NAME, DB_VERSION);
+        request.onerror = () => reject(new Error('Failed to open IndexedDB.'));
+        request.onsuccess = () => resolve(request.result);
+        request.onupgradeneeded = (event) => {
+            const db = (event.target as IDBOpenDBRequest).result;
+            // If the object store exists, it might be an old version.
+            // Delete it and create a new one to ensure schema compatibility.
+            if (db.objectStoreNames.contains(STORE_NAME)) {
+                db.deleteObjectStore(STORE_NAME);
+            }
+            db.createObjectStore(STORE_NAME, { keyPath: 'name' });
+        };
+    });
 };
 
 export const saveDictionary = async (name: string, file: File): Promise<void> => {
@@ -66,6 +66,18 @@ export const getDictionaries = async (): Promise<string[]> => {
         const store = transaction.objectStore(STORE_NAME);
         const request = store.getAllKeys();
         request.onsuccess = () => resolve(request.result as string[]);
+        request.onerror = () => reject(request.error);
+    });
+};
+
+export const getAllDictionaryDetails = async (): Promise<StoredDictionaryObject[]> => {
+    const db = await openDB();
+    return new Promise((resolve, reject) => {
+        const transaction = db.transaction(STORE_NAME, 'readonly');
+        transaction.onerror = () => reject(transaction.error);
+        const store = transaction.objectStore(STORE_NAME);
+        const request = store.getAll();
+        request.onsuccess = () => resolve(request.result as StoredDictionaryObject[]);
         request.onerror = () => reject(request.error);
     });
 };
