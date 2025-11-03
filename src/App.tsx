@@ -20,6 +20,7 @@ import { TrainingModeToggle } from './components/TrainingModeToggle';
 import { TranslationModeToggle } from './components/TranslationModeToggle';
 import { saveLocalProgress, loadLocalProgress, deleteLocalProgress } from './lib/localProgress';
 import { ThemeToggle } from './components/ThemeToggle';
+import { syncLocalDictionariesToCloud } from './lib/syncManager';
 
 
 // --- Constants ---
@@ -92,6 +93,13 @@ const App: React.FC = () => {
 
     // FIX: Replaced `replaceAll` with `replace` with a global regex for wider compatibility.
     const dictionaryId = useMemo(() => loadedDictionary?.name.replace(/[./]/g, '_'), [loadedDictionary]);
+
+    // Effect to sync local dictionaries to the cloud on login
+    useEffect(() => {
+        if (user) {
+            syncLocalDictionariesToCloud(user);
+        }
+    }, [user]);
 
     // Load global sentences from Firestore user document
     useEffect(() => {

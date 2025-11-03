@@ -1,4 +1,4 @@
-// FIX: `initializeApp` is a named export in Firebase v9+, not a property on a namespace. Switched to a named import.
+// FIX: The original import for `initializeApp` was causing an error. This has been corrected to align with Firebase v9+ modular SDK standards.
 import { initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
