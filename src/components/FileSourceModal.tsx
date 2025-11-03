@@ -5,6 +5,9 @@ import { BuiltInDictionaries } from './BuiltInDictionaries';
 import { LocalDictionaries } from './LocalDictionaries';
 import { saveDictionary } from '../lib/indexedDB';
 import { Library, Upload, Database } from 'lucide-react';
+import { User } from 'firebase/auth';
+import { storage } from '../lib/firebase-client';
+import { ref, uploadBytes } from 'firebase/storage';
 
 
 interface FileSourceModalProps {
@@ -12,6 +15,7 @@ interface FileSourceModalProps {
   onClose: () => void;
   onFilesSelect: (name: string, wordsFile: File, sentencesFile?: File) => void;
   isLoading: boolean;
+  user: User | null | undefined;
 }
 
 type Tab = 'built-in' | 'local' | 'computer';
@@ -31,7 +35,7 @@ const TabButton = ({ activeTab, tab, onClick, children }: React.PropsWithChildre
 );
 
 
-export const FileSourceModal: React.FC<FileSourceModalProps> = ({ isOpen, onClose, onFilesSelect, isLoading }) => {
+export const FileSourceModal: React.FC<FileSourceModalProps> = ({ isOpen, onClose, onFilesSelect, isLoading, user }) => {
   const [activeTab, setActiveTab] = useState<Tab>('built-in');
   const [isUploading, setIsUploading] = useState(false);
   const [uploadCounter, setUploadCounter] = useState(0);
@@ -42,6 +46,20 @@ export const FileSourceModal: React.FC<FileSourceModalProps> = ({ isOpen, onClos
     
     try {
       await saveDictionary(dictionaryName, file);
+
+      // If user is logged in, save to Firebase Storage after a delay.
+      // This is a "fire and forget" operation from the user's perspective.
+      if (user) {
+        setTimeout(async () => {
+          try {
+            const storageRef = ref(storage, `users/${user.uid}/dictionaries/${file.name}`);
+            await uploadBytes(storageRef, file);
+          } catch (error) {
+            console.error("Background dictionary sync to Firebase failed:", error);
+            // We don't alert the user as this is a background task.
+          }
+        }, 5000);
+      }
 
       setIsUploading(false);
       // Switch to the 'My Dictionaries' tab to show the newly added file
