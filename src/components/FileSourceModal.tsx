@@ -46,7 +46,7 @@ export const FileSourceModal: React.FC<FileSourceModalProps> = ({ isOpen, onClos
   const handleFileUpload = async (file: File) => {
     const dictionaryName = file.name.endsWith('.xlsx') ? file.name.slice(0, -5) : file.name;
     setIsUploading(true);
-    
+
     try {
       await saveDictionary(dictionaryName, file);
 
@@ -66,7 +66,7 @@ export const FileSourceModal: React.FC<FileSourceModalProps> = ({ isOpen, onClos
             });
           } catch (error) {
             console.error("Firestore dictionary sync failed:", error);
-            // Non-blocking, as it's saved locally. Could show a non-modal notification.
+            alert(`Dictionary saved locally, but failed to sync to the cloud. Please check your internet connection and Firestore permissions. Error: ${(error as Error).message}`);
           }
         }
       }
@@ -86,7 +86,7 @@ export const FileSourceModal: React.FC<FileSourceModalProps> = ({ isOpen, onClos
   const handleBuiltInSelect = (name: string, wordsFile: File, sentencesFile?: File) => {
     onFilesSelect(name, wordsFile, sentencesFile);
   };
-  
+
   const handleLocalDictionarySelect = (name: string, wordsFile: File) => {
     onFilesSelect(name, wordsFile);
   };
