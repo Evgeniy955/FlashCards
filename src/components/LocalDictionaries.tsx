@@ -19,7 +19,7 @@ export const LocalDictionaries: React.FC<LocalDictionariesProps> = ({ onSelect, 
   const [savedDicts, setSavedDicts] = useState<DictionarySource[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [actionInProgress, setActionInProgress] = useState<string | null>(null);
+  const [actionInProgress, setActionInProgress] = useState<{ name: string, type: 'select' | 'delete' } | null>(null);
 
   const fetchDictionaries = useCallback(async () => {
     setIsLoading(true);
@@ -28,20 +28,22 @@ export const LocalDictionaries: React.FC<LocalDictionariesProps> = ({ onSelect, 
       const sources = new Map<string, 'local' | 'cloud'>();
       
       const localNames = await getDictionaries();
-      localNames.forEach(name => sources.set(name, 'local'));
+      for (const name of localNames) {
+        sources.set(name, 'local');
+      }
 
       if (user) {
         const listRef = ref(storage, `user_dictionaries/${user.uid}`);
         const res = await listAll(listRef);
-        res.items.forEach(itemRef => {
+        for (const itemRef of res.items) {
             const cleanName = itemRef.name.endsWith('.xlsx') ? itemRef.name.slice(0, -5) : itemRef.name;
             // Cloud source takes precedence if it exists
             sources.set(cleanName, 'cloud');
-        });
+        }
       }
 
       const combinedDicts: DictionarySource[] = Array.from(sources.entries()).map(([name, source]) => ({ name, source }));
-      setSavedDicts(combinedDicts.sort((a, b) => a.name.localeCompare(b.name)));
+      setSavedDicts([...combinedDicts].sort((a, b) => a.name.localeCompare(b.name)));
 
     } catch (err) {
       setError('Could not load saved dictionaries.');
@@ -56,7 +58,7 @@ export const LocalDictionaries: React.FC<LocalDictionariesProps> = ({ onSelect, 
   }, [fetchDictionaries]);
 
   const handleSelect = async (name: string) => {
-    setActionInProgress(name);
+    setActionInProgress({ name, type: 'select' });
     setError(null);
     try {
       // Always try local first for speed
@@ -91,7 +93,7 @@ export const LocalDictionaries: React.FC<LocalDictionariesProps> = ({ onSelect, 
 
   const handleDelete = async (name: string) => {
     if (window.confirm(`Are you sure you want to delete "${name}"? This will remove it from this device and from your account if you are logged in.`)) {
-      setActionInProgress(name);
+      setActionInProgress({ name, type: 'delete' });
       setError(null);
       try {
         await deleteDictionary(name);
@@ -136,7 +138,7 @@ export const LocalDictionaries: React.FC<LocalDictionariesProps> = ({ onSelect, 
                         disabled={!!actionInProgress}
                         className="w-full flex items-center gap-3 p-3 text-left text-sm text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 rounded-md transition-colors disabled:opacity-50"
                     >
-                         {actionInProgress === dict.name && !window.confirm ? (
+                         {actionInProgress?.name === dict.name && actionInProgress.type === 'select' ? (
                             <Loader2 className="animate-spin h-5 w-5 flex-shrink-0" />
                         ) : (
                             <Database className="h-5 w-5 flex-shrink-0" />
@@ -150,7 +152,7 @@ export const LocalDictionaries: React.FC<LocalDictionariesProps> = ({ onSelect, 
                         className="p-3 text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-700 hover:bg-rose-500 hover:text-white rounded-md transition-colors disabled:opacity-50 flex-shrink-0"
                         aria-label={`Delete ${dict.name}`}
                     >
-                         {actionInProgress === dict.name && window.confirm ? (
+                         {actionInProgress?.name === dict.name && actionInProgress.type === 'delete' ? (
                             <Loader2 className="animate-spin h-5 w-5" />
                          ) : (
                             <Trash2 size={18} />
