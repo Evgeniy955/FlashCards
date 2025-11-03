@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Modal } from './Modal';
 import { FileUpload } from './FileUpload';
 import { BuiltInDictionaries } from './BuiltInDictionaries';
-import { LocalDictionaries } from './LocalDictionaries.tsx';
+import { LocalDictionaries } from './LocalDictionaries';
 import { saveDictionary } from '../lib/indexedDB';
 import { Library, Upload, Database } from 'lucide-react';
 
@@ -35,7 +35,7 @@ export const FileSourceModal: React.FC<FileSourceModalProps> = ({ isOpen, onClos
 
   const handleLocalFileSelect = async (file: File) => {
     const dictionaryName = file.name.endsWith('.xlsx') ? file.name.slice(0, -5) : file.name;
-    
+
     try {
       await saveDictionary(dictionaryName, file);
     } catch (error) {
@@ -48,7 +48,7 @@ export const FileSourceModal: React.FC<FileSourceModalProps> = ({ isOpen, onClos
   const handleBuiltInSelect = (name: string, wordsFile: File, sentencesFile?: File) => {
     onFilesSelect(name, wordsFile, sentencesFile);
   };
-  
+
   const handleLocalDictionarySelect = (name: string, wordsFile: File) => {
     onFilesSelect(name, wordsFile);
   };
