@@ -8,9 +8,15 @@ import { firebaseConfig } from '../firebase-config';
 // Initialize Firebase with the modern v9+ API
 const app = firebaseApp.initializeApp(firebaseConfig);
 
-// Get auth, firestore, and storage instances using the v9+ modular functions
+// Get auth and firestore instances
 const auth = getAuth(app);
 const db = getFirestore(app);
-const storage = getStorage(app);
+
+// Explicitly construct the correct storage bucket URL from the project ID.
+// This corrects potential misconfigurations where the Realtime Database URL
+// might be used instead of the correct Cloud Storage bucket URL, which was
+// causing 404 errors on file downloads.
+const correctStorageBucket = `gs://${firebaseConfig.projectId}.appspot.com`;
+const storage = getStorage(app, correctStorageBucket);
 
 export { auth, db, storage };
