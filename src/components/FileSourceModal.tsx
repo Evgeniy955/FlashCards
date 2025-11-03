@@ -37,16 +37,21 @@ const TabButton = ({ activeTab, tab, onClick, children }: React.PropsWithChildre
 
 export const FileSourceModal: React.FC<FileSourceModalProps> = ({ isOpen, onClose, onFilesSelect, isLoading, user }) => {
   const [activeTab, setActiveTab] = useState<Tab>('built-in');
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadCounter, setUploadCounter] = useState(0);
 
-  const handleLocalFileSelect = async (file: File) => {
+  const handleFileUpload = async (file: File) => {
     const dictionaryName = file.name.endsWith('.xlsx') ? file.name.slice(0, -5) : file.name;
+    setIsUploading(true);
     
     // Always save to IndexedDB for offline access and speed
     try {
       await saveDictionary(dictionaryName, file);
     } catch (error) {
         console.error("Failed to save dictionary to IndexedDB:", error);
-        // This is not a critical failure, so we just log it and continue.
+        alert(`Failed to save dictionary locally: ${(error as Error).message}. Please try again.`);
+        setIsUploading(false);
+        return;
     }
 
     // If user is logged in, also upload to Firebase Storage
@@ -56,11 +61,16 @@ export const FileSourceModal: React.FC<FileSourceModalProps> = ({ isOpen, onClos
             await uploadBytes(storageRef, file);
         } catch (error) {
             console.error("Failed to upload dictionary to Firebase Storage:", error);
-            alert(`Failed to upload dictionary to your account due to an error: ${(error as Error).message}. It will be available on this device only.`);
+            alert(`Failed to upload dictionary to your account due to a network or permission error: ${(error as Error).message}. It has been saved on this device only.`);
+            // Don't abort, as it's saved locally which is a valid outcome.
         }
     }
 
-    onFilesSelect(dictionaryName, file);
+    setIsUploading(false);
+    // Switch to the 'My Dictionaries' tab to show the newly added file
+    setActiveTab('local');
+    // Increment a counter to force the LocalDictionaries component to re-mount and fetch the new list
+    setUploadCounter(c => c + 1);
   };
 
   const handleBuiltInSelect = (name: string, wordsFile: File, sentencesFile?: File) => {
@@ -83,10 +93,10 @@ export const FileSourceModal: React.FC<FileSourceModalProps> = ({ isOpen, onClos
           <BuiltInDictionaries onSelect={handleBuiltInSelect} />
         )}
         {activeTab === 'local' && (
-          <LocalDictionaries onSelect={handleLocalDictionarySelect} user={user} />
+          <LocalDictionaries key={uploadCounter} onSelect={handleLocalDictionarySelect} user={user} />
         )}
         {activeTab === 'computer' && (
-          <FileUpload onFileUpload={handleLocalFileSelect} isLoading={isLoading} />
+          <FileUpload onFileUpload={handleFileUpload} isLoading={isUploading} />
         )}
       </div>
     </Modal>

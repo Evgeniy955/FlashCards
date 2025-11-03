@@ -41,7 +41,7 @@ export const FileUpload: React.FC<FileUploadProps> = ({ onFileUpload, isLoading 
         </div>
         <input id="file-upload" type="file" className="hidden" onChange={handleFileChange} accept=".xlsx" disabled={isLoading} />
       </label>
-      {isLoading && <p className="mt-4 text-indigo-500 dark:text-indigo-400 animate-pulse">Processing file...</p>}
+      {isLoading && <p className="mt-4 text-indigo-500 dark:text-indigo-400 animate-pulse">Saving dictionary...</p>}
     </div>
   );
 };
