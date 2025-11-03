@@ -1,5 +1,6 @@
 import { User } from 'firebase/auth';
-import { ref, listAll, uploadBytes } from 'firebase/storage';
+// FIX: Updated to use Firebase v8 syntax. `ref`, `listAll`, etc. are now methods on the storage instance.
+import 'firebase/storage';
 import { storage } from './firebase-client';
 import { getDictionaries, getDictionary } from './indexedDB';
 
@@ -14,8 +15,10 @@ export const syncLocalDictionariesToCloud = async (user: User): Promise<void> =>
 
     try {
         // 1. Get list of remote dictionaries
-        const remoteListRef = ref(storage, `user_dictionaries/${user.uid}`);
-        const remoteFilesResult = await listAll(remoteListRef);
+        // FIX: Use v8 syntax for storage reference.
+        const remoteListRef = storage.ref(`user_dictionaries/${user.uid}`);
+        // FIX: Use v8 syntax for listing files.
+        const remoteFilesResult = await remoteListRef.listAll();
         const remoteNames = new Set(remoteFilesResult.items.map(item => item.name));
 
         // 2. Get list of local dictionaries
@@ -32,8 +35,10 @@ export const syncLocalDictionariesToCloud = async (user: User): Promise<void> =>
                 if (dictionaryData && dictionaryData.file) {
                     
                     // 5. Upload to Firebase Storage
-                    const storageRef = ref(storage, `user_dictionaries/${user.uid}/${remoteFileName}`);
-                    await uploadBytes(storageRef, dictionaryData.file);
+                    // FIX: Use v8 syntax for storage reference.
+                    const storageRef = storage.ref(`user_dictionaries/${user.uid}/${remoteFileName}`);
+                    // FIX: Use v8 syntax for uploading files (`put` instead of `uploadBytes`).
+                    await storageRef.put(dictionaryData.file);
                     console.log(`Successfully synced "${localName}".`);
                 }
             }

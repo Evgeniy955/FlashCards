@@ -1,16 +1,18 @@
-// FIX: The original import for `initializeApp` was causing an error. This has been corrected to align with Firebase v9+ modular SDK standards.
-import { initializeApp } from 'firebase/app';
-import { getAuth } from 'firebase/auth';
-import { getFirestore } from 'firebase/firestore';
-import { getStorage } from 'firebase/storage';
+// FIX: Updated to use Firebase v8 syntax to match the likely installed package version, resolving the import error for `initializeApp`.
+import firebase from 'firebase/app';
+import 'firebase/auth';
+import 'firebase/firestore';
+import 'firebase/storage';
 import { firebaseConfig } from '../firebase-config';
 
-// Initialize Firebase with the modern v9+ API
-const app = initializeApp(firebaseConfig);
+// Initialize Firebase with the v8 API
+if (!firebase.apps.length) {
+  firebase.initializeApp(firebaseConfig);
+}
 
-// Get auth and firestore instances using the v9+ modular functions
-const auth = getAuth(app);
-const db = getFirestore(app);
-const storage = getStorage(app);
+// Get auth and firestore instances using the v8 API
+const auth = firebase.auth();
+const db = firebase.firestore();
+const storage = firebase.storage();
 
 export { auth, db, storage };
