@@ -29,7 +29,7 @@ export const LocalDictionaries: React.FC<LocalDictionariesProps> = ({ onSelect }
           
           for (const doc of querySnapshot.docs) {
             const data = doc.data();
-            const dictBaseName = data.name.replace('.xlsx', '');
+            const dictBaseName = data.name.replace(/\.xlsx$/i, '');
             const file = base64ToFile(data.content, data.name, data.mimeType);
             await saveDictionary(dictBaseName, file); // This will add or overwrite
           }

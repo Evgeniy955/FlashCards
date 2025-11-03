@@ -44,9 +44,9 @@ export const FileSourceModal: React.FC<FileSourceModalProps> = ({ isOpen, onClos
   const [uploadCounter, setUploadCounter] = useState(0);
 
   const handleFileUpload = async (file: File) => {
-    const dictionaryName = file.name.endsWith('.xlsx') ? file.name.slice(0, -5) : file.name;
+    const dictionaryName = file.name.replace(/\.xlsx$/i, '');
     setIsUploading(true);
-
+    
     try {
       await saveDictionary(dictionaryName, file);
 
@@ -86,7 +86,7 @@ export const FileSourceModal: React.FC<FileSourceModalProps> = ({ isOpen, onClos
   const handleBuiltInSelect = (name: string, wordsFile: File, sentencesFile?: File) => {
     onFilesSelect(name, wordsFile, sentencesFile);
   };
-
+  
   const handleLocalDictionarySelect = (name: string, wordsFile: File) => {
     onFilesSelect(name, wordsFile);
   };
