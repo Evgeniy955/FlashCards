@@ -3,20 +3,27 @@ import * as firebaseApp from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
-import { firebaseConfig } from '../firebase-config';
+// Rename the import to avoid naming collision
+import { firebaseConfig as originalFirebaseConfig } from '../firebase-config';
 
-// Initialize Firebase with the modern v9+ API
+// Programmatically correct the storageBucket URL to prevent misconfiguration.
+// This creates the correct bucket address from the projectId, ensuring that
+// file operations target Cloud Storage (...appspot.com) instead of potentially
+// an incorrect URL (e.g., the Realtime Database ...firebaseio.com),
+// which was the root cause of the 404 errors during upload.
+const firebaseConfig = {
+    ...originalFirebaseConfig,
+    storageBucket: `${originalFirebaseConfig.projectId}.appspot.com`,
+};
+
+
+// Initialize Firebase with the corrected configuration
 const app = firebaseApp.initializeApp(firebaseConfig);
 
-// Get auth and firestore instances
+// Get auth, firestore, and storage instances
 const auth = getAuth(app);
 const db = getFirestore(app);
-
-// Explicitly construct the correct storage bucket URL from the project ID.
-// This corrects potential misconfigurations where the Realtime Database URL
-// might be used instead of the correct Cloud Storage bucket URL, which was
-// causing 404 errors on file downloads.
-const correctStorageBucket = `gs://${firebaseConfig.projectId}.appspot.com`;
-const storage = getStorage(app, correctStorageBucket);
+// Storage will now correctly use the overridden storageBucket from the config
+const storage = getStorage(app);
 
 export { auth, db, storage };
