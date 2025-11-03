@@ -6,8 +6,6 @@ import { LocalDictionaries } from './LocalDictionaries';
 import { saveDictionary } from '../lib/indexedDB';
 import { Library, Upload, Database } from 'lucide-react';
 import { User } from 'firebase/auth';
-import { ref, uploadBytes } from 'firebase/storage';
-import { storage } from '../lib/firebase-client';
 
 
 interface FileSourceModalProps {
@@ -44,33 +42,20 @@ export const FileSourceModal: React.FC<FileSourceModalProps> = ({ isOpen, onClos
     const dictionaryName = file.name.endsWith('.xlsx') ? file.name.slice(0, -5) : file.name;
     setIsUploading(true);
     
-    // Always save to IndexedDB for offline access and speed
     try {
+      // The dictionary is now only saved locally. The cloud sync is handled by a separate background process.
       await saveDictionary(dictionaryName, file);
+
+      setIsUploading(false);
+      // Switch to the 'My Dictionaries' tab to show the newly added file
+      setActiveTab('local');
+      // Increment a counter to force the LocalDictionaries component to re-mount and fetch the new list
+      setUploadCounter(c => c + 1);
     } catch (error) {
         console.error("Failed to save dictionary to IndexedDB:", error);
         alert(`Failed to save dictionary locally: ${(error as Error).message}. Please try again.`);
         setIsUploading(false);
-        return;
     }
-
-    // If user is logged in, also upload to Firebase Storage
-    if (user) {
-        const storageRef = ref(storage, `user_dictionaries/${user.uid}/${file.name}`);
-        try {
-            await uploadBytes(storageRef, file);
-        } catch (error) {
-            console.error("Failed to upload dictionary to Firebase Storage:", error);
-            alert(`Failed to upload dictionary to your account due to a network or permission error: ${(error as Error).message}. It has been saved on this device only.`);
-            // Don't abort, as it's saved locally which is a valid outcome.
-        }
-    }
-
-    setIsUploading(false);
-    // Switch to the 'My Dictionaries' tab to show the newly added file
-    setActiveTab('local');
-    // Increment a counter to force the LocalDictionaries component to re-mount and fetch the new list
-    setUploadCounter(c => c + 1);
   };
 
   const handleBuiltInSelect = (name: string, wordsFile: File, sentencesFile?: File) => {
