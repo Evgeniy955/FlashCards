@@ -1,6 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { Database, Loader2, Trash2 } from 'lucide-react';
-import { getDictionaries, getDictionary, deleteDictionary } from '../lib/indexedDB';
+import { getDictionaries, getDictionary, deleteDictionary, saveDictionary } from '../lib/indexedDB';
+import { useAuthState } from 'react-firebase-hooks/auth';
+import { auth, db } from '../lib/firebase-client';
+import { collection, getDocs, deleteDoc, doc } from 'firebase/firestore';
+import { base64ToFile } from '../utils/fileUtils';
 
 interface LocalDictionariesProps {
   onSelect: (name: string, wordsFile: File) => void;
@@ -11,24 +15,39 @@ export const LocalDictionaries: React.FC<LocalDictionariesProps> = ({ onSelect }
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [actionInProgress, setActionInProgress] = useState<{ name: string, type: 'select' | 'delete' } | null>(null);
+  const [user] = useAuthState(auth);
 
   useEffect(() => {
-    const fetchDictionaries = async () => {
+    const syncAndFetchDictionaries = async () => {
       setIsLoading(true);
       setError(null);
       try {
-        const localNames = await getDictionaries();
-        setSavedDicts(localNames.sort((a, b) => a.localeCompare(b)));
+        if (user) {
+          // Sync from Firestore to IndexedDB
+          const firestoreDictsRef = collection(db, `users/${user.uid}/dictionaries`);
+          const querySnapshot = await getDocs(firestoreDictsRef);
+          
+          for (const doc of querySnapshot.docs) {
+            const data = doc.data();
+            const dictBaseName = data.name.replace('.xlsx', '');
+            const file = base64ToFile(data.content, data.name, data.mimeType);
+            await saveDictionary(dictBaseName, file); // This will add or overwrite
+          }
+        }
+        
+        // Fetch from IndexedDB to display
+        const finalLocalNames = await getDictionaries();
+        setSavedDicts(finalLocalNames.sort((a, b) => a.localeCompare(b)));
       } catch (err) {
-        setError('Could not load dictionaries from this device.');
+        setError('Could not load dictionaries.');
         console.error(err);
       } finally {
         setIsLoading(false);
       }
     };
 
-    fetchDictionaries();
-  }, []);
+    syncAndFetchDictionaries();
+  }, [user]);
 
   const handleSelect = async (name: string) => {
     setActionInProgress({ name, type: 'select' });
@@ -48,14 +67,27 @@ export const LocalDictionaries: React.FC<LocalDictionariesProps> = ({ onSelect }
   };
 
   const handleDelete = async (name: string) => {
-    if (window.confirm(`Are you sure you want to delete "${name}"? This will permanently remove it from this device.`)) {
+    if (window.confirm(`Are you sure you want to delete "${name}"? This will permanently remove it from this device and from the cloud if synced.`)) {
       setActionInProgress({ name, type: 'delete' });
       setError(null);
       try {
-        await deleteDictionary(name);
+        let fileNameToDelete: string | null = null;
+        const dictFromDb = await getDictionary(name);
+        if (dictFromDb) {
+            fileNameToDelete = dictFromDb.file.name;
+        }
+
+        await deleteDictionary(name); // Deletes from IndexedDB
+
+        if (user && fileNameToDelete) {
+            const dictionaryDocRef = doc(db, `users/${user.uid}/dictionaries/${fileNameToDelete}`);
+            await deleteDoc(dictionaryDocRef);
+        }
+
         setSavedDicts(prev => prev.filter(d => d !== name));
       } catch (err) {
         setError(`Failed to delete dictionary: ${name}`);
+        console.error(err);
       } finally {
         setActionInProgress(null);
       }
