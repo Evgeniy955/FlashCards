@@ -190,9 +190,9 @@ export const LocalDictionaries: React.FC<LocalDictionariesProps> = ({ onSelect }
                       <Database className="h-5 w-5 flex-shrink-0 text-slate-500" />
                   )}
                   <span className="flex-grow truncate" title={dict.name}>{dict.name}</span>
-                  <div className="flex items-center gap-2 text-slate-400 dark:text-slate-500">
-                    {dict.isLocal && <span title="Saved locally on this device"><Database size={16} /></span>}
-                    {dict.isRemote && <span title="Saved in the cloud"><Cloud size={16} /></span>}
+                  <div className="flex items-center gap-2">
+                    {dict.isLocal && <span title="Saved locally on this device"><Database size={16} className="text-sky-500" /></span>}
+                    {dict.isRemote && <span title="Saved in the cloud"><Cloud size={16} className="text-amber-500" /></span>}
                   </div>
                 </button>
                 <button
