@@ -52,13 +52,38 @@ export const LocalDictionaries: React.FC<LocalDictionariesProps> = ({ onSelect, 
         const docRef = doc(db, `users/${user.uid}/dictionaries/${name}`);
         const docSnap = await getDoc(docRef);
         if (docSnap.exists()) {
-            const fileName = docSnap.data().fileName;
-            const storageRef = ref(storage, `user_dictionaries/${user.uid}/${fileName}`);
-            const blob = await getBlob(storageRef);
-            const file = new File([blob], fileName, { type: blob.type });
-            onSelect(name, file);
+          const fileName = docSnap.data().fileName;
+          const storageRef = ref(storage, `user_dictionaries/${user.uid}/${fileName}`);
+
+          // Retry logic to handle potential delay in file availability
+          let blob: Blob | undefined;
+          const maxRetries = 3;
+          let attempt = 0;
+          let delay = 1000; // Start with 1 second delay
+
+          while (attempt < maxRetries) {
+            try {
+              blob = await getBlob(storageRef);
+              break; // Success, exit loop
+            } catch (error) {
+              attempt++;
+              if (attempt >= maxRetries) {
+                throw error; // Rethrow the last error if all retries fail
+              }
+              console.warn(`Attempt ${attempt} to fetch blob failed. Retrying in ${delay}ms...`, error);
+              await new Promise(resolve => setTimeout(resolve, delay));
+              delay *= 2; // Exponential backoff
+            }
+          }
+
+          if (!blob) {
+            throw new Error("Could not retrieve file from storage after multiple attempts.");
+          }
+
+          const file = new File([blob], fileName, { type: blob.type });
+          onSelect(name, file);
         } else {
-            throw new Error("Dictionary metadata not found in Firestore.");
+          throw new Error("Dictionary metadata not found in Firestore.");
         }
       } else {
         // Get from IndexedDB
@@ -82,18 +107,18 @@ export const LocalDictionaries: React.FC<LocalDictionariesProps> = ({ onSelect, 
       setActionInProgress(name);
       try {
         if (user) {
-            // Delete from Firestore and Firebase Storage
-            const docRef = doc(db, `users/${user.uid}/dictionaries/${name}`);
-            const docSnap = await getDoc(docRef);
-            if (docSnap.exists()) {
-                const fileName = docSnap.data().fileName;
-                const storageRef = ref(storage, `user_dictionaries/${user.uid}/${fileName}`);
-                await deleteObject(storageRef);
-            }
-            await deleteDoc(docRef);
+          // Delete from Firestore and Firebase Storage
+          const docRef = doc(db, `users/${user.uid}/dictionaries/${name}`);
+          const docSnap = await getDoc(docRef);
+          if (docSnap.exists()) {
+            const fileName = docSnap.data().fileName;
+            const storageRef = ref(storage, `user_dictionaries/${user.uid}/${fileName}`);
+            await deleteObject(storageRef);
+          }
+          await deleteDoc(docRef);
         } else {
-            // Delete from IndexedDB
-            await deleteLocalDictionary(name);
+          // Delete from IndexedDB
+          await deleteLocalDictionary(name);
         }
         setSavedDicts(prev => prev.filter(d => d !== name));
       } catch (err) {
@@ -108,47 +133,47 @@ export const LocalDictionaries: React.FC<LocalDictionariesProps> = ({ onSelect, 
   if (isLoading) {
     return <div className="flex justify-center items-center h-40"><Loader2 className="animate-spin h-8 w-8 text-slate-400" /></div>;
   }
-  
+
   if (error) {
     return <p className="text-center text-red-400">{error}</p>;
   }
-  
+
   if (savedDicts.length === 0) {
-    const message = user 
+    const message = user
         ? "No dictionaries found in your account. Upload one to get started."
         : "No dictionaries saved locally. Upload one to save it here for future sessions.";
     return <p className="text-center text-slate-500 dark:text-slate-400">{message}</p>;
   }
 
   return (
-    <div className="space-y-3">
+      <div className="space-y-3">
         <h3 className="text-sm font-medium text-slate-500 dark:text-slate-400">Select one of your dictionaries:</h3>
         <ul className="max-h-64 overflow-y-auto space-y-2 pr-2">
-            {savedDicts.map(name => (
-                <li key={name} className="flex items-center gap-2">
-                    <button
-                        onClick={() => handleSelect(name)}
-                        disabled={!!actionInProgress}
-                        className="w-full flex items-center gap-3 p-3 text-left text-sm text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 rounded-md transition-colors disabled:opacity-50"
-                    >
-                         {actionInProgress === name && !window.confirm ? (
-                            <Loader2 className="animate-spin h-5 w-5 flex-shrink-0" />
-                        ) : (
-                            <Database className="h-5 w-5 flex-shrink-0" />
-                        )}
-                        <span className="flex-grow truncate" title={name}>{name}</span>
-                    </button>
-                    <button 
-                        onClick={() => handleDelete(name)} 
-                        disabled={!!actionInProgress}
-                        className="p-3 text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-700 hover:bg-rose-500 hover:text-white rounded-md transition-colors disabled:opacity-50 flex-shrink-0"
-                        aria-label={`Delete ${name}`}
-                    >
-                        <Trash2 size={18} />
-                    </button>
-                </li>
-            ))}
+          {savedDicts.map(name => (
+              <li key={name} className="flex items-center gap-2">
+                <button
+                    onClick={() => handleSelect(name)}
+                    disabled={!!actionInProgress}
+                    className="w-full flex items-center gap-3 p-3 text-left text-sm text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 rounded-md transition-colors disabled:opacity-50"
+                >
+                  {actionInProgress === name ? (
+                      <Loader2 className="animate-spin h-5 w-5 flex-shrink-0" />
+                  ) : (
+                      <Database className="h-5 w-5 flex-shrink-0" />
+                  )}
+                  <span className="flex-grow truncate" title={name}>{name}</span>
+                </button>
+                <button
+                    onClick={() => handleDelete(name)}
+                    disabled={!!actionInProgress}
+                    className="p-3 text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-700 hover:bg-rose-500 hover:text-white rounded-md transition-colors disabled:opacity-50 flex-shrink-0"
+                    aria-label={`Delete ${name}`}
+                >
+                  <Trash2 size={18} />
+                </button>
+              </li>
+          ))}
         </ul>
-    </div>
+      </div>
   );
 };
