@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Modal } from './Modal';
-import { BookUser, HelpCircle, BrainCircuit, Library } from 'lucide-react';
+import { BookUser, HelpCircle, BrainCircuit, Library, Trash2 } from 'lucide-react';
 
 interface ProfileStats {
   totalWords: number;
@@ -18,6 +18,7 @@ interface ProfileModalProps {
   currentStats: ProfileStats | null;
   allTimeStats: ProfileStats | null;
   dictionaryName: string;
+  onResetAllStats: () => void;
 }
 
 const StatCard: React.FC<{ icon: React.ReactNode; title: string; value: number | string; total?: number; percentage?: number, color: string }> = ({ icon, title, value, total, percentage, color }) => (
@@ -45,7 +46,7 @@ const StatCard: React.FC<{ icon: React.ReactNode; title: string; value: number |
     </div>
 );
 
-export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, currentStats, allTimeStats, dictionaryName }) => {
+export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, currentStats, allTimeStats, dictionaryName, onResetAllStats }) => {
     const [activeTab, setActiveTab] = useState<'current' | 'allTime'>('current');
 
     const renderCurrentStats = () => {
@@ -80,6 +81,15 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, cur
                     <StatCard icon={<BookUser size={20} className="text-white" />} title="Total Learned Words" value={learnedCount} total={totalWords} percentage={learnedPercentage} color="bg-emerald-500" />
                     <StatCard icon={<HelpCircle size={20} className="text-white" />} title="Total 'Don't Know'" value={dontKnowCount} total={totalWords} percentage={totalWords > 0 ? (dontKnowCount / totalWords) * 100 : 0} color="bg-rose-500" />
                     <StatCard icon={<BrainCircuit size={20} className="text-white" />} title="Total Remaining" value={remainingCount} total={totalWords} percentage={totalWords > 0 ? (remainingCount / totalWords) * 100 : 0} color="bg-sky-500" />
+                </div>
+                <div className="mt-8 text-center">
+                    <button 
+                        onClick={onResetAllStats} 
+                        className="flex items-center justify-center gap-2 mx-auto px-4 py-2 text-sm font-medium text-rose-600 dark:text-rose-400 bg-rose-100 dark:bg-rose-900/50 hover:bg-rose-200 dark:hover:bg-rose-800/50 rounded-lg transition-colors"
+                    >
+                        <Trash2 size={16} />
+                        Reset All Statistics
+                    </button>
                 </div>
             </>
         );

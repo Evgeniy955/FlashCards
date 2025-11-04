@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useAuthState } from 'react-firebase-hooks/auth';
 import { auth, db } from './lib/firebase-client';
-import { doc, getDoc, setDoc, collection, getDocs } from 'firebase/firestore';
+import { doc, getDoc, setDoc, collection, getDocs, deleteDoc } from 'firebase/firestore';
 import { Flashcard } from './components/Flashcard';
 import { ProgressBar } from './components/ProgressBar';
 import { SetSelector } from './components/SetSelector';
@@ -19,7 +19,7 @@ import { TrainingModeInput, AnswerState } from './components/TrainingModeInput';
 import { TrainingModeGuess } from './components/TrainingModeGuess';
 import { TrainingModeToggle } from './components/TrainingModeToggle';
 import { TranslationModeToggle } from './components/TranslationModeToggle';
-import { saveLocalProgress, loadLocalProgress, deleteLocalProgress, loadAllLocalProgress } from './lib/localProgress';
+import { saveLocalProgress, loadLocalProgress, deleteLocalProgress, loadAllLocalProgress, clearAllLocalProgress } from './lib/localProgress';
 import { ThemeToggle } from './components/ThemeToggle';
 import { getDictionary } from './lib/indexedDB';
 
@@ -422,6 +422,38 @@ const App: React.FC = () => {
         calculateAllTimeStats();
     }, [user, authLoading, progressSaveCounter]);
 
+    const handleResetAllStats = async () => {
+        if (window.confirm('Are you sure you want to reset ALL your statistics across ALL dictionaries? This action cannot be undone.')) {
+            setIsProgressLoading(true);
+            try {
+                if (user) {
+                    const progressColRef = collection(db, `users/${user.uid}/progress`);
+                    const querySnapshot = await getDocs(progressColRef);
+                    const deletePromises = querySnapshot.docs.map(doc => deleteDoc(doc.ref));
+                    await Promise.all(deletePromises);
+                } else {
+                    await clearAllLocalProgress();
+                }
+    
+                // Also clear the current dictionary's progress from state
+                setLearnedWords(new Map());
+                setDontKnowWords(new Map());
+                
+                // Force a refresh of the stats
+                setAllTimeStats(null);
+                setProgressSaveCounter(c => c + 1);
+    
+                alert('All statistics have been reset.');
+    
+            } catch (error) {
+                console.error("Failed to reset all stats:", error);
+                alert("An error occurred while resetting statistics. Please try again.");
+            } finally {
+                setIsProgressLoading(false);
+                setProfileModalOpen(false); // Close modal after reset
+            }
+        }
+    };
 
     const currentSet = useMemo(() => selectedSetIndex !== null ? loadedDictionary?.sets[selectedSetIndex] : null, [selectedSetIndex, loadedDictionary]);
 
@@ -921,7 +953,8 @@ const App: React.FC = () => {
                 onClose={() => setProfileModalOpen(false)} 
                 currentStats={currentDictionaryStats} 
                 allTimeStats={allTimeStats}
-                dictionaryName={loadedDictionary.name} 
+                dictionaryName={loadedDictionary.name}
+                onResetAllStats={handleResetAllStats}
             />
         </main>
     );

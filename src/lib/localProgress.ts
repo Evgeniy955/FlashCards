@@ -70,3 +70,15 @@ export const deleteLocalProgress = async (id: string): Promise<void> => {
         request.onerror = () => reject(request.error);
     });
 };
+
+export const clearAllLocalProgress = async (): Promise<void> => {
+    const db = await openDB();
+    return new Promise((resolve, reject) => {
+        const transaction = db.transaction(STORE_NAME, 'readwrite');
+        transaction.onerror = () => reject(transaction.error);
+        const store = transaction.objectStore(STORE_NAME);
+        const request = store.clear();
+        request.onsuccess = () => resolve();
+        request.onerror = () => reject(request.error);
+    });
+};
