@@ -1,14 +1,15 @@
-import { initializeApp } from "firebase/app";
-import { getAuth } from "firebase/auth";
+import firebase from "firebase/compat/app";
+import "firebase/compat/auth";
 import { getFirestore } from "firebase/firestore";
 import { firebaseConfig } from '../firebase-config';
 
-// Initialize Firebase with the standard v9 modular function
-// FIX: The `initializeApp` function should be imported directly from "firebase/app" for the Firebase v9 modular SDK, not accessed via a namespace import.
-const app = initializeApp(firebaseConfig);
+// Initialize Firebase using the compatibility library
+const app = firebase.initializeApp(firebaseConfig);
 
 // Get services
-const auth = getAuth(app);
+// FIX: Use v8 compat auth to solve import errors.
+const auth = firebase.auth();
+// Use v9 modular firestore, which is used throughout the app.
 const db = getFirestore(app);
 
 export { auth, db };
