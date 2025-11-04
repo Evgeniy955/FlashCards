@@ -11,6 +11,7 @@ export interface StoredDictionaryObject {
     mimeType: string;
     content: string; // base64 encoded file content
     lastModified: number; // timestamp
+    isBuiltIn?: boolean;
 }
 
 
@@ -37,7 +38,7 @@ const openDB = (): Promise<IDBDatabase> => {
   });
 };
 
-export const saveDictionary = async (name: string, file: File): Promise<void> => {
+export const saveDictionary = async (name: string, file: File, isBuiltIn: boolean = false): Promise<void> => {
     const db = await openDB();
     const base64Content = await fileToBase64(file);
     const objectToStore: StoredDictionaryObject = {
@@ -46,6 +47,7 @@ export const saveDictionary = async (name: string, file: File): Promise<void> =>
         mimeType: file.type,
         content: base64Content,
         lastModified: file.lastModified,
+        isBuiltIn,
     };
 
     return new Promise((resolve, reject) => {

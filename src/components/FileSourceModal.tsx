@@ -86,8 +86,9 @@ export const FileSourceModal: React.FC<FileSourceModalProps> = ({ isOpen, onClos
 
   const handleBuiltInSelect = async (name: string, wordsFile: File, sentencesFile?: File) => {
     try {
-        // Save the fetched dictionary to IndexedDB for persistence across sessions.
-        await saveDictionary(name, wordsFile);
+        // Save the fetched dictionary to IndexedDB for persistence across sessions,
+        // marking it as a built-in dictionary so it doesn't show in "My Dictionaries".
+        await saveDictionary(name, wordsFile, true);
     } catch (error) {
         console.error("Failed to save built-in dictionary to IndexedDB:", error);
         // This is a non-critical error for the current session.
