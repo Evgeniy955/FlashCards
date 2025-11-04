@@ -3,7 +3,7 @@ import { Database, Loader2, Trash2, Cloud } from 'lucide-react';
 import { getDictionary, deleteDictionary, saveDictionary, getAllDictionaryDetails } from '../lib/indexedDB';
 import { useAuthState } from 'react-firebase-hooks/auth';
 import { auth, db } from '../lib/firebase-client';
-import { collection, getDocs, deleteDoc, doc, setDoc } from 'firebase/firestore';
+import { collection, getDocs, doc, setDoc, updateDoc } from 'firebase/firestore';
 import { base64ToFile } from '../utils/fileUtils';
 
 interface LocalDictionariesProps {
@@ -30,77 +30,83 @@ export const LocalDictionaries: React.FC<LocalDictionariesProps> = ({ onSelect }
     setIsLoading(true);
     setError(null);
     try {
-      // 1. Get remote dictionaries from Firestore
+      // Step 1: Fetch remote state (active dicts and deleted dicts/tombstones)
       const remoteDictMap = new Map<string, any>();
+      const remoteTombstones = new Set<string>();
       if (user) {
           const firestoreDictsRef = collection(db, `users/${user.uid}/dictionaries`);
           const querySnapshot = await getDocs(firestoreDictsRef);
-          querySnapshot.forEach(doc => {
-              remoteDictMap.set(doc.id, doc.data());
+          querySnapshot.forEach(docSnap => {
+              const data = docSnap.data();
+              if (data.deleted) {
+                  remoteTombstones.add(docSnap.id);
+              } else {
+                  remoteDictMap.set(docSnap.id, data);
+              }
           });
       }
       
-      // 2. Get ALL local dictionaries from IndexedDB and filter them
-      const allLocalDicts = await getAllDictionaryDetails();
-      const userUploadedLocalDicts = allLocalDicts.filter(d => !d.isBuiltIn);
-
-      const allLocalDictsMap = new Map(allLocalDicts.map(dict => [dict.fileName, dict]));
-      const userUploadedLocalDictsMap = new Map(userUploadedLocalDicts.map(dict => [dict.fileName, dict]));
+      // Step 2: Sync remote deletions to local storage
+      let allLocalDicts = await getAllDictionaryDetails();
+      const localCleanupPromises = allLocalDicts
+        .filter(localDict => remoteTombstones.has(localDict.fileName))
+        .map(dictToDelete => deleteDictionary(dictToDelete.name));
       
-      // 3. If logged in, perform sync operations
-      if (user) {
-          let changesMade = false;
-          // 3a. Upload local-only dictionaries (only user-uploaded ones)
-          for (const [fileName, localData] of userUploadedLocalDictsMap.entries()) {
-              if (!remoteDictMap.has(fileName)) {
-                  changesMade = true;
-                  const file = base64ToFile(localData.content, localData.fileName, localData.mimeType);
-                  if (file.size > FIRESTORE_DOC_SIZE_LIMIT) {
-                      console.warn(`Local dictionary "${fileName}" is too large to sync to the cloud.`);
-                      continue;
-                  }
-                  const dictionaryDocRef = doc(db, `users/${user.uid}/dictionaries/${fileName}`);
-                  await setDoc(dictionaryDocRef, {
-                      name: fileName,
-                      content: localData.content,
-                      mimeType: localData.mimeType,
-                      lastModified: new Date(localData.lastModified),
-                  });
-              }
-          }
-
-          // 3b. Download remote-only dictionaries
-          for (const [fileName, remoteData] of remoteDictMap.entries()) {
-              if (!allLocalDictsMap.has(fileName)) { // Check against ALL local dicts
-                  changesMade = true;
-                  const dictBaseName = remoteData.name.replace(/\.xlsx$/i, '');
-                  const file = base64ToFile(remoteData.content, remoteData.name, remoteData.mimeType);
-                  await saveDictionary(dictBaseName, file); // isBuiltIn defaults to false, correct.
-              }
-          }
-
-          // 4. If sync happened, re-fetch and rebuild UI state for consistency
-          if (changesMade) {
-              const finalRemoteSnapshot = await getDocs(collection(db, `users/${user.uid}/dictionaries`));
-              remoteDictMap.clear();
-              finalRemoteSnapshot.forEach(doc => {
-                  remoteDictMap.set(doc.id, doc.data());
-              });
-
-              const finalAllLocalDicts = await getAllDictionaryDetails();
-              const finalUserLocalDicts = finalAllLocalDicts.filter(d => !d.isBuiltIn);
-              userUploadedLocalDictsMap.clear();
-              finalUserLocalDicts.forEach(d => userUploadedLocalDictsMap.set(d.fileName, d));
-          }
+      if (localCleanupPromises.length > 0) {
+        await Promise.all(localCleanupPromises);
+        allLocalDicts = await getAllDictionaryDetails(); // Re-fetch after cleanup
       }
 
-      // 5. Build the final list for the UI from remote and USER-UPLOADED local dictionaries
-      const uiFileNames = new Set([...remoteDictMap.keys(), ...userUploadedLocalDictsMap.keys()]);
+      // Step 3: Two-way sync for active dictionaries if user is logged in
+      if (user) {
+        const allLocalDictsMap = new Map(allLocalDicts.map(dict => [dict.fileName, dict]));
+        const userUploadedLocalDictsMap = new Map(allLocalDicts.filter(d => !d.isBuiltIn).map(d => [d.fileName, d]));
+
+        // 3a. Upload local-only dictionaries
+        for (const [fileName, localData] of userUploadedLocalDictsMap.entries()) {
+            if (!remoteDictMap.has(fileName)) {
+                const file = base64ToFile(localData.content, localData.fileName, localData.mimeType);
+                if (file.size > FIRESTORE_DOC_SIZE_LIMIT) continue;
+                const dictionaryDocRef = doc(db, `users/${user.uid}/dictionaries/${fileName}`);
+                await setDoc(dictionaryDocRef, {
+                    name: fileName,
+                    content: localData.content,
+                    mimeType: localData.mimeType,
+                    lastModified: new Date(localData.lastModified),
+                });
+            }
+        }
+
+        // 3b. Download remote-only dictionaries
+        for (const [fileName, remoteData] of remoteDictMap.entries()) {
+            if (!allLocalDictsMap.has(fileName)) {
+                const dictBaseName = remoteData.name.replace(/\.xlsx$/i, '');
+                const file = base64ToFile(remoteData.content, remoteData.name, remoteData.mimeType);
+                await saveDictionary(dictBaseName, file);
+            }
+        }
+      }
+
+      // Step 4: Re-fetch all data *after* all sync operations to build the final UI list
+      const finalLocalDicts = await getAllDictionaryDetails();
+      const finalUserUploadedLocalDicts = finalLocalDicts.filter(d => !d.isBuiltIn);
+
+      const finalRemoteDicts = new Map<string, any>();
+      if (user) {
+          const finalQuerySnapshot = await getDocs(collection(db, `users/${user.uid}/dictionaries`));
+          finalQuerySnapshot.forEach(docSnap => {
+              if (!docSnap.data().deleted) {
+                  finalRemoteDicts.set(docSnap.id, docSnap.data());
+              }
+          });
+      }
+
+      const uiFileNames = new Set([...finalRemoteDicts.keys(), ...finalUserUploadedLocalDicts.map(d => d.fileName)]);
       const statusList = Array.from(uiFileNames).map(fileName => ({
           name: fileName.replace(/\.xlsx$/i, ''),
           fileName: fileName,
-          isLocal: userUploadedLocalDictsMap.has(fileName),
-          isRemote: remoteDictMap.has(fileName),
+          isLocal: finalUserUploadedLocalDicts.some(d => d.fileName === fileName),
+          isRemote: finalRemoteDicts.has(fileName),
       })).sort((a, b) => a.name.localeCompare(b.name));
       
       setSavedDicts(statusList);
@@ -138,23 +144,25 @@ export const LocalDictionaries: React.FC<LocalDictionariesProps> = ({ onSelect }
     if (window.confirm(`Are you sure you want to delete "${dict.name}"? This will permanently remove it from this device and from the cloud if synced.`)) {
       setActionInProgress({ name: dict.name, type: 'delete' });
       setError(null);
-  
       try {
-        if (dict.isLocal) {
-            await deleteDictionary(dict.name); // Delete from IndexedDB
-        }
-  
+        // If the user is logged in and the dictionary is on the server,
+        // the authoritative action is to mark it as deleted on the server.
+        // The sync process will then handle removing it from all local instances.
         if (user && dict.isRemote) {
           const dictionaryDocRef = doc(db, `users/${user.uid}/dictionaries/${dict.fileName}`);
-          await deleteDoc(dictionaryDocRef);
+          await updateDoc(dictionaryDocRef, { deleted: true, deletedAt: new Date() });
         }
-  
-        // Instead of just filtering the local state, re-run the entire sync process
-        // to get the definitive state from the server and local DB.
+        // If it's only a local dictionary (e.g., user is offline or not logged in),
+        // just delete it from the local device.
+        else if (dict.isLocal) {
+          await deleteDictionary(dict.name);
+        }
+        
+        // Trigger a fresh sync to update the UI everywhere consistently.
         await syncAndFetchDictionaries();
 
       } catch (err) {
-        setError(`Failed to delete "${dict.name}". This can happen after an app update. Please reload the page and try again.`);
+        setError(`Failed to delete "${dict.name}". Please check your connection and try again.`);
         console.error(err);
       } finally {
         setActionInProgress(null);

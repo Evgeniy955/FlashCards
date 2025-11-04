@@ -5,7 +5,8 @@ import { BuiltInDictionaries } from './BuiltInDictionaries';
 import { LocalDictionaries } from './LocalDictionaries';
 import { saveDictionary } from '../lib/indexedDB';
 import { Library, Upload, Database } from 'lucide-react';
-import { User } from 'firebase/auth';
+// FIX: Replaced modular User type with the v8 compat version to fix module export error.
+import type firebase from 'firebase/compat/app';
 import { db } from '../lib/firebase-client';
 import { doc, setDoc } from 'firebase/firestore';
 import { fileToBase64 } from '../utils/fileUtils';
@@ -16,7 +17,7 @@ interface FileSourceModalProps {
   onClose: () => void;
   onFilesSelect: (name: string, wordsFile: File, sentencesFile?: File) => void;
   isLoading: boolean;
-  user: User | null | undefined;
+  user: firebase.User | null | undefined;
 }
 
 type Tab = 'built-in' | 'local' | 'computer';
