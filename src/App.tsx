@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useAuthState } from 'react-firebase-hooks/auth';
 import { auth, db } from './lib/firebase-client';
 import { doc, getDoc, setDoc, collection, getDocs, deleteDoc, updateDoc, arrayUnion, increment } from 'firebase/firestore';
@@ -38,6 +38,16 @@ interface ProfileStats {
   remainingPercentage: number;
   dictionaryCount?: number;
 }
+
+// Custom hook to get the previous value of a prop or state.
+function usePrevious<T>(value: T): T | undefined {
+    const ref = useRef<T>();
+    useEffect(() => {
+        ref.current = value;
+    });
+    return ref.current;
+}
+
 
 // --- Helper Functions for Stats ---
 const calculateStreak = (history: string[]): number => {
@@ -128,6 +138,10 @@ const App: React.FC = () => {
     // State for welcome toast
     const [welcomeStats, setWelcomeStats] = useState<{ streak: number; lastSessionCount: number } | null>(null);
     const [showWelcomeToast, setShowWelcomeToast] = useState(false);
+    
+    // State to manage sync on login
+    const [isSyncing, setIsSyncing] = useState(false);
+    const prevUser = usePrevious(user);
 
     // Effect to set initial theme from localStorage or system preference
     useEffect(() => {
@@ -354,13 +368,69 @@ const App: React.FC = () => {
         return () => clearTimeout(handler);
     }, [sentences, user]);
 
+    // Effect to handle merging local progress to remote on login
+    useEffect(() => {
+        const syncOnLogin = async () => {
+            // Condition: user just logged in and a dictionary is loaded.
+            if (user && !prevUser && dictionaryId) {
+                setIsSyncing(true);
+                try {
+                    // 1. Load both local and remote progress to reconcile them.
+                    const localData = await loadLocalProgress(dictionaryId);
+                    const docRef = doc(db, `users/${user.uid}/progress/${dictionaryId}`);
+                    const docSnap = await getDoc(docRef);
+
+                    const localLearned = localData?.learnedWords ? new Map(Object.entries(localData.learnedWords)) : new Map<string, WordProgress>();
+                    const localDontKnow = localData?.dontKnowWords ? new Map(Object.entries(localData.dontKnowWords).map(([k, v]) => [Number(k), v as Word[]])) : new Map<number, Word[]>();
+
+                    const remoteData = docSnap.exists() ? docSnap.data() : {};
+                    const remoteLearned = remoteData?.learnedWords ? new Map(Object.entries(remoteData.learnedWords as { [s: string]: WordProgress; })) : new Map<string, WordProgress>();
+                    const remoteDontKnow = remoteData?.dontKnowWords ? new Map(Object.entries(remoteData.dontKnowWords).map(([k, v]) => [Number(k), v as Word[]])) : new Map<number, Word[]>();
+
+                    // 2. Merge data: Remote data takes precedence for learned words to prevent overwrites,
+                    // while 'don't know' words are combined to not lose any.
+                    const mergedLearned = new Map([...localLearned, ...remoteLearned]);
+
+                    const mergedDontKnow = new Map<number, Word[]>();
+                    const allDontKnowKeys = new Set([...localDontKnow.keys(), ...remoteDontKnow.keys()]);
+                    
+                    allDontKnowKeys.forEach(key => {
+                        const localWords = localDontKnow.get(key) || [];
+                        const remoteWords = remoteDontKnow.get(key) || [];
+                        const combined = [...localWords, ...remoteWords];
+                        // Deduplicate the combined array
+                        const uniqueWords = Array.from(new Map(combined.map(w => [getWordId(w), w])).values());
+                        mergedDontKnow.set(key, uniqueWords);
+                    });
+                    
+                    // 3. Update state with the definitive merged data.
+                    setLearnedWords(mergedLearned);
+                    setDontKnowWords(mergedDontKnow);
+
+                    // 4. Clean up local progress after successful merge.
+                    if (localData) {
+                        await deleteLocalProgress(dictionaryId);
+                    }
+                } catch (error) {
+                    console.error("Error during login sync:", error);
+                } finally {
+                    setIsSyncing(false);
+                }
+            }
+        };
+
+        syncOnLogin();
+    }, [user, prevUser, dictionaryId]);
+
 
     // Load DICTIONARY-SPECIFIC progress from Firestore or Local Storage
     useEffect(() => {
         const loadProgress = async () => {
-            if (!dictionaryId) {
-                setLearnedWords(new Map());
-                setDontKnowWords(new Map());
+            if (!dictionaryId || isSyncing) {
+                if (!dictionaryId) {
+                  setLearnedWords(new Map());
+                  setDontKnowWords(new Map());
+                }
                 setIsProgressLoading(false);
                 return;
             }
@@ -408,7 +478,7 @@ const App: React.FC = () => {
         };
 
         loadProgress();
-    }, [user, dictionaryId]);
+    }, [user, dictionaryId, isSyncing]);
 
 
     const currentDictionaryStats = useMemo<ProfileStats | null>(() => {

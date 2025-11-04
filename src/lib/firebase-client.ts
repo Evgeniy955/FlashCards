@@ -1,12 +1,11 @@
-import { initializeApp } from "firebase/app";
+// FIX: Using namespace import for firebase/app to work around a potential module resolution issue.
+import * as firebase from "firebase/app";
 import { getAuth } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 import { firebaseConfig } from '../firebase-config';
 
-// Initialize Firebase
-// FIX: The original code used a namespace import for Firebase which is incorrect for the v9+ modular SDK.
-// `initializeApp` must be imported as a named export from 'firebase/app'.
-const app = initializeApp(firebaseConfig);
+// Initialize Firebase with the standard v9 modular function
+const app = firebase.initializeApp(firebaseConfig);
 
 // Get services
 const auth = getAuth(app);
