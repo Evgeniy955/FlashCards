@@ -84,7 +84,16 @@ export const FileSourceModal: React.FC<FileSourceModalProps> = ({ isOpen, onClos
     }
   };
 
-  const handleBuiltInSelect = (name: string, wordsFile: File, sentencesFile?: File) => {
+  const handleBuiltInSelect = async (name: string, wordsFile: File, sentencesFile?: File) => {
+    try {
+        // Save the fetched dictionary to IndexedDB for persistence across sessions.
+        await saveDictionary(name, wordsFile);
+    } catch (error) {
+        console.error("Failed to save built-in dictionary to IndexedDB:", error);
+        // This is a non-critical error for the current session.
+        // The dictionary will still load, but progress won't be saved for the next session.
+        alert("Warning: Could not save the dictionary for offline use. Your progress for this dictionary may not be saved if you close the app.");
+    }
     onFilesSelect(name, wordsFile, sentencesFile);
   };
   
