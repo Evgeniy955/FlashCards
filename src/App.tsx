@@ -20,6 +20,7 @@ import { TrainingModeToggle } from './components/TrainingModeToggle';
 import { TranslationModeToggle } from './components/TranslationModeToggle';
 import { saveLocalProgress, loadLocalProgress, deleteLocalProgress } from './lib/localProgress';
 import { ThemeToggle } from './components/ThemeToggle';
+import { getDictionary } from './lib/indexedDB';
 
 
 // --- Constants ---
@@ -27,7 +28,7 @@ const SRS_INTERVALS = [1, 2, 4, 8, 16, 32, 64]; // in days
 
 // --- Main App Component ---
 const App: React.FC = () => {
-    const [user] = useAuthState(auth);
+    const [user, authLoading] = useAuthState(auth);
     const [loadedDictionary, setLoadedDictionary] = useState<LoadedDictionary | null>(null);
     const [selectedSetIndex, setSelectedSetIndex] = useState<number | null>(null);
     const [currentWordIndex, setCurrentWordIndex] = useState(0);
@@ -45,8 +46,9 @@ const App: React.FC = () => {
     const [dontKnowWords, setDontKnowWords] = useState<Map<number, Word[]>>(new Map());
     const [sentences, setSentences] = useState<Map<string, string>>(new Map());
 
-    const [isLoading, setIsLoading] = useState(false); // For file parsing
-    const [isProgressLoading, setIsProgressLoading] = useState(true); // For Firestore, start as true
+    const [isLoading, setIsLoading] = useState(false); // For file parsing and dictionary loading
+    const [isInitialLoading, setIsInitialLoading] = useState(true); // For loading the last used dictionary on startup
+    const [isProgressLoading, setIsProgressLoading] = useState(true); // For Firestore progress
     const [isWordListVisible, setIsWordListVisible] = useState(false);
     const [isDontKnowMode, setIsDontKnowMode] = useState(false);
     const [isChangingWord, setIsChangingWord] = useState(false); // For fade animation
@@ -90,8 +92,103 @@ const App: React.FC = () => {
     }, [theme]);
 
 
-    // FIX: Replaced `replaceAll` with `replace` with a global regex for wider compatibility.
     const dictionaryId = useMemo(() => loadedDictionary?.name.replace(/[./]/g, '_'), [loadedDictionary]);
+
+    // --- History and Auto-loading Logic ---
+
+    const saveLastUsedDictionary = useCallback(async (name: string) => {
+        if (user) {
+            const userDocRef = doc(db, 'users', user.uid);
+            await setDoc(userDocRef, { lastUsedDictionary: name }, { merge: true });
+        } else {
+            localStorage.setItem('lastUsedDictionary', name);
+        }
+    }, [user]);
+
+    const clearLastUsedDictionary = useCallback(async () => {
+        if (user) {
+            const userDocRef = doc(db, 'users', user.uid);
+            await setDoc(userDocRef, { lastUsedDictionary: null }, { merge: true });
+        } else {
+            localStorage.removeItem('lastUsedDictionary');
+        }
+    }, [user]);
+
+    const loadAndSetDictionary = useCallback(async (name: string, wordsFile: File, sentencesFile?: File) => {
+        setIsLoading(true);
+        try {
+            let sentenceMapFromFile: Map<string, string> | null = null;
+            if (sentencesFile) {
+                const text = await sentencesFile.text();
+                const jsonObj = JSON.parse(text);
+                sentenceMapFromFile = new Map<string, string>();
+                for (const key in jsonObj) {
+                    if (typeof jsonObj[key] === 'string') {
+                        sentenceMapFromFile.set(key.trim().toLowerCase(), jsonObj[key]);
+                    }
+                }
+            }
+
+            setLearnedWords(new Map());
+            setDontKnowWords(new Map());
+            if (sentenceMapFromFile) {
+                setSentences(prev => new Map([...prev, ...sentenceMapFromFile]));
+            }
+
+            const dictionary = await parseDictionaryFile(wordsFile);
+            dictionary.name = name;
+            setLoadedDictionary(dictionary);
+            setSelectedSetIndex(0);
+            setFileSourceModalOpen(false);
+            setSessionActive(false);
+
+            await saveLastUsedDictionary(name);
+
+        } catch (error) {
+            alert((error as Error).message);
+            setLoadedDictionary(null);
+        } finally {
+            setIsLoading(false);
+        }
+    }, [saveLastUsedDictionary]);
+
+
+    useEffect(() => {
+        const loadLastDictionary = async () => {
+            if (authLoading) return;
+
+            let lastUsedDictName: string | null = null;
+            if (user) {
+                const userDocRef = doc(db, 'users', user.uid);
+                const docSnap = await getDoc(userDocRef);
+                if (docSnap.exists()) {
+                    lastUsedDictName = docSnap.data()?.lastUsedDictionary || null;
+                }
+            } else {
+                lastUsedDictName = localStorage.getItem('lastUsedDictionary');
+            }
+
+            if (lastUsedDictName) {
+                try {
+                    const savedDict = await getDictionary(lastUsedDictName);
+                    if (savedDict) {
+                        await loadAndSetDictionary(savedDict.name, savedDict.file);
+                    } else {
+                        await clearLastUsedDictionary();
+                    }
+                } catch (error) {
+                    console.error("Failed to load last used dictionary:", error);
+                    await clearLastUsedDictionary();
+                }
+            }
+            setIsInitialLoading(false);
+        };
+
+        loadLastDictionary();
+    }, [user, authLoading, loadAndSetDictionary, clearLastUsedDictionary]);
+
+    // --- End History Logic ---
+
 
     // Load global sentences from Firestore user document
     useEffect(() => {
@@ -319,39 +416,7 @@ const App: React.FC = () => {
     }, [trainingMode, isDontKnowMode, currentWord, guessOptions, generateGuessOptions, translationMode]);
 
     const handleFilesSelect = async (name: string, wordsFile: File, sentencesFile?: File) => {
-        setIsLoading(true);
-        try {
-            let sentenceMapFromFile: Map<string, string> | null = null;
-            if (sentencesFile) {
-                const text = await sentencesFile.text();
-                const jsonObj = JSON.parse(text);
-                sentenceMapFromFile = new Map<string, string>();
-                for (const key in jsonObj) {
-                    if (typeof jsonObj[key] === 'string') {
-                        sentenceMapFromFile.set(key.trim().toLowerCase(), jsonObj[key]);
-                    }
-                }
-            }
-
-            setLearnedWords(new Map());
-            setDontKnowWords(new Map());
-            if (sentenceMapFromFile) {
-                setSentences(prev => new Map([...prev, ...sentenceMapFromFile]));
-            }
-
-            const dictionary = await parseDictionaryFile(wordsFile);
-            dictionary.name = name;
-            setLoadedDictionary(dictionary);
-            setSelectedSetIndex(0);
-            setFileSourceModalOpen(false);
-            setSessionActive(false);
-
-        } catch (error) {
-            alert((error as Error).message);
-            setLoadedDictionary(null);
-        } finally {
-            setIsLoading(false);
-        }
+        await loadAndSetDictionary(name, wordsFile, sentencesFile);
     };
 
     const exampleSentence = useMemo(() => currentWord ? sentences.get(currentWord.lang2.toLowerCase()) : undefined, [currentWord, sentences]);
@@ -548,8 +613,6 @@ const App: React.FC = () => {
 
     const handleResetProgress = async () => {
         if (globalThis.confirm('Are you sure you want to reset learning progress for this dictionary? This action cannot be undone.')) {
-            // Clearing state will trigger the save effect, which overwrites Firestore data for logged-in users.
-            // For logged-out users, we need to explicitly delete from IndexedDB.
             if (!user && dictionaryId) {
                 try {
                     await deleteLocalProgress(dictionaryId);
@@ -654,6 +717,15 @@ const App: React.FC = () => {
             </div>
         );
     };
+
+    if (isInitialLoading) {
+        return (
+            <div className="min-h-screen flex flex-col items-center justify-center">
+                <Loader2 className="animate-spin h-12 w-12 text-indigo-500" />
+                <p className="mt-4 text-slate-500 dark:text-slate-400">Loading your session...</p>
+            </div>
+        );
+    }
 
     if (!loadedDictionary) {
         return (
