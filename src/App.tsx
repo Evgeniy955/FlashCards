@@ -1,30 +1,43 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useAuthState } from 'react-firebase-hooks/auth';
 import { auth, db } from './lib/firebase-client';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, collection, getDocs } from 'firebase/firestore';
 import { Flashcard } from './components/Flashcard';
 import { ProgressBar } from './components/ProgressBar';
 import { SetSelector } from './components/SetSelector';
 import { FileSourceModal } from './components/FileSourceModal';
 import { InstructionsModal } from './components/InstructionsModal';
 import { LearnedWordsModal } from './components/LearnedWordsModal';
+import { ProfileModal } from './components/ProfileModal';
 import { WordList } from './components/WordList';
 import { SentenceUpload } from './components/SentenceUpload';
 import { Auth } from './components/Auth';
 import { Word, LoadedDictionary, WordProgress, TranslationMode, Theme } from './types';
 import { parseDictionaryFile, shuffleArray, getWordId } from './utils/dictionaryUtils';
-import { Shuffle, ChevronsUpDown, Info, BookUser, Trash2, Repeat, Library, Loader2 } from 'lucide-react';
+import { Shuffle, ChevronsUpDown, Info, BookUser, Trash2, Repeat, Library, Loader2, User as UserIcon } from 'lucide-react';
 import { TrainingModeInput, AnswerState } from './components/TrainingModeInput';
 import { TrainingModeGuess } from './components/TrainingModeGuess';
 import { TrainingModeToggle } from './components/TrainingModeToggle';
 import { TranslationModeToggle } from './components/TranslationModeToggle';
-import { saveLocalProgress, loadLocalProgress, deleteLocalProgress } from './lib/localProgress';
+import { saveLocalProgress, loadLocalProgress, deleteLocalProgress, loadAllLocalProgress } from './lib/localProgress';
 import { ThemeToggle } from './components/ThemeToggle';
 import { getDictionary } from './lib/indexedDB';
 
 
 // --- Constants ---
 const SRS_INTERVALS = [1, 2, 4, 8, 16, 32, 64]; // in days
+
+// Custom ProfileStats type definition for clarity
+interface ProfileStats {
+  totalWords: number;
+  learnedCount: number;
+  dontKnowCount: number;
+  remainingCount: number;
+  learnedPercentage: number;
+  remainingPercentage: number;
+  dictionaryCount?: number;
+}
+
 
 // --- Main App Component ---
 const App: React.FC = () => {
@@ -53,6 +66,7 @@ const App: React.FC = () => {
     const [isDontKnowMode, setIsDontKnowMode] = useState(false);
     const [isChangingWord, setIsChangingWord] = useState(false); // For fade animation
     const [isInstantChange, setIsInstantChange] = useState(false); // For instant card change
+    const [progressSaveCounter, setProgressSaveCounter] = useState(0); // Trigger for all-time stats refresh
 
     // State for Training Mode input
     const [userAnswer, setUserAnswer] = useState('');
@@ -64,7 +78,9 @@ const App: React.FC = () => {
     const [isFileSourceModalOpen, setFileSourceModalOpen] = useState(false);
     const [isInstructionsModalOpen, setInstructionsModalOpen] = useState(false);
     const [isLearnedWordsModalOpen, setLearnedWordsModalOpen] = useState(false);
+    const [isProfileModalOpen, setProfileModalOpen] = useState(false);
     const [theme, setTheme] = useState<Theme>('dark');
+    const [allTimeStats, setAllTimeStats] = useState<ProfileStats | null>(null);
 
     // Effect to set initial theme from localStorage or system preference
     useEffect(() => {
@@ -93,7 +109,7 @@ const App: React.FC = () => {
 
 
     const dictionaryId = useMemo(() => loadedDictionary?.name.replace(/[./]/g, '_'), [loadedDictionary]);
-
+    
     // --- History and Auto-loading Logic ---
 
     const saveLastUsedDictionary = useCallback(async (name: string) => {
@@ -174,7 +190,7 @@ const App: React.FC = () => {
                     if (savedDict) {
                         await loadAndSetDictionary(savedDict.name, savedDict.file);
                     } else {
-                        await clearLastUsedDictionary();
+                       await clearLastUsedDictionary();
                     }
                 } catch (error) {
                     console.error("Failed to load last used dictionary:", error);
@@ -290,6 +306,32 @@ const App: React.FC = () => {
         loadProgress();
     }, [user, dictionaryId]);
 
+
+    const currentDictionaryStats = useMemo<ProfileStats | null>(() => {
+        if (!loadedDictionary) return null;
+        const totalWords = loadedDictionary.sets.reduce((sum, set) => sum + set.words.length, 0);
+        const learnedCount = learnedWords.size;
+        
+        const allDontKnowWords = new Set<string>();
+        dontKnowWords.forEach(wordArray => {
+            wordArray.forEach(word => {
+                allDontKnowWords.add(getWordId(word));
+            });
+        });
+        const dontKnowCount = allDontKnowWords.size;
+
+        const remainingCount = totalWords - learnedCount;
+        
+        return {
+            totalWords,
+            learnedCount,
+            dontKnowCount,
+            remainingCount,
+            learnedPercentage: totalWords > 0 ? (learnedCount / totalWords) * 100 : 0,
+            remainingPercentage: totalWords > 0 ? (remainingCount / totalWords) * 100 : 0,
+        };
+    }, [loadedDictionary, learnedWords, dontKnowWords]);
+
     // Save DICTIONARY-SPECIFIC progress to Firestore or Local Storage
     useEffect(() => {
         if (isProgressLoading || !dictionaryId) {
@@ -301,25 +343,84 @@ const App: React.FC = () => {
                 learnedWords: Object.fromEntries(learnedWords),
                 dontKnowWords: Object.fromEntries(dontKnowWords),
             };
+            const totalWordsInDict = currentDictionaryStats?.totalWords;
 
             if (user) {
                 const docRef = doc(db, `users/${user.uid}/progress/${dictionaryId}`);
                 try {
-                    await setDoc(docRef, dataToSave, { merge: true });
+                    await setDoc(docRef, { ...dataToSave, totalWordsInDict }, { merge: true });
                 } catch (error) {
                     console.error("Error saving dictionary progress to Firestore:", error);
                 }
             } else {
                 try {
-                    await saveLocalProgress(dictionaryId, dataToSave);
+                    await saveLocalProgress(dictionaryId, { ...dataToSave, totalWordsInDict });
                 } catch (error) {
                     console.error("Error saving local progress:", error);
                 }
             }
+            setProgressSaveCounter(c => c + 1); // Trigger all-time stats refresh
         }, 1500);
 
         return () => clearTimeout(handler);
-    }, [learnedWords, dontKnowWords, user, dictionaryId, isProgressLoading]);
+    }, [learnedWords, dontKnowWords, user, dictionaryId, isProgressLoading, currentDictionaryStats]);
+
+     // Effect to calculate all-time stats
+     useEffect(() => {
+        const calculateAllTimeStats = async () => {
+            if (authLoading) return; // Wait for auth state to be resolved
+            let allProgressData: any[] = [];
+
+            try {
+                if (user) {
+                    const progressColRef = collection(db, `users/${user.uid}/progress`);
+                    const querySnapshot = await getDocs(progressColRef);
+                    querySnapshot.forEach(doc => allProgressData.push(doc.data()));
+                } else {
+                    allProgressData = await loadAllLocalProgress();
+                }
+
+                if (allProgressData.length > 0) {
+                    const aggregated = allProgressData.reduce((acc, progress) => {
+                        acc.totalWords += progress.totalWordsInDict || 0;
+                        acc.learnedCount += progress.learnedWords ? Object.keys(progress.learnedWords).length : 0;
+                        
+                        const dontKnowInDict = new Set<string>();
+                        if (progress.dontKnowWords) {
+                            Object.values(progress.dontKnowWords).forEach((wordArray: unknown) => {
+                                if (Array.isArray(wordArray)) {
+                                    (wordArray as Word[]).forEach(word => {
+                                        dontKnowInDict.add(getWordId(word));
+                                    });
+                                }
+                            });
+                        }
+                        acc.dontKnowCount += dontKnowInDict.size;
+                        return acc;
+                    }, { totalWords: 0, learnedCount: 0, dontKnowCount: 0 });
+
+                    const remaining = aggregated.totalWords - aggregated.learnedCount;
+
+                    setAllTimeStats({
+                        dictionaryCount: allProgressData.length,
+                        totalWords: aggregated.totalWords,
+                        learnedCount: aggregated.learnedCount,
+                        dontKnowCount: aggregated.dontKnowCount,
+                        remainingCount: remaining > 0 ? remaining : 0,
+                        learnedPercentage: aggregated.totalWords > 0 ? (aggregated.learnedCount / aggregated.totalWords) * 100 : 0,
+                        remainingPercentage: aggregated.totalWords > 0 ? (remaining / aggregated.totalWords) * 100 : 0,
+                    });
+                } else {
+                    setAllTimeStats(null);
+                }
+            } catch (error) {
+                console.error("Failed to calculate all-time stats:", error);
+                setAllTimeStats(null);
+            }
+        };
+
+        calculateAllTimeStats();
+    }, [user, authLoading, progressSaveCounter]);
 
 
     const currentSet = useMemo(() => selectedSetIndex !== null ? loadedDictionary?.sets[selectedSetIndex] : null, [selectedSetIndex, loadedDictionary]);
@@ -447,6 +548,7 @@ const App: React.FC = () => {
             .filter((item): item is Word & { progress: WordProgress } => item !== null)
             .sort((a, b) => a.lang2.localeCompare(b.lang2));
     }, [learnedWords, loadedDictionary]);
+
 
     const advanceToNextWord = (updateLogic: () => boolean, instant = false) => {
         if (!currentWord || isChangingWord || isInstantChange) return;
@@ -730,7 +832,7 @@ const App: React.FC = () => {
     if (!loadedDictionary) {
         return (
             <div className="min-h-screen flex flex-col">
-                <header className="relative z-10 w-full p-4 sm:p-6 flex justify-end">
+                 <header className="relative z-10 w-full p-4 sm:p-6 flex justify-end">
                     <div className="flex items-center gap-2">
                         <ThemeToggle theme={theme} setTheme={setTheme} />
                         <Auth user={user} />
@@ -770,6 +872,9 @@ const App: React.FC = () => {
                     <h1 className="text-lg sm:text-xl font-bold truncate max-w-[200px] sm:max-w-xs" title={loadedDictionary.name}>{loadedDictionary.name}</h1>
                 </div>
                 <div className="flex items-center gap-2">
+                    <button onClick={() => setProfileModalOpen(true)} className="text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors">
+                        <UserIcon size={20} />
+                    </button>
                     <ThemeToggle theme={theme} setTheme={setTheme} />
                     <Auth user={user} />
                 </div>
@@ -811,6 +916,13 @@ const App: React.FC = () => {
             <FileSourceModal isOpen={isFileSourceModalOpen && !loadedDictionary} onClose={() => setFileSourceModalOpen(false)} onFilesSelect={handleFilesSelect} isLoading={isLoading} user={user} />
             <InstructionsModal isOpen={isInstructionsModalOpen} onClose={() => setInstructionsModalOpen(false)} />
             <LearnedWordsModal isOpen={isLearnedWordsModalOpen} onClose={() => setLearnedWordsModalOpen(false)} learnedWords={learnedWordsWithDetails} lang1={currentSet?.lang1 || 'Language 1'} lang2={currentSet?.lang2 || 'Language 2'} />
+            <ProfileModal 
+                isOpen={isProfileModalOpen} 
+                onClose={() => setProfileModalOpen(false)} 
+                currentStats={currentDictionaryStats} 
+                allTimeStats={allTimeStats}
+                dictionaryName={loadedDictionary.name} 
+            />
         </main>
     );
 };

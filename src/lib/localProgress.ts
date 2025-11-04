@@ -5,6 +5,7 @@ const DB_VERSION = 1;
 export interface LocalProgress {
   learnedWords: object;
   dontKnowWords: object;
+  totalWordsInDict?: number;
 }
 
 const openDB = (): Promise<IDBDatabase> => {
@@ -44,6 +45,19 @@ export const loadLocalProgress = async (id: string): Promise<LocalProgress | und
         request.onerror = () => reject(request.error);
     });
 };
+
+export const loadAllLocalProgress = async (): Promise<(LocalProgress & {id: string})[]> => {
+    const db = await openDB();
+    return new Promise((resolve, reject) => {
+        const transaction = db.transaction(STORE_NAME, 'readonly');
+        transaction.onerror = () => reject(transaction.error);
+        const store = transaction.objectStore(STORE_NAME);
+        const request = store.getAll();
+        request.onsuccess = () => resolve(request.result as (LocalProgress & {id: string})[]);
+        request.onerror = () => reject(request.error);
+    });
+};
+
 
 export const deleteLocalProgress = async (id: string): Promise<void> => {
     const db = await openDB();
