@@ -59,7 +59,7 @@ const App: React.FC = () => {
     const [translationMode, setTranslationMode] = useState<TranslationMode>('standard');
     const [guessOptions, setGuessOptions] = useState<string[]>([]);
 
-    const [isFileSourceModalOpen, setFileSourceModalOpen] = useState(true);
+    const [isFileSourceModalOpen, setFileSourceModalOpen] = useState(false);
     const [isInstructionsModalOpen, setInstructionsModalOpen] = useState(false);
     const [isLearnedWordsModalOpen, setLearnedWordsModalOpen] = useState(false);
     const [theme, setTheme] = useState<Theme>('dark');
@@ -657,16 +657,24 @@ const App: React.FC = () => {
 
     if (!loadedDictionary) {
         return (
-            <main className="min-h-screen flex flex-col items-center justify-center p-4">
-                <FileSourceModal isOpen={isFileSourceModalOpen} onClose={() => setFileSourceModalOpen(false)} onFilesSelect={handleFilesSelect} isLoading={isLoading} user={user} />
-                <div className="text-center">
-                    <h1 className="text-5xl font-bold mb-4">Flashcard App</h1>
-                    <p className="text-slate-500 dark:text-slate-400 mb-8">Your personal language learning assistant.</p>
-                    <button onClick={() => setFileSourceModalOpen(true)} className="px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-semibold transition-colors">
-                        Get Started
-                    </button>
-                </div>
-            </main>
+            <div className="min-h-screen flex flex-col">
+                <header className="w-full p-4 sm:p-6 flex justify-end">
+                    <div className="flex items-center gap-2">
+                        <ThemeToggle theme={theme} setTheme={setTheme} />
+                        <Auth user={user} />
+                    </div>
+                </header>
+                <main className="flex-grow flex flex-col items-center justify-center p-4 -mt-16">
+                    <FileSourceModal isOpen={isFileSourceModalOpen} onClose={() => setFileSourceModalOpen(false)} onFilesSelect={handleFilesSelect} isLoading={isLoading} user={user} />
+                    <div className="text-center">
+                        <h1 className="text-5xl font-bold mb-4">Flashcard App</h1>
+                        <p className="text-slate-500 dark:text-slate-400 mb-8">Your personal language learning assistant.</p>
+                        <button onClick={() => setFileSourceModalOpen(true)} className="px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-semibold transition-colors">
+                            Select Dictionary
+                        </button>
+                    </div>
+                </main>
+            </div>
         );
     }
 
