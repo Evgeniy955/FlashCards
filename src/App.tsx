@@ -14,7 +14,7 @@ import { SentenceUpload } from './components/SentenceUpload';
 import { Auth } from './components/Auth';
 import { Word, LoadedDictionary, WordProgress, TranslationMode, Theme } from './types';
 import { parseDictionaryFile, shuffleArray, getWordId } from './utils/dictionaryUtils';
-import { Shuffle, ChevronsUpDown, Info, BookUser, Trash2, Repeat, Library, Loader2, User as UserIcon } from 'lucide-react';
+import { Shuffle, ChevronsUpDown, Info, BookUser, Trash2, Repeat, Library, Loader2, User as UserIcon, RefreshCw } from 'lucide-react';
 import { TrainingModeInput, AnswerState } from './components/TrainingModeInput';
 import { TrainingModeGuess } from './components/TrainingModeGuess';
 import { TrainingModeToggle } from './components/TrainingModeToggle';
@@ -117,6 +117,7 @@ const App: React.FC = () => {
     const [isProgressLoading, setIsProgressLoading] = useState(true); // For Firestore progress
     const [isWordListVisible, setIsWordListVisible] = useState(false);
     const [isDontKnowMode, setIsDontKnowMode] = useState(false);
+    const [isPracticeMode, setIsPracticeMode] = useState(false); // For re-studying without saving progress
     const [isChangingWord, setIsChangingWord] = useState(false); // For fade animation
     const [isInstantChange, setIsInstantChange] = useState(false); // For instant card change
     const [progressSaveCounter, setProgressSaveCounter] = useState(0); // Trigger for all-time stats refresh
@@ -678,6 +679,7 @@ const App: React.FC = () => {
         } else {
             setReviewWords([]);
             setSessionActive(false); // End session
+            setIsPracticeMode(false); // Exit practice mode
         }
     };
 
@@ -692,6 +694,7 @@ const App: React.FC = () => {
         });
 
         setIsShuffled(false);
+        setIsPracticeMode(false);
         if (wordsForReview.length > 0) {
             setReviewWords(wordsForReview);
             setSessionTotal(wordsForReview.length);
@@ -782,6 +785,10 @@ const App: React.FC = () => {
     };
 
     const handleKnow = () => {
+        if (isPracticeMode) {
+            advanceToNextWord(() => true, isFlipped);
+            return;
+        }
         const isNewlyLearned = !learnedWords.has(getWordId(currentWord));
         recordStudyActivity(isNewlyLearned);
         advanceToNextWord(() => {
@@ -807,6 +814,10 @@ const App: React.FC = () => {
     };
 
     const handleDontKnow = () => {
+        if (isPracticeMode) {
+            advanceToNextWord(() => true, isFlipped);
+            return;
+        }
         recordStudyActivity(false);
         advanceToNextWord(() => {
             if (selectedSetIndex === null) return false;
@@ -842,6 +853,7 @@ const App: React.FC = () => {
     const handleSelectSet = (index: number) => {
         if (index !== selectedSetIndex) {
             setSessionActive(false);
+            setIsPracticeMode(false);
             setSelectedSetIndex(index);
         }
     };
@@ -864,11 +876,29 @@ const App: React.FC = () => {
             setAnswerState('idle');
             setUserAnswer('');
             setIsDontKnowMode(true);
+            setIsPracticeMode(false);
             setSessionActive(true);
             setIsShuffled(false);
             if (trainingMode === 'guess') {
                 generateGuessOptions(shuffledWords[0]);
             }
+        }
+    };
+
+    const startPracticeSession = () => {
+        if (!currentSet) return;
+        const allWordsInSet = currentSet.words;
+        if (allWordsInSet.length > 0) {
+            const shuffledWords = shuffleArray(allWordsInSet);
+            setReviewWords(shuffledWords);
+            setSessionTotal(allWordsInSet.length);
+            setSessionProgress(1);
+            setCurrentWordIndex(0);
+            setIsFlipped(false);
+            setIsDontKnowMode(false);
+            setIsPracticeMode(true);
+            setSessionActive(true);
+            setIsShuffled(true);
         }
     };
 
@@ -985,7 +1015,17 @@ const App: React.FC = () => {
                                 <div /> {/* Placeholder for grid */}
                             </>
                         ) : (
-                            <p className="text-slate-500 dark:text-slate-400 text-sm col-span-3 text-center">{counterText}</p>
+                            <>
+                                <div className="text-left">
+                                    {isPracticeMode && (
+                                        <span className="text-xs font-semibold uppercase tracking-wider text-sky-500 dark:text-sky-400 bg-sky-500/10 px-2.5 py-1 rounded-full">
+                                            Practice
+                                        </span>
+                                    )}
+                                </div>
+                                <p className="text-slate-500 dark:text-slate-400 text-sm text-center">{counterText}</p>
+                                <div />
+                            </>
                         )}
                     </div>
                     <ProgressBar current={sessionProgress} total={sessionTotal} />
@@ -1026,12 +1066,20 @@ const App: React.FC = () => {
             <div className="text-center my-16">
                 <h2 className="text-2xl font-semibold mb-4 text-slate-800 dark:text-slate-300">Session Complete!</h2>
                 <p className="text-slate-500 dark:text-slate-400">You've reviewed all available cards for this set.</p>
-                {selectedSetIndex !== null && dontKnowWords.get(selectedSetIndex) && dontKnowWords.get(selectedSetIndex)!.length > 0 && (
-                    <button onClick={startDontKnowSession} className="mt-6 px-5 py-2.5 text-white bg-amber-600 hover:bg-amber-700 rounded-lg font-semibold transition-colors flex items-center gap-2 mx-auto">
-                        <Repeat size={18} />
-                        Review {dontKnowWords.get(selectedSetIndex)?.length} Mistake(s)
-                    </button>
-                )}
+                <div className="flex flex-col sm:flex-row justify-center items-center gap-4 mt-6">
+                    {selectedSetIndex !== null && dontKnowWords.get(selectedSetIndex) && dontKnowWords.get(selectedSetIndex)!.length > 0 && (
+                        <button onClick={startDontKnowSession} className="px-5 py-2.5 text-white bg-amber-600 hover:bg-amber-700 rounded-lg font-semibold transition-colors flex items-center gap-2">
+                            <Repeat size={18} />
+                            Review {dontKnowWords.get(selectedSetIndex)?.length} Mistake(s)
+                        </button>
+                    )}
+                    {currentSet && (
+                        <button onClick={startPracticeSession} className="px-5 py-2.5 text-white bg-sky-600 hover:bg-sky-700 rounded-lg font-semibold transition-colors flex items-center gap-2">
+                            <RefreshCw size={18} />
+                            Пройти еще раз
+                        </button>
+                    )}
+                </div>
             </div>
         );
     };
