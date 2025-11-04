@@ -30,13 +30,13 @@ const SRS_INTERVALS = [1, 2, 4, 8, 16, 32, 64]; // in days
 
 // Custom ProfileStats type definition for clarity
 interface ProfileStats {
-    totalWords: number;
-    learnedCount: number;
-    dontKnowCount: number;
-    remainingCount: number;
-    learnedPercentage: number;
-    remainingPercentage: number;
-    dictionaryCount?: number;
+  totalWords: number;
+  learnedCount: number;
+  dontKnowCount: number;
+  remainingCount: number;
+  learnedPercentage: number;
+  remainingPercentage: number;
+  dictionaryCount?: number;
 }
 
 // Custom hook to get the previous value of a prop or state.
@@ -52,34 +52,34 @@ function usePrevious<T>(value: T): T | undefined {
 // --- Helper Functions for Stats ---
 const calculateStreak = (history: string[]): number => {
     if (!history || history.length === 0) return 0;
-
+  
     const sortedDates = [...new Set(history)].map(d => new Date(d)).sort((a, b) => b.getTime() - a.getTime());
-
+  
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-
+  
     const yesterday = new Date();
     yesterday.setDate(today.getDate() - 1);
     yesterday.setHours(0, 0, 0, 0);
-
+  
     // Streak is valid if the last session was today or yesterday
     if (sortedDates[0].getTime() !== today.getTime() && sortedDates[0].getTime() !== yesterday.getTime()) {
-        return 0;
+      return 0;
     }
-
+  
     let streak = 1;
     for (let i = 0; i < sortedDates.length - 1; i++) {
-        const current = sortedDates[i];
-        const next = sortedDates[i + 1];
-
-        const diffTime = current.getTime() - next.getTime();
-        const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
-
-        if (diffDays === 1) {
-            streak++;
-        } else {
-            break; // Gap found, streak ends
-        }
+      const current = sortedDates[i];
+      const next = sortedDates[i + 1];
+  
+      const diffTime = current.getTime() - next.getTime();
+      const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
+  
+      if (diffDays === 1) {
+        streak++;
+      } else {
+        break; // Gap found, streak ends
+      }
     }
     return streak;
 };
@@ -139,7 +139,7 @@ const App: React.FC = () => {
     // State for welcome toast
     const [welcomeStats, setWelcomeStats] = useState<{ streak: number; lastSessionCount: number } | null>(null);
     const [showWelcomeToast, setShowWelcomeToast] = useState(false);
-
+    
     // State to manage sync on login
     const [isSyncing, setIsSyncing] = useState(false);
     const prevUser = usePrevious(user);
@@ -171,7 +171,7 @@ const App: React.FC = () => {
 
 
     const dictionaryId = useMemo(() => loadedDictionary?.name.replace(/[./]/g, '_'), [loadedDictionary]);
-
+    
     // --- History and Auto-loading Logic ---
 
     const saveLastUsedDictionary = useCallback(async (name: string) => {
@@ -252,7 +252,7 @@ const App: React.FC = () => {
                     if (savedDict) {
                         await loadAndSetDictionary(savedDict.name, savedDict.file);
                     } else {
-                        await clearLastUsedDictionary();
+                       await clearLastUsedDictionary();
                     }
                 } catch (error) {
                     console.error("Failed to load last used dictionary:", error);
@@ -271,7 +271,7 @@ const App: React.FC = () => {
     // --- Study Stats and Welcome Message ---
     useEffect(() => {
         if (!user || authLoading) return;
-
+    
         const fetchUserStats = async () => {
             const userDocRef = doc(db, 'users', user.uid);
             try {
@@ -280,10 +280,10 @@ const App: React.FC = () => {
                     const data = docSnap.data();
                     const history = data.studyHistory || [];
                     const dailyData = data.dailyStats || {};
-
+    
                     const streak = calculateStreak(history);
                     const lastSessionCount = getLastSessionCount(history, dailyData);
-
+    
                     if (streak > 0 || lastSessionCount > 0) {
                         setWelcomeStats({ streak, lastSessionCount });
                         setShowWelcomeToast(true);
@@ -293,30 +293,30 @@ const App: React.FC = () => {
                 console.error("Failed to fetch user stats for welcome message:", error);
             }
         };
-
+    
         fetchUserStats();
     }, [user, authLoading]);
 
     const recordStudyActivity = useCallback(async (isNewWord: boolean) => {
         if (!user) return;
-
+    
         const todayStr = new Date().toISOString().split('T')[0]; // YYYY-MM-DD format
         const userDocRef = doc(db, 'users', user.uid);
-
+    
         try {
             const updates: { [key: string]: any } = {
                 studyHistory: arrayUnion(todayStr)
             };
-
+    
             if (isNewWord) {
                 // This syntax allows for a dynamic key in the update object.
                 // It will increment 'newWordsLearned' for the current date.
                 updates[`dailyStats.${todayStr}.newWordsLearned`] = increment(1);
             }
-
+    
             // Using setDoc with merge is safer than updateDoc as it creates the doc if it doesn't exist.
             await setDoc(userDocRef, updates, { merge: true });
-
+    
         } catch (error) {
             console.error("Failed to record study activity:", error);
         }
@@ -394,7 +394,7 @@ const App: React.FC = () => {
 
                     const mergedDontKnow = new Map<number, Word[]>();
                     const allDontKnowKeys = new Set([...localDontKnow.keys(), ...remoteDontKnow.keys()]);
-
+                    
                     allDontKnowKeys.forEach(key => {
                         const localWords = localDontKnow.get(key) || [];
                         const remoteWords = remoteDontKnow.get(key) || [];
@@ -403,7 +403,7 @@ const App: React.FC = () => {
                         const uniqueWords = Array.from(new Map(combined.map(w => [getWordId(w), w])).values());
                         mergedDontKnow.set(key, uniqueWords);
                     });
-
+                    
                     // 3. Update state with the definitive merged data.
                     setLearnedWords(mergedLearned);
                     setDontKnowWords(mergedDontKnow);
@@ -433,12 +433,12 @@ const App: React.FC = () => {
                 // isProgressLoading remains true from its initial state, which is correct.
                 return;
             }
-
+            
             // If a sync is in progress, let it finish. Don't run this load.
             if (isSyncing) {
                 return;
             }
-
+    
             setIsProgressLoading(true);
             try {
                 if (user) { // User is logged in, use Firestore
@@ -480,7 +480,7 @@ const App: React.FC = () => {
                 setIsProgressLoading(false);
             }
         };
-
+    
         loadProgress();
     }, [user, dictionaryId, isSyncing]);
 
@@ -489,7 +489,7 @@ const App: React.FC = () => {
         if (!loadedDictionary) return null;
         const totalWords = loadedDictionary.sets.reduce((sum, set) => sum + set.words.length, 0);
         const learnedCount = learnedWords.size;
-
+        
         const allDontKnowWords = new Set<string>();
         dontKnowWords.forEach(wordArray => {
             wordArray.forEach(word => {
@@ -499,7 +499,7 @@ const App: React.FC = () => {
         const dontKnowCount = allDontKnowWords.size;
 
         const remainingCount = totalWords - learnedCount;
-
+        
         return {
             totalWords,
             learnedCount,
@@ -543,8 +543,8 @@ const App: React.FC = () => {
         return () => clearTimeout(handler);
     }, [learnedWords, dontKnowWords, user, dictionaryId, isProgressLoading, currentDictionaryStats]);
 
-    // Effect to calculate all-time stats
-    useEffect(() => {
+     // Effect to calculate all-time stats
+     useEffect(() => {
         const calculateAllTimeStats = async () => {
             if (authLoading) return; // Wait for auth state to be resolved
             let allProgressData: any[] = [];
@@ -562,7 +562,7 @@ const App: React.FC = () => {
                     const aggregated = allProgressData.reduce((acc, progress) => {
                         acc.totalWords += progress.totalWordsInDict || 0;
                         acc.learnedCount += progress.learnedWords ? Object.keys(progress.learnedWords).length : 0;
-
+                        
                         const dontKnowInDict = new Set<string>();
                         if (progress.dontKnowWords) {
                             Object.values(progress.dontKnowWords).forEach((wordArray: unknown) => {
@@ -612,17 +612,17 @@ const App: React.FC = () => {
                 } else {
                     await clearAllLocalProgress();
                 }
-
+    
                 // Also clear the current dictionary's progress from state
                 setLearnedWords(new Map());
                 setDontKnowWords(new Map());
-
+                
                 // Force a refresh of the stats
                 setAllTimeStats(null);
                 setProgressSaveCounter(c => c + 1);
-
+    
                 alert('All statistics have been reset.');
-
+    
             } catch (error) {
                 console.error("Failed to reset all stats:", error);
                 alert("An error occurred while resetting statistics. Please try again.");
@@ -907,7 +907,7 @@ const App: React.FC = () => {
 
         const correctAnswer = translationMode === 'standard' ? currentWord.lang2 : currentWord.lang1;
         const isCorrect = userAnswer.trim().toLowerCase() === correctAnswer.toLowerCase();
-
+        
         recordStudyActivity(isCorrect && !learnedWords.has(getWordId(currentWord)));
 
         if (isCorrect) {
@@ -1096,7 +1096,7 @@ const App: React.FC = () => {
     if (!loadedDictionary) {
         return (
             <div className="min-h-screen flex flex-col">
-                <header className="relative z-10 w-full p-4 sm:p-6 flex justify-end">
+                 <header className="relative z-10 w-full p-4 sm:p-6 flex justify-end">
                     <div className="flex items-center gap-2">
                         <ThemeToggle theme={theme} setTheme={setTheme} />
                         <Auth user={user} />
@@ -1176,7 +1176,7 @@ const App: React.FC = () => {
 
                 {currentSet && <WordList words={currentSet.words} isVisible={isWordListVisible} lang1={currentSet.lang1} lang2={currentSet.lang2} />}
             </div>
-
+            
             {user && showWelcomeToast && welcomeStats && (
                 <StudyStatsToast
                     streak={welcomeStats.streak}
@@ -1188,10 +1188,10 @@ const App: React.FC = () => {
             <FileSourceModal isOpen={isFileSourceModalOpen && !loadedDictionary} onClose={() => setFileSourceModalOpen(false)} onFilesSelect={handleFilesSelect} isLoading={isLoading} user={user} />
             <InstructionsModal isOpen={isInstructionsModalOpen} onClose={() => setInstructionsModalOpen(false)} />
             <LearnedWordsModal isOpen={isLearnedWordsModalOpen} onClose={() => setLearnedWordsModalOpen(false)} learnedWords={learnedWordsWithDetails} lang1={currentSet?.lang1 || 'Language 1'} lang2={currentSet?.lang2 || 'Language 2'} />
-            <ProfileModal
-                isOpen={isProfileModalOpen}
-                onClose={() => setProfileModalOpen(false)}
-                currentStats={currentDictionaryStats}
+            <ProfileModal 
+                isOpen={isProfileModalOpen} 
+                onClose={() => setProfileModalOpen(false)} 
+                currentStats={currentDictionaryStats} 
                 allTimeStats={allTimeStats}
                 dictionaryName={loadedDictionary.name}
                 onResetAllStats={handleResetAllStats}
