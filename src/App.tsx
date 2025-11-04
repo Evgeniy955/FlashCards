@@ -823,10 +823,11 @@ const App: React.FC = () => {
     };
 
     const handleTrainingNext = () => {
-        setAnswerState('idle');
-        setUserAnswer('');
-        setIsFlipped(false);
-        updateWordIndex();
+        advanceToNextWord(() => {
+            setAnswerState('idle');
+            setUserAnswer('');
+            return true;
+        }, isFlipped);
     };
 
     const handleGuess = (isCorrect: boolean) => {
