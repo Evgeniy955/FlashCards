@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Database, Loader2, Trash2, Cloud } from 'lucide-react';
 import { getDictionary, deleteDictionary, saveDictionary, getAllDictionaryDetails } from '../lib/indexedDB';
 import { useAuthState } from 'react-firebase-hooks/auth';
@@ -26,97 +26,96 @@ export const LocalDictionaries: React.FC<LocalDictionariesProps> = ({ onSelect }
   const [actionInProgress, setActionInProgress] = useState<{ name: string, type: 'select' | 'delete' } | null>(null);
   const [user] = useAuthState(auth);
 
-  useEffect(() => {
-    const syncAndFetchDictionaries = async () => {
-      setIsLoading(true);
-      setError(null);
-      try {
-        // 1. Get remote dictionaries from Firestore
-        const remoteDictMap = new Map<string, any>();
-        if (user) {
-            const firestoreDictsRef = collection(db, `users/${user.uid}/dictionaries`);
-            const querySnapshot = await getDocs(firestoreDictsRef);
-            querySnapshot.forEach(doc => {
-                remoteDictMap.set(doc.id, doc.data());
-            });
-        }
-        
-        // 2. Get ALL local dictionaries from IndexedDB and filter them
-        const allLocalDicts = await getAllDictionaryDetails();
-        const userUploadedLocalDicts = allLocalDicts.filter(d => !d.isBuiltIn);
-
-        const allLocalDictsMap = new Map(allLocalDicts.map(dict => [dict.fileName, dict]));
-        const userUploadedLocalDictsMap = new Map(userUploadedLocalDicts.map(dict => [dict.fileName, dict]));
-        
-        // 3. If logged in, perform sync operations
-        if (user) {
-            let changesMade = false;
-            // 3a. Upload local-only dictionaries (only user-uploaded ones)
-            for (const [fileName, localData] of userUploadedLocalDictsMap.entries()) {
-                if (!remoteDictMap.has(fileName)) {
-                    changesMade = true;
-                    const file = base64ToFile(localData.content, localData.fileName, localData.mimeType);
-                    if (file.size > FIRESTORE_DOC_SIZE_LIMIT) {
-                        console.warn(`Local dictionary "${fileName}" is too large to sync to the cloud.`);
-                        continue;
-                    }
-                    const dictionaryDocRef = doc(db, `users/${user.uid}/dictionaries/${fileName}`);
-                    await setDoc(dictionaryDocRef, {
-                        name: fileName,
-                        content: localData.content,
-                        mimeType: localData.mimeType,
-                        lastModified: new Date(localData.lastModified),
-                    });
-                }
-            }
-
-            // 3b. Download remote-only dictionaries
-            for (const [fileName, remoteData] of remoteDictMap.entries()) {
-                if (!allLocalDictsMap.has(fileName)) { // Check against ALL local dicts
-                    changesMade = true;
-                    const dictBaseName = remoteData.name.replace(/\.xlsx$/i, '');
-                    const file = base64ToFile(remoteData.content, remoteData.name, remoteData.mimeType);
-                    await saveDictionary(dictBaseName, file); // isBuiltIn defaults to false, correct.
-                }
-            }
-
-            // 4. If sync happened, re-fetch and rebuild UI state for consistency
-            if (changesMade) {
-                // This block re-fetches everything to ensure the UI is perfectly in sync.
-                const finalRemoteSnapshot = await getDocs(collection(db, `users/${user.uid}/dictionaries`));
-                remoteDictMap.clear();
-                finalRemoteSnapshot.forEach(doc => {
-                    remoteDictMap.set(doc.id, doc.data());
-                });
-
-                const finalAllLocalDicts = await getAllDictionaryDetails();
-                const finalUserLocalDicts = finalAllLocalDicts.filter(d => !d.isBuiltIn);
-                userUploadedLocalDictsMap.clear();
-                finalUserLocalDicts.forEach(d => userUploadedLocalDictsMap.set(d.fileName, d));
-            }
-        }
-
-        // 5. Build the final list for the UI from remote and USER-UPLOADED local dictionaries
-        const uiFileNames = new Set([...remoteDictMap.keys(), ...userUploadedLocalDictsMap.keys()]);
-        const statusList = Array.from(uiFileNames).map(fileName => ({
-            name: fileName.replace(/\.xlsx$/i, ''),
-            fileName: fileName,
-            isLocal: userUploadedLocalDictsMap.has(fileName),
-            isRemote: remoteDictMap.has(fileName),
-        })).sort((a, b) => a.name.localeCompare(b.name));
-        
-        setSavedDicts(statusList);
-
-      } catch (err) {
-        setError('Could not load or sync dictionaries. Please check your connection and security rules.');
-        console.error(err);
-      } finally {
-        setIsLoading(false);
+  const syncAndFetchDictionaries = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      // 1. Get remote dictionaries from Firestore
+      const remoteDictMap = new Map<string, any>();
+      if (user) {
+          const firestoreDictsRef = collection(db, `users/${user.uid}/dictionaries`);
+          const querySnapshot = await getDocs(firestoreDictsRef);
+          querySnapshot.forEach(doc => {
+              remoteDictMap.set(doc.id, doc.data());
+          });
       }
-    };
+      
+      // 2. Get ALL local dictionaries from IndexedDB and filter them
+      const allLocalDicts = await getAllDictionaryDetails();
+      const userUploadedLocalDicts = allLocalDicts.filter(d => !d.isBuiltIn);
 
-    syncAndFetchDictionaries();
+      const allLocalDictsMap = new Map(allLocalDicts.map(dict => [dict.fileName, dict]));
+      const userUploadedLocalDictsMap = new Map(userUploadedLocalDicts.map(dict => [dict.fileName, dict]));
+      
+      // 3. If logged in, perform sync operations
+      if (user) {
+          let changesMade = false;
+          // 3a. Upload local-only dictionaries (only user-uploaded ones)
+          for (const [fileName, localData] of userUploadedLocalDictsMap.entries()) {
+              if (!remoteDictMap.has(fileName)) {
+                  changesMade = true;
+                  const file = base64ToFile(localData.content, localData.fileName, localData.mimeType);
+                  if (file.size > FIRESTORE_DOC_SIZE_LIMIT) {
+                      console.warn(`Local dictionary "${fileName}" is too large to sync to the cloud.`);
+                      continue;
+                  }
+                  const dictionaryDocRef = doc(db, `users/${user.uid}/dictionaries/${fileName}`);
+                  await setDoc(dictionaryDocRef, {
+                      name: fileName,
+                      content: localData.content,
+                      mimeType: localData.mimeType,
+                      lastModified: new Date(localData.lastModified),
+                  });
+              }
+          }
+
+          // 3b. Download remote-only dictionaries
+          for (const [fileName, remoteData] of remoteDictMap.entries()) {
+              if (!allLocalDictsMap.has(fileName)) { // Check against ALL local dicts
+                  changesMade = true;
+                  const dictBaseName = remoteData.name.replace(/\.xlsx$/i, '');
+                  const file = base64ToFile(remoteData.content, remoteData.name, remoteData.mimeType);
+                  await saveDictionary(dictBaseName, file); // isBuiltIn defaults to false, correct.
+              }
+          }
+
+          // 4. If sync happened, re-fetch and rebuild UI state for consistency
+          if (changesMade) {
+              const finalRemoteSnapshot = await getDocs(collection(db, `users/${user.uid}/dictionaries`));
+              remoteDictMap.clear();
+              finalRemoteSnapshot.forEach(doc => {
+                  remoteDictMap.set(doc.id, doc.data());
+              });
+
+              const finalAllLocalDicts = await getAllDictionaryDetails();
+              const finalUserLocalDicts = finalAllLocalDicts.filter(d => !d.isBuiltIn);
+              userUploadedLocalDictsMap.clear();
+              finalUserLocalDicts.forEach(d => userUploadedLocalDictsMap.set(d.fileName, d));
+          }
+      }
+
+      // 5. Build the final list for the UI from remote and USER-UPLOADED local dictionaries
+      const uiFileNames = new Set([...remoteDictMap.keys(), ...userUploadedLocalDictsMap.keys()]);
+      const statusList = Array.from(uiFileNames).map(fileName => ({
+          name: fileName.replace(/\.xlsx$/i, ''),
+          fileName: fileName,
+          isLocal: userUploadedLocalDictsMap.has(fileName),
+          isRemote: remoteDictMap.has(fileName),
+      })).sort((a, b) => a.name.localeCompare(b.name));
+      
+      setSavedDicts(statusList);
+
+    } catch (err) {
+      setError('Could not load or sync dictionaries. Please check your connection and security rules.');
+      console.error(err);
+    } finally {
+      setIsLoading(false);
+    }
   }, [user]);
+
+  useEffect(() => {
+    syncAndFetchDictionaries();
+  }, [syncAndFetchDictionaries]);
 
   const handleSelect = async (name: string) => {
     setActionInProgress({ name, type: 'select' });
@@ -150,7 +149,10 @@ export const LocalDictionaries: React.FC<LocalDictionariesProps> = ({ onSelect }
           await deleteDoc(dictionaryDocRef);
         }
   
-        setSavedDicts(prev => prev.filter(d => d.name !== dict.name));
+        // Instead of just filtering the local state, re-run the entire sync process
+        // to get the definitive state from the server and local DB.
+        await syncAndFetchDictionaries();
+
       } catch (err) {
         setError(`Failed to delete "${dict.name}". This can happen after an app update. Please reload the page and try again.`);
         console.error(err);
