@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useAuthState } from 'react-firebase-hooks/auth';
 import { auth, db } from './lib/firebase-client';
-import { doc, getDoc, setDoc, collection, getDocs, deleteDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, collection, getDocs, deleteDoc, updateDoc, arrayUnion, increment } from 'firebase/firestore';
 import { Flashcard } from './components/Flashcard';
 import { ProgressBar } from './components/ProgressBar';
 import { SetSelector } from './components/SetSelector';
@@ -22,6 +22,7 @@ import { TranslationModeToggle } from './components/TranslationModeToggle';
 import { saveLocalProgress, loadLocalProgress, deleteLocalProgress, loadAllLocalProgress, clearAllLocalProgress } from './lib/localProgress';
 import { ThemeToggle } from './components/ThemeToggle';
 import { getDictionary } from './lib/indexedDB';
+import { StudyStatsToast } from './components/StudyStatsToast';
 
 
 // --- Constants ---
@@ -37,6 +38,48 @@ interface ProfileStats {
   remainingPercentage: number;
   dictionaryCount?: number;
 }
+
+// --- Helper Functions for Stats ---
+const calculateStreak = (history: string[]): number => {
+    if (!history || history.length === 0) return 0;
+  
+    const sortedDates = [...new Set(history)].map(d => new Date(d)).sort((a, b) => b.getTime() - a.getTime());
+  
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+  
+    const yesterday = new Date();
+    yesterday.setDate(today.getDate() - 1);
+    yesterday.setHours(0, 0, 0, 0);
+  
+    // Streak is valid if the last session was today or yesterday
+    if (sortedDates[0].getTime() !== today.getTime() && sortedDates[0].getTime() !== yesterday.getTime()) {
+      return 0;
+    }
+  
+    let streak = 1;
+    for (let i = 0; i < sortedDates.length - 1; i++) {
+      const current = sortedDates[i];
+      const next = sortedDates[i + 1];
+  
+      const diffTime = current.getTime() - next.getTime();
+      const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
+  
+      if (diffDays === 1) {
+        streak++;
+      } else {
+        break; // Gap found, streak ends
+      }
+    }
+    return streak;
+};
+
+const getLastSessionCount = (history: string[], dailyData: { [key: string]: { newWordsLearned: number } }): number => {
+    if (!history || history.length === 0) return 0;
+    const sortedDates = [...new Set(history)].sort().reverse();
+    const lastDate = sortedDates[0];
+    return dailyData[lastDate]?.newWordsLearned || 0;
+};
 
 
 // --- Main App Component ---
@@ -82,6 +125,10 @@ const App: React.FC = () => {
     const [theme, setTheme] = useState<Theme>('dark');
     const [allTimeStats, setAllTimeStats] = useState<ProfileStats | null>(null);
 
+    // State for welcome toast
+    const [welcomeStats, setWelcomeStats] = useState<{ streak: number; lastSessionCount: number } | null>(null);
+    const [showWelcomeToast, setShowWelcomeToast] = useState(false);
+
     // Effect to set initial theme from localStorage or system preference
     useEffect(() => {
         const savedTheme = localStorage.getItem('theme') as Theme | null;
@@ -90,7 +137,7 @@ const App: React.FC = () => {
         if (savedTheme) {
             setTheme(savedTheme);
         } else if (systemPrefersDark) {
-            setTheme('dark');
+            setTheme('light');
         } else {
             setTheme('light');
         }
@@ -204,6 +251,63 @@ const App: React.FC = () => {
     }, [user, authLoading, loadAndSetDictionary, clearLastUsedDictionary]);
 
     // --- End History Logic ---
+
+
+    // --- Study Stats and Welcome Message ---
+    useEffect(() => {
+        if (!user || authLoading) return;
+    
+        const fetchUserStats = async () => {
+            const userDocRef = doc(db, 'users', user.uid);
+            try {
+                const docSnap = await getDoc(userDocRef);
+                if (docSnap.exists()) {
+                    const data = docSnap.data();
+                    const history = data.studyHistory || [];
+                    const dailyData = data.dailyStats || {};
+    
+                    const streak = calculateStreak(history);
+                    const lastSessionCount = getLastSessionCount(history, dailyData);
+    
+                    if (streak > 0 || lastSessionCount > 0) {
+                        setWelcomeStats({ streak, lastSessionCount });
+                        setShowWelcomeToast(true);
+                    }
+                }
+            } catch (error) {
+                console.error("Failed to fetch user stats for welcome message:", error);
+            }
+        };
+    
+        fetchUserStats();
+    }, [user, authLoading]);
+
+    const recordStudyActivity = useCallback(async (isNewWord: boolean) => {
+        if (!user) return;
+    
+        const todayStr = new Date().toISOString().split('T')[0]; // YYYY-MM-DD format
+        const userDocRef = doc(db, 'users', user.uid);
+    
+        try {
+            const updates: { [key: string]: any } = {
+                studyHistory: arrayUnion(todayStr)
+            };
+    
+            if (isNewWord) {
+                // This syntax allows for a dynamic key in the update object.
+                // It will increment 'newWordsLearned' for the current date.
+                updates[`dailyStats.${todayStr}.newWordsLearned`] = increment(1);
+            }
+    
+            // Using setDoc with merge is safer than updateDoc as it creates the doc if it doesn't exist.
+            await setDoc(userDocRef, updates, { merge: true });
+    
+        } catch (error) {
+            console.error("Failed to record study activity:", error);
+        }
+    }, [user]);
+
+    // --- End Study Stats ---
 
 
     // Load global sentences from Firestore user document
@@ -605,6 +709,8 @@ const App: React.FC = () => {
     };
 
     const handleKnow = () => {
+        const isNewlyLearned = !learnedWords.has(getWordId(currentWord));
+        recordStudyActivity(isNewlyLearned);
         advanceToNextWord(() => {
             const wordId = getWordId(currentWord);
             const progress = learnedWords.get(wordId);
@@ -628,6 +734,7 @@ const App: React.FC = () => {
     };
 
     const handleDontKnow = () => {
+        recordStudyActivity(false);
         advanceToNextWord(() => {
             if (selectedSetIndex === null) return false;
             const wordId = getWordId(currentWord);
@@ -697,6 +804,8 @@ const App: React.FC = () => {
 
         const correctAnswer = translationMode === 'standard' ? currentWord.lang2 : currentWord.lang1;
         const isCorrect = userAnswer.trim().toLowerCase() === correctAnswer.toLowerCase();
+        
+        recordStudyActivity(isCorrect && !learnedWords.has(getWordId(currentWord)));
 
         if (isCorrect) {
             setAnswerState('correct');
@@ -721,6 +830,7 @@ const App: React.FC = () => {
     };
 
     const handleGuess = (isCorrect: boolean) => {
+        recordStudyActivity(isCorrect && !learnedWords.has(getWordId(currentWord)));
         if (isCorrect) {
             const wordId = getWordId(currentWord);
             const progress = learnedWords.get(wordId);
@@ -944,6 +1054,14 @@ const App: React.FC = () => {
 
                 {currentSet && <WordList words={currentSet.words} isVisible={isWordListVisible} lang1={currentSet.lang1} lang2={currentSet.lang2} />}
             </div>
+            
+            {user && showWelcomeToast && welcomeStats && (
+                <StudyStatsToast
+                    streak={welcomeStats.streak}
+                    wordsLearned={welcomeStats.lastSessionCount}
+                    onClose={() => setShowWelcomeToast(false)}
+                />
+            )}
 
             <FileSourceModal isOpen={isFileSourceModalOpen && !loadedDictionary} onClose={() => setFileSourceModalOpen(false)} onFilesSelect={handleFilesSelect} isLoading={isLoading} user={user} />
             <InstructionsModal isOpen={isInstructionsModalOpen} onClose={() => setInstructionsModalOpen(false)} />
