@@ -757,7 +757,7 @@ const App: React.FC = () => {
                 });
             }
             return true;
-        });
+        }, isFlipped);
     };
 
     const handleFlip = () => {
