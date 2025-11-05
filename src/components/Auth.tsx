@@ -1,8 +1,6 @@
 import React from 'react';
-// FIX: Switched to Firebase v8 compatibility API to fix module export errors.
-// This requires using the namespaced `firebase.auth` API instead of v9 modular functions.
-import firebase from 'firebase/compat/app';
-import 'firebase/compat/auth';
+// FIX: Switched to Firebase v9+ modular API to match the rest of the app.
+import { GoogleAuthProvider, signInWithPopup, signOut, type User } from 'firebase/auth';
 import { auth } from '../lib/firebase-client';
 
 const GoogleIcon = () => (
@@ -16,15 +14,15 @@ const GoogleIcon = () => (
 );
 
 interface AuthProps {
-    user: firebase.User | null | undefined;
+    user: User | null | undefined;
 }
 
 export const Auth: React.FC<AuthProps> = ({ user }) => {
     
     const handleSignIn = async () => {
-        const provider = new firebase.auth.GoogleAuthProvider();
+        const provider = new GoogleAuthProvider();
         try {
-            await auth.signInWithPopup(provider);
+            await signInWithPopup(auth, provider);
         } catch (error) {
             console.error("Authentication failed:", error);
         }
@@ -32,7 +30,7 @@ export const Auth: React.FC<AuthProps> = ({ user }) => {
 
     const handleSignOut = async () => {
         try {
-            await auth.signOut();
+            await signOut(auth);
         } catch (error) {
             console.error("Sign out failed:", error);
         }

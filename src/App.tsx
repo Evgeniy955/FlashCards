@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useAuthState } from 'react-firebase-hooks/auth';
 import { auth, db } from './lib/firebase-client';
-import { doc, getDoc, setDoc, collection, getDocs, deleteDoc, updateDoc, arrayUnion, increment } from 'firebase/firestore';
+import { doc, getDoc, setDoc, collection, getDocs, deleteDoc, arrayUnion, increment } from 'firebase/firestore';
 import { Flashcard } from './components/Flashcard';
 import { ProgressBar } from './components/ProgressBar';
 import { SetSelector } from './components/SetSelector';
