@@ -23,6 +23,7 @@ import { saveLocalProgress, loadLocalProgress, deleteLocalProgress, loadAllLocal
 import { ThemeToggle } from './components/ThemeToggle';
 import { getDictionary } from './lib/indexedDB';
 import { StudyStatsToast } from './components/StudyStatsToast';
+import { loadSentences as loadLocalSentences, saveSentences as saveLocalSentences } from './lib/sentenceDB';
 
 
 // --- Constants ---
@@ -248,7 +249,7 @@ const App: React.FC = () => {
 
             if (lastUsedDictName) {
                 try {
-                    const savedDict = await getDictionary(lastUsedDictName);
+                    const savedDict = await getDictionary(lastUsedDictName, user?.uid);
                     if (savedDict) {
                         await loadAndSetDictionary(savedDict.name, savedDict.file);
                     } else {
@@ -325,49 +326,66 @@ const App: React.FC = () => {
     // --- End Study Stats ---
 
 
-    // Load global sentences from Firestore user document
+    // Load sentences from Firestore (for logged-in users) or IndexedDB (for anonymous users)
     useEffect(() => {
-        const loadGlobalSentences = async () => {
-            if (!user) {
-                setSentences(new Map());
-                return;
-            }
-            const userDocRef = doc(db, 'users', user.uid);
-            try {
-                const docSnap = await getDoc(userDocRef);
-                if (docSnap.exists()) {
-                    const data = docSnap.data();
-                    if (data?.globalSentences) {
-                        setSentences(new Map(Object.entries(data.globalSentences)));
-                    } else {
-                        setSentences(new Map());
+        const loadUserSentences = async () => {
+            if (authLoading) return; // Wait for auth state to be confirmed
+            
+            if (user) {
+                const userDocRef = doc(db, 'users', user.uid);
+                try {
+                    const docSnap = await getDoc(userDocRef);
+                    if (docSnap.exists()) {
+                        const data = docSnap.data();
+                        if (data?.globalSentences) {
+                            setSentences(new Map(Object.entries(data.globalSentences)));
+                        } else {
+                            setSentences(new Map());
+                        }
                     }
+                } catch (error) {
+                    console.error("Error loading sentences from Firestore:", error);
+                    setSentences(new Map());
                 }
-            } catch (error) {
-                console.error("Error loading global sentences:", error);
-                setSentences(new Map());
+            } else {
+                // User is logged out, load from local storage
+                try {
+                    const localSentences = await loadLocalSentences('local');
+                    setSentences(localSentences);
+                } catch (error) {
+                    console.error("Error loading local sentences:", error);
+                    setSentences(new Map());
+                }
             }
         };
-        loadGlobalSentences();
-    }, [user]);
+        loadUserSentences();
+    }, [user, authLoading]);
 
-    // Save global sentences to Firestore user document
+    // Save sentences to Firestore or IndexedDB, with debouncing
     useEffect(() => {
-        if (!user) return;
+        if (authLoading) return; // Don't save until auth state is known
 
         const handler = setTimeout(async () => {
-            const userDocRef = doc(db, 'users', user.uid);
-            try {
-                await setDoc(userDocRef, {
-                    globalSentences: Object.fromEntries(sentences)
-                }, { merge: true });
-            } catch (error) {
-                console.error("Error saving global sentences:", error);
+            if (user) {
+                const userDocRef = doc(db, 'users', user.uid);
+                try {
+                    await setDoc(userDocRef, {
+                        globalSentences: Object.fromEntries(sentences)
+                    }, { merge: true });
+                } catch (error) {
+                    console.error("Error saving sentences to Firestore:", error);
+                }
+            } else {
+                try {
+                    await saveLocalSentences('local', sentences);
+                } catch (error) {
+                    console.error("Error saving local sentences:", error);
+                }
             }
         }, 1500);
 
         return () => clearTimeout(handler);
-    }, [sentences, user]);
+    }, [sentences, user, authLoading]);
 
     // Effect to handle merging local progress to remote on login
     useEffect(() => {
