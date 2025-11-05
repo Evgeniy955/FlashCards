@@ -1076,7 +1076,7 @@ const App: React.FC = () => {
                     {currentSet && (
                         <button onClick={startPracticeSession} className="px-5 py-2.5 text-white bg-sky-600 hover:bg-sky-700 rounded-lg font-semibold transition-colors flex items-center gap-2">
                             <RefreshCw size={18} />
-                            Пройти еще раз
+                            Practice Again
                         </button>
                     )}
                 </div>
