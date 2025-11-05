@@ -49,7 +49,7 @@ export const FileSourceModal: React.FC<FileSourceModalProps> = ({ isOpen, onClos
     setIsUploading(true);
     
     try {
-      await saveDictionary(dictionaryName, file);
+      await saveDictionary(dictionaryName, file, user?.uid);
 
       // Sync to Firestore if user is logged in and file is within size limits
       if (user) {
@@ -89,7 +89,7 @@ export const FileSourceModal: React.FC<FileSourceModalProps> = ({ isOpen, onClos
     try {
         // Save the fetched dictionary to IndexedDB for persistence across sessions,
         // marking it as a built-in dictionary so it doesn't show in "My Dictionaries".
-        await saveDictionary(name, wordsFile, true);
+        await saveDictionary(name, wordsFile, null, true);
     } catch (error) {
         console.error("Failed to save built-in dictionary to IndexedDB:", error);
         // This is a non-critical error for the current session.

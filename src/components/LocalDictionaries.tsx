@@ -47,14 +47,14 @@ export const LocalDictionaries: React.FC<LocalDictionariesProps> = ({ onSelect }
       }
       
       // Step 2: Sync remote deletions to local storage
-      let allLocalDicts = await getAllDictionaryDetails();
+      let allLocalDicts = await getAllDictionaryDetails(user?.uid);
       const localCleanupPromises = allLocalDicts
         .filter(localDict => remoteTombstones.has(localDict.fileName))
-        .map(dictToDelete => deleteDictionary(dictToDelete.name));
+        .map(dictToDelete => deleteDictionary(dictToDelete.name, user?.uid));
       
       if (localCleanupPromises.length > 0) {
         await Promise.all(localCleanupPromises);
-        allLocalDicts = await getAllDictionaryDetails(); // Re-fetch after cleanup
+        allLocalDicts = await getAllDictionaryDetails(user?.uid); // Re-fetch after cleanup
       }
 
       // Step 3: Two-way sync for active dictionaries if user is logged in
@@ -82,13 +82,13 @@ export const LocalDictionaries: React.FC<LocalDictionariesProps> = ({ onSelect }
             if (!allLocalDictsMap.has(fileName)) {
                 const dictBaseName = remoteData.name.replace(/\.xlsx$/i, '');
                 const file = base64ToFile(remoteData.content, remoteData.name, remoteData.mimeType);
-                await saveDictionary(dictBaseName, file);
+                await saveDictionary(dictBaseName, file, user.uid);
             }
         }
       }
 
       // Step 4: Re-fetch all data *after* all sync operations to build the final UI list
-      const finalLocalDicts = await getAllDictionaryDetails();
+      const finalLocalDicts = await getAllDictionaryDetails(user?.uid);
       const finalUserUploadedLocalDicts = finalLocalDicts.filter(d => !d.isBuiltIn);
 
       const finalRemoteDicts = new Map<string, any>();
@@ -127,7 +127,7 @@ export const LocalDictionaries: React.FC<LocalDictionariesProps> = ({ onSelect }
     setActionInProgress({ name, type: 'select' });
     setError(null);
     try {
-      const localDict = await getDictionary(name);
+      const localDict = await getDictionary(name, user?.uid);
       if (localDict) {
         onSelect(localDict.name, localDict.file);
       } else {
@@ -155,7 +155,7 @@ export const LocalDictionaries: React.FC<LocalDictionariesProps> = ({ onSelect }
         // If it's only a local dictionary (e.g., user is offline or not logged in),
         // just delete it from the local device.
         else if (dict.isLocal) {
-          await deleteDictionary(dict.name);
+          await deleteDictionary(dict.name, user?.uid);
         }
         
         // Trigger a fresh sync to update the UI everywhere consistently.
