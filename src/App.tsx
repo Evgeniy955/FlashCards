@@ -847,21 +847,19 @@ const App: React.FC = () => {
             nextReviewDate.setDate(nextReviewDate.getDate() + SRS_INTERVALS[nextStage]);
             setLearnedWords(prev => new Map(prev).set(wordId, { srsStage: nextStage, nextReviewDate: nextReviewDate.toISOString() }));
 
-            // FIX: Always remove the word from the 'dontKnowWords' list when it's marked as known,
-            // regardless of the current mode. This prevents state inconsistencies.
+            // FIX: Unified and more robust logic to ensure a correctly answered word is always
+            // removed from the 'dontKnowWords' list, preventing it from reappearing as a mistake.
             if (selectedSetIndex !== null) {
                 setDontKnowWords((prev: Map<number, Word[]>) => {
                     const newMap = new Map(prev);
-                    const words = newMap.get(selectedSetIndex)?.filter(w => getWordId(w) !== wordId);
+                    // Ensure we operate on an array, even if the key doesn't exist yet.
+                    const currentMistakes = newMap.get(selectedSetIndex) || [];
+                    const updatedMistakes = currentMistakes.filter(w => getWordId(w) !== wordId);
 
-                    // If `words` is `undefined`, the set index was not in `dontKnowWords`.
-                    // Otherwise, update or delete the key based on the new array's length.
-                    if (words !== undefined) {
-                        if (words.length > 0) {
-                            newMap.set(selectedSetIndex, words);
-                        } else {
-                            newMap.delete(selectedSetIndex);
-                        }
+                    if (updatedMistakes.length > 0) {
+                        newMap.set(selectedSetIndex, updatedMistakes);
+                    } else {
+                        newMap.delete(selectedSetIndex);
                     }
                     return newMap;
                 });
@@ -1001,12 +999,18 @@ const App: React.FC = () => {
             nextReviewDate.setDate(nextReviewDate.getDate() + SRS_INTERVALS[nextStage]);
             setLearnedWords(prev => new Map(prev).set(wordId, { srsStage: nextStage, nextReviewDate: nextReviewDate.toISOString() }));
 
+            // FIX: Unified and more robust logic for removing a word from the 'dontKnowWords' list.
             if (isDontKnowMode && selectedSetIndex !== null) {
                 setDontKnowWords((prev: Map<number, Word[]>) => {
                     const newMap = new Map(prev);
-                    const words = newMap.get(selectedSetIndex)?.filter(w => getWordId(w) !== wordId) || [];
-                    if (words.length > 0) newMap.set(selectedSetIndex, words);
-                    else newMap.delete(selectedSetIndex);
+                    const currentMistakes = newMap.get(selectedSetIndex) || [];
+                    const updatedMistakes = currentMistakes.filter(w => getWordId(w) !== wordId);
+
+                    if (updatedMistakes.length > 0) {
+                        newMap.set(selectedSetIndex, updatedMistakes);
+                    } else {
+                        newMap.delete(selectedSetIndex);
+                    }
                     return newMap;
                 });
             }
