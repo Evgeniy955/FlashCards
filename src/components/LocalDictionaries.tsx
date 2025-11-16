@@ -3,7 +3,6 @@ import { Database, Loader2, Trash2, Cloud } from 'lucide-react';
 import { getDictionary, deleteDictionary, saveDictionary, getAllDictionaryDetails } from '../lib/indexedDB';
 import { useAuthState } from 'react-firebase-hooks/auth';
 import { auth, db } from '../lib/firebase-client';
-import { collection, getDocs, doc, setDoc, updateDoc } from 'firebase/firestore';
 import { base64ToFile } from '../utils/fileUtils';
 
 interface LocalDictionariesProps {
@@ -34,8 +33,9 @@ export const LocalDictionaries: React.FC<LocalDictionariesProps> = ({ onSelect }
       const remoteDictMap = new Map<string, any>();
       const remoteTombstones = new Set<string>();
       if (user) {
-          const firestoreDictsRef = collection(db, `users/${user.uid}/dictionaries`);
-          const querySnapshot = await getDocs(firestoreDictsRef);
+          // FIX: Use compat API for Firestore
+          const firestoreDictsRef = db.collection('users').doc(user.uid).collection('dictionaries');
+          const querySnapshot = await firestoreDictsRef.get();
           querySnapshot.forEach(docSnap => {
               const data = docSnap.data();
               if (data.deleted) {
@@ -67,8 +67,9 @@ export const LocalDictionaries: React.FC<LocalDictionariesProps> = ({ onSelect }
             if (!remoteDictMap.has(fileName)) {
                 const file = base64ToFile(localData.content, localData.fileName, localData.mimeType);
                 if (file.size > FIRESTORE_DOC_SIZE_LIMIT) continue;
-                const dictionaryDocRef = doc(db, `users/${user.uid}/dictionaries/${fileName}`);
-                await setDoc(dictionaryDocRef, {
+                // FIX: Use compat API for Firestore
+                const dictionaryDocRef = db.collection('users').doc(user.uid).collection('dictionaries').doc(fileName);
+                await dictionaryDocRef.set({
                     name: fileName,
                     content: localData.content,
                     mimeType: localData.mimeType,
@@ -93,7 +94,8 @@ export const LocalDictionaries: React.FC<LocalDictionariesProps> = ({ onSelect }
 
       const finalRemoteDicts = new Map<string, any>();
       if (user) {
-          const finalQuerySnapshot = await getDocs(collection(db, `users/${user.uid}/dictionaries`));
+          // FIX: Use compat API for Firestore
+          const finalQuerySnapshot = await db.collection('users').doc(user.uid).collection('dictionaries').get();
           finalQuerySnapshot.forEach(docSnap => {
               if (!docSnap.data().deleted) {
                   finalRemoteDicts.set(docSnap.id, docSnap.data());
@@ -149,8 +151,9 @@ export const LocalDictionaries: React.FC<LocalDictionariesProps> = ({ onSelect }
         // the authoritative action is to mark it as deleted on the server.
         // The sync process will then handle removing it from all local instances.
         if (user && dict.isRemote) {
-          const dictionaryDocRef = doc(db, `users/${user.uid}/dictionaries/${dict.fileName}`);
-          await updateDoc(dictionaryDocRef, { deleted: true, deletedAt: new Date() });
+          // FIX: Use compat API for Firestore
+          const dictionaryDocRef = db.collection('users').doc(user.uid).collection('dictionaries').doc(dict.fileName);
+          await dictionaryDocRef.update({ deleted: true, deletedAt: new Date() });
         }
         // If it's only a local dictionary (e.g., user is offline or not logged in),
         // just delete it from the local device.

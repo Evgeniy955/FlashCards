@@ -1,13 +1,20 @@
 import { initializeApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
-import { getFirestore } from "firebase/firestore";
+// FIX: Switched to Firebase compat API for Firestore to resolve module loading errors.
+// This uses the v8 API surface for database operations.
+import firebase from "firebase/compat/app";
+import "firebase/compat/firestore";
 import { firebaseConfig } from '../firebase-config';
 
-// Initialize Firebase using the modular v9+ SDK
+// Initialize modular app for Auth (required by react-firebase-hooks)
 const app = initializeApp(firebaseConfig);
-
-// Get modular services
 const auth = getAuth(app);
-const db = getFirestore(app);
 
-export { auth, db };
+// Initialize compat app for Firestore
+// Check if it's already initialized to prevent errors.
+if (!firebase.apps.length) {
+    firebase.initializeApp(firebaseConfig);
+}
+const db = firebase.firestore();
+
+export { auth, db, firebase };
