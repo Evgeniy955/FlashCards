@@ -11,21 +11,21 @@ interface FlashcardProps {
   isInstantChange?: boolean;
   translationMode: TranslationMode;
   lang1: string;
-  lang2: string;
-  knowCount: number;
+  knowAttempts: number;
+  totalAttempts: number;
 }
 
-export const Flashcard: React.FC<FlashcardProps> = ({ word, isFlipped, onFlip, exampleSentence, isChanging, isInstantChange, translationMode, lang1, lang2, knowCount }) => {
+export const Flashcard: React.FC<FlashcardProps> = ({ word, isFlipped, onFlip, exampleSentence, isChanging, isInstantChange, translationMode, lang1, knowAttempts, totalAttempts }) => {
   
   const handlePlayAudioSequence = (e: React.MouseEvent) => {
     e.stopPropagation(); // Prevent card from flipping when clicking the button
     
-    if (!('speechSynthesis' in window)) {
+    if (!('speechSynthesis' in globalThis)) {
       alert('Sorry, your browser does not support text-to-speech.');
       return;
     }
 
-    window.speechSynthesis.cancel(); // Stop any ongoing speech to prevent overlap
+    globalThis.speechSynthesis.cancel(); // Stop any ongoing speech to prevent overlap
 
     // Always speak the English word (lang2)
     const wordToSpeak = word.lang2;
@@ -37,18 +37,19 @@ export const Flashcard: React.FC<FlashcardProps> = ({ word, isFlipped, onFlip, e
         setTimeout(() => {
           const sentenceUtterance = new SpeechSynthesisUtterance(exampleSentence);
           sentenceUtterance.lang = 'en-US';
-          window.speechSynthesis.speak(sentenceUtterance);
+          globalThis.speechSynthesis.speak(sentenceUtterance);
         }, 500);
       };
     }
 
-    window.speechSynthesis.speak(wordUtterance);
+    globalThis.speechSynthesis.speak(wordUtterance);
   };
 
   const handleFlipDuringChange = () => {
-    if (!isChanging) {
-      onFlip();
+    if (isChanging) {
+      return;
     }
+    onFlip();
   };
 
   const isStandardMode = translationMode === 'standard';
@@ -72,10 +73,10 @@ export const Flashcard: React.FC<FlashcardProps> = ({ word, isFlipped, onFlip, e
         className={`absolute w-full h-full ${isStandardMode ? 'bg-white dark:bg-slate-800' : 'bg-indigo-500 dark:bg-indigo-700'} rounded-2xl shadow-xl flex flex-col justify-center items-center p-6 text-center`}
         style={{ backfaceVisibility: 'hidden', WebkitBackfaceVisibility: 'hidden' }}
     >
-      {knowCount > 0 && (
+      {totalAttempts > 0 && (
           <div className={`absolute top-4 left-4 flex items-center gap-1 text-xs font-mono px-2 py-1 rounded-full ${isStandardMode ? 'bg-emerald-100 dark:bg-emerald-900/50 text-emerald-600 dark:text-emerald-400' : 'bg-emerald-400/50 text-white'}`}>
               <Check size={14} />
-              <span>{knowCount}</span>
+              <span>{knowAttempts}/{totalAttempts}</span>
           </div>
       )}
       <span className={`${getFontSizeClass(frontWord)} font-bold ${isStandardMode ? 'text-slate-900 dark:text-white' : 'text-white'}`}>{frontWord}</span>
@@ -89,6 +90,7 @@ export const Flashcard: React.FC<FlashcardProps> = ({ word, isFlipped, onFlip, e
     >
       <div className="absolute top-4 right-4 flex items-center gap-2">
         <button
+          type="button"
           onClick={handlePlayAudioSequence}
           className={`p-2 ${isStandardMode ? 'text-indigo-100 dark:text-indigo-200 hover:text-white hover:bg-indigo-600 dark:hover:bg-indigo-600' : 'text-slate-600 dark:text-slate-300 hover:text-slate-800 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-slate-700'} transition-colors rounded-full`}
           aria-label="Play English pronunciation"
@@ -96,10 +98,10 @@ export const Flashcard: React.FC<FlashcardProps> = ({ word, isFlipped, onFlip, e
           <Volume2 size={24} />
         </button>
       </div>
-      {knowCount > 0 && (
+      {totalAttempts > 0 && (
           <div className={`absolute top-4 left-4 flex items-center gap-1 text-xs font-mono px-2 py-1 rounded-full ${isStandardMode ? 'bg-emerald-400/50 text-white' : 'bg-emerald-100 dark:bg-emerald-900/50 text-emerald-600 dark:text-emerald-400'}`}>
               <Check size={14} />
-              <span>{knowCount}</span>
+              <span>{knowAttempts}/{totalAttempts}</span>
           </div>
       )}
       <div>

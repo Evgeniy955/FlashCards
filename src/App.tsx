@@ -12,7 +12,7 @@ import { ProfileModal } from './components/ProfileModal';
 import { WordList } from './components/WordList';
 import { SentenceUpload } from './components/SentenceUpload';
 import { Auth } from './components/Auth';
-import { Word, LoadedDictionary, WordProgress, TranslationMode, Theme } from './types';
+import { Word, LoadedDictionary, WordProgress, TranslationMode, Theme, WordStats } from './types';
 import { parseDictionaryFile, shuffleArray, getWordId } from './utils/dictionaryUtils';
 import { Shuffle, ChevronsUpDown, Info, BookUser, Trash2, Repeat, Library, Loader2, User as UserIcon, RefreshCw } from 'lucide-react';
 import { TrainingModeInput, AnswerState } from './components/TrainingModeInput';
@@ -31,13 +31,13 @@ const SRS_INTERVALS = [1, 2, 4, 8, 16, 32, 64]; // in days
 
 // Custom ProfileStats type definition for clarity
 interface ProfileStats {
-    totalWords: number;
-    learnedCount: number;
-    dontKnowCount: number;
-    remainingCount: number;
-    learnedPercentage: number;
-    remainingPercentage: number;
-    dictionaryCount?: number;
+  totalWords: number;
+  learnedCount: number;
+  dontKnowCount: number;
+  remainingCount: number;
+  learnedPercentage: number;
+  remainingPercentage: number;
+  dictionaryCount?: number;
 }
 
 // Custom hook to get the previous value of a prop or state.
@@ -56,34 +56,34 @@ function usePrevious<T>(value: T): T | undefined {
 // --- Helper Functions for Stats ---
 const calculateStreak = (history: string[]): number => {
     if (!history || history.length === 0) return 0;
-
+  
     const sortedDates = [...new Set(history)].map(d => new Date(d)).sort((a, b) => b.getTime() - a.getTime());
-
+  
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-
+  
     const yesterday = new Date();
     yesterday.setDate(today.getDate() - 1);
     yesterday.setHours(0, 0, 0, 0);
-
+  
     // Streak is valid if the last session was today or yesterday
     if (sortedDates[0].getTime() !== today.getTime() && sortedDates[0].getTime() !== yesterday.getTime()) {
-        return 0;
+      return 0;
     }
-
+  
     let streak = 1;
     for (let i = 0; i < sortedDates.length - 1; i++) {
-        const current = sortedDates[i];
-        const next = sortedDates[i + 1];
-
-        const diffTime = current.getTime() - next.getTime();
-        const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
-
-        if (diffDays === 1) {
-            streak++;
-        } else {
-            break; // Gap found, streak ends
-        }
+      const current = sortedDates[i];
+      const next = sortedDates[i + 1];
+  
+      const diffTime = current.getTime() - next.getTime();
+      const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
+  
+      if (diffDays === 1) {
+        streak++;
+      } else {
+        break; // Gap found, streak ends
+      }
     }
     return streak;
 };
@@ -102,7 +102,7 @@ const aggregateProgress = (
 ) => {
     acc.totalWords += progress.totalWordsInDict || 0;
     acc.learnedCount += progress.learnedWords ? Object.keys(progress.learnedWords).length : 0;
-
+    
     const dontKnowInDict = new Set<string>();
     if (progress.dontKnowWords) {
         Object.values(progress.dontKnowWords).forEach((wordArray: unknown) => {
@@ -136,6 +136,7 @@ const App: React.FC = () => {
 
     const [learnedWords, setLearnedWords] = useState<Map<string, WordProgress>>(new Map());
     const [dontKnowWords, setDontKnowWords] = useState<Map<number, Word[]>>(new Map());
+    const [wordStats, setWordStats] = useState<Map<string, WordStats>>(new Map());
     const [sentences, setSentences] = useState<Map<string, string>>(new Map());
 
     const [isLoading, setIsLoading] = useState(false); // For file parsing and dictionary loading
@@ -165,7 +166,7 @@ const App: React.FC = () => {
     // State for welcome toast
     const [welcomeStats, setWelcomeStats] = useState<{ streak: number; lastSessionCount: number } | null>(null);
     const [showWelcomeToast, setShowWelcomeToast] = useState(false);
-
+    
     // State to manage sync on login
     const [isSyncing, setIsSyncing] = useState(false);
     const prevUser = usePrevious(user);
@@ -199,7 +200,7 @@ const App: React.FC = () => {
 
     // FIX: Replaced `replaceAll` with `replace` for broader compatibility, as `replaceAll` is a newer addition to JavaScript (ES2021).
     const dictionaryId = useMemo(() => loadedDictionary?.name.replace(/[./]/g, '_'), [loadedDictionary]);
-
+    
     // --- History and Auto-loading Logic ---
 
     const saveLastUsedDictionary = useCallback(async (name: string) => {
@@ -240,6 +241,7 @@ const App: React.FC = () => {
 
             setLearnedWords(new Map());
             setDontKnowWords(new Map());
+            setWordStats(new Map());
             if (sentenceMapFromFile) {
                 setSentences(prev => new Map([...prev, ...sentenceMapFromFile]));
             }
@@ -285,7 +287,7 @@ const App: React.FC = () => {
                     if (savedDict) {
                         await loadAndSetDictionary(savedDict.name, savedDict.file);
                     } else {
-                        await clearLastUsedDictionary();
+                       await clearLastUsedDictionary();
                     }
                 } catch (error) {
                     console.error("Failed to load last used dictionary:", error);
@@ -304,7 +306,7 @@ const App: React.FC = () => {
     // --- Study Stats and Welcome Message ---
     useEffect(() => {
         if (!user || authLoading) return;
-
+    
         const fetchUserStats = async () => {
             // FIX: Use compat API for Firestore
             const userDocRef = db.collection('users').doc(user.uid);
@@ -315,10 +317,10 @@ const App: React.FC = () => {
                     if (data) {
                         const history = data.studyHistory || [];
                         const dailyData = data.dailyStats || {};
-
+        
                         const streak = calculateStreak(history);
                         const lastSessionCount = getLastSessionCount(history, dailyData);
-
+        
                         if (streak > 0 || lastSessionCount > 0) {
                             setWelcomeStats({ streak, lastSessionCount });
                             setShowWelcomeToast(true);
@@ -329,33 +331,33 @@ const App: React.FC = () => {
                 console.error("Failed to fetch user stats for welcome message:", error);
             }
         };
-
+    
         fetchUserStats();
     }, [user, authLoading]);
 
     const recordStudyActivity = useCallback(async (isNewWord: boolean) => {
         if (!user) return;
-
+    
         const todayStr = new Date().toISOString().split('T')[0]; // YYYY-MM-DD format
         // FIX: Use compat API for Firestore
         const userDocRef = db.collection('users').doc(user.uid);
-
+    
         try {
             const updates: { [key: string]: any } = {
                 // FIX: Use compat API for arrayUnion
                 studyHistory: firebase.firestore.FieldValue.arrayUnion(todayStr)
             };
-
+    
             if (isNewWord) {
                 // This syntax allows for a dynamic key in the update object.
                 // It will increment 'newWordsLearned' for the current date.
                 // FIX: Use compat API for increment
                 updates[`dailyStats.${todayStr}.newWordsLearned`] = firebase.firestore.FieldValue.increment(1);
             }
-
+    
             // Using setDoc with merge is safer than updateDoc as it creates the doc if it doesn't exist.
             await userDocRef.set(updates, { merge: true });
-
+    
         } catch (error) {
             console.error("Failed to record study activity:", error);
         }
@@ -368,7 +370,7 @@ const App: React.FC = () => {
     useEffect(() => {
         const loadUserSentences = async () => {
             if (authLoading) return; // Wait for auth state to be confirmed
-
+            
             if (user) {
                 // FIX: Use compat API for Firestore
                 const userDocRef = db.collection('users').doc(user.uid);
@@ -442,10 +444,13 @@ const App: React.FC = () => {
 
                     const localLearned = localData?.learnedWords ? new Map(Object.entries(localData.learnedWords)) : new Map<string, WordProgress>();
                     const localDontKnow = localData?.dontKnowWords ? new Map(Object.entries(localData.dontKnowWords).map(([k, v]) => [Number(k), v as Word[]])) : new Map<number, Word[]>();
+                    const localStats = localData?.wordStats ? new Map(Object.entries(localData.wordStats as { [s: string]: WordStats })) : new Map<string, WordStats>();
 
                     const remoteData = docSnap.exists ? docSnap.data() : {};
                     const remoteLearned = remoteData?.learnedWords ? new Map(Object.entries(remoteData.learnedWords as { [s: string]: WordProgress; })) : new Map<string, WordProgress>();
                     const remoteDontKnow = remoteData?.dontKnowWords ? new Map(Object.entries(remoteData.dontKnowWords).map(([k, v]) => [Number(k), v as Word[]])) : new Map<number, Word[]>();
+                    const remoteStats = remoteData?.wordStats ? new Map(Object.entries(remoteData.wordStats as { [s: string]: WordStats })) : new Map<string, WordStats>();
+
 
                     // 2. Merge data: Remote data takes precedence for learned words to prevent overwrites,
                     // while 'don't know' words are combined to not lose any.
@@ -453,7 +458,7 @@ const App: React.FC = () => {
 
                     const mergedDontKnow = new Map<number, Word[]>();
                     const allDontKnowKeys = new Set([...localDontKnow.keys(), ...remoteDontKnow.keys()]);
-
+                    
                     allDontKnowKeys.forEach(key => {
                         const localWords = localDontKnow.get(key) || [];
                         const remoteWords = remoteDontKnow.get(key) || [];
@@ -462,10 +467,24 @@ const App: React.FC = () => {
                         const uniqueWords = Array.from(new Map(combined.map(w => [getWordId(w), w])).values());
                         mergedDontKnow.set(key, uniqueWords);
                     });
+                    
+                    const mergedStats = new Map(localStats);
+                    remoteStats.forEach((stats, wordId) => {
+                        const local = mergedStats.get(wordId);
+                        if (local) {
+                            mergedStats.set(wordId, {
+                                knowCount: local.knowCount + stats.knowCount,
+                                totalAttempts: local.totalAttempts + stats.totalAttempts,
+                            });
+                        } else {
+                            mergedStats.set(wordId, stats);
+                        }
+                    });
 
                     // 3. Update state with the definitive merged data.
                     setLearnedWords(mergedLearned);
                     setDontKnowWords(mergedDontKnow);
+                    setWordStats(mergedStats);
 
                     // 4. Clean up local progress after successful merge.
                     if (localData) {
@@ -489,15 +508,16 @@ const App: React.FC = () => {
             if (!dictionaryId) {
                 setLearnedWords(new Map());
                 setDontKnowWords(new Map());
+                setWordStats(new Map());
                 // isProgressLoading remains true from its initial state, which is correct.
                 return;
             }
-
+            
             // If a sync is in progress, let it finish. Don't run this load.
             if (isSyncing) {
                 return;
             }
-
+    
             setIsProgressLoading(true);
             try {
                 if (user) { // User is logged in, use Firestore
@@ -513,9 +533,13 @@ const App: React.FC = () => {
                             Object.entries(dontKnowData).map(([key, value]) => [Number(key), value as Word[]])
                         );
                         setDontKnowWords(dontKnowMap);
+                        const statsData = data?.wordStats || {};
+                        setWordStats(new Map(Object.entries(statsData)));
+
                     } else {
                         setLearnedWords(new Map());
                         setDontKnowWords(new Map());
+                        setWordStats(new Map());
                     }
                 } else { // User is not logged in, use IndexedDB
                     const localProgress = await loadLocalProgress(dictionaryId);
@@ -527,20 +551,24 @@ const App: React.FC = () => {
                             Object.entries(dontKnowData).map(([key, value]) => [Number(key), value as Word[]])
                         );
                         setDontKnowWords(dontKnowMap);
+                        const statsData = localProgress.wordStats || {};
+                        setWordStats(new Map(Object.entries(statsData as object)));
                     } else {
                         setLearnedWords(new Map());
                         setDontKnowWords(new Map());
+                        setWordStats(new Map());
                     }
                 }
             } catch (error) {
                 console.error("Error loading progress:", error);
                 setLearnedWords(new Map());
                 setDontKnowWords(new Map());
+                setWordStats(new Map());
             } finally {
                 setIsProgressLoading(false);
             }
         };
-
+    
         loadProgress();
     }, [user, dictionaryId, isSyncing]);
 
@@ -549,7 +577,7 @@ const App: React.FC = () => {
         if (!loadedDictionary) return null;
         const totalWords = loadedDictionary.sets.reduce((sum, set) => sum + set.words.length, 0);
         const learnedCount = learnedWords.size;
-
+        
         const allDontKnowWords = new Set<string>();
         dontKnowWords.forEach(wordArray => {
             wordArray.forEach(word => {
@@ -559,7 +587,7 @@ const App: React.FC = () => {
         const dontKnowCount = allDontKnowWords.size;
 
         const remainingCount = totalWords - learnedCount;
-
+        
         return {
             totalWords,
             learnedCount,
@@ -580,6 +608,7 @@ const App: React.FC = () => {
             const dataToSave = {
                 learnedWords: Object.fromEntries(learnedWords),
                 dontKnowWords: Object.fromEntries(dontKnowWords),
+                wordStats: Object.fromEntries(wordStats),
             };
             const totalWordsInDict = currentDictionaryStats?.totalWords;
 
@@ -602,10 +631,10 @@ const App: React.FC = () => {
         }, 1500);
 
         return () => clearTimeout(handler);
-    }, [learnedWords, dontKnowWords, user, dictionaryId, isProgressLoading, currentDictionaryStats]);
+    }, [learnedWords, dontKnowWords, wordStats, user, dictionaryId, isProgressLoading, currentDictionaryStats]);
 
-    // Effect to calculate all-time stats
-    useEffect(() => {
+     // Effect to calculate all-time stats
+     useEffect(() => {
         const calculateAllTimeStats = async () => {
             if (authLoading) return; // Wait for auth state to be resolved
             let allProgressData: any[] = [];
@@ -659,17 +688,17 @@ const App: React.FC = () => {
                 } else {
                     await clearAllLocalProgress();
                 }
-
+    
                 // Also clear the current dictionary's progress from state
                 setLearnedWords(new Map());
                 setDontKnowWords(new Map());
-
+                
                 // Force a refresh of the stats
                 setAllTimeStats(null);
                 setProgressSaveCounter(c => c + 1);
-
+    
                 alert('All statistics have been reset.');
-
+    
             } catch (error) {
                 console.error("Failed to reset all stats:", error);
                 alert("An error occurred while resetting statistics. Please try again.");
@@ -840,13 +869,24 @@ const App: React.FC = () => {
         recordStudyActivity(isNewlyLearned);
         advanceToNextWord(() => {
             const wordId = getWordId(currentWord);
+            
+            setWordStats(prev => {
+                const newMap = new Map(prev);
+                const stats = newMap.get(wordId) || { knowCount: 0, totalAttempts: 0 };
+                newMap.set(wordId, { 
+                    knowCount: stats.knowCount + 1,
+                    totalAttempts: stats.totalAttempts + 1,
+                });
+                return newMap;
+            });
+
             const progress = learnedWords.get(wordId);
             const currentStage = progress ? progress.srsStage : -1;
             const nextStage = Math.min(currentStage + 1, SRS_INTERVALS.length - 1);
             const nextReviewDate = new Date();
             nextReviewDate.setDate(nextReviewDate.getDate() + SRS_INTERVALS[nextStage]);
             setLearnedWords(prev => new Map(prev).set(wordId, { srsStage: nextStage, nextReviewDate: nextReviewDate.toISOString() }));
-
+    
             // FIX: Unified and more robust logic to ensure a correctly answered word is always
             // removed from the 'dontKnowWords' list, preventing it from reappearing as a mistake.
             if (selectedSetIndex !== null) {
@@ -877,6 +917,16 @@ const App: React.FC = () => {
         advanceToNextWord(() => {
             if (selectedSetIndex === null) return false;
             const wordId = getWordId(currentWord);
+
+            setWordStats(prev => {
+                const newMap = new Map(prev);
+                const stats = newMap.get(wordId) || { knowCount: 0, totalAttempts: 0 };
+                newMap.set(wordId, { 
+                    knowCount: stats.knowCount,
+                    totalAttempts: stats.totalAttempts + 1,
+                });
+                return newMap;
+            });
 
             if (learnedWords.has(wordId)) {
                 setLearnedWords(prev => {
@@ -962,7 +1012,7 @@ const App: React.FC = () => {
 
         const correctAnswer = translationMode === 'standard' ? currentWord.lang2 : currentWord.lang1;
         const isCorrect = userAnswer.trim().toLowerCase() === correctAnswer.toLowerCase();
-
+        
         recordStudyActivity(isCorrect && !learnedWords.has(getWordId(currentWord)));
 
         if (isCorrect) {
@@ -990,8 +1040,19 @@ const App: React.FC = () => {
 
     const handleGuess = (isCorrect: boolean) => {
         recordStudyActivity(isCorrect && !learnedWords.has(getWordId(currentWord)));
+        const wordId = getWordId(currentWord);
+
+        setWordStats(prev => {
+            const newMap = new Map(prev);
+            const stats = newMap.get(wordId) || { knowCount: 0, totalAttempts: 0 };
+            newMap.set(wordId, {
+                knowCount: stats.knowCount + (isCorrect ? 1 : 0),
+                totalAttempts: stats.totalAttempts + 1,
+            });
+            return newMap;
+        });
+
         if (isCorrect) {
-            const wordId = getWordId(currentWord);
             const progress = learnedWords.get(wordId);
             const currentStage = progress ? progress.srsStage : -1;
             const nextStage = Math.min(currentStage + 1, SRS_INTERVALS.length - 1);
@@ -1032,6 +1093,7 @@ const App: React.FC = () => {
             }
             setLearnedWords(new Map());
             setDontKnowWords(new Map());
+            setWordStats(new Map());
             setSessionActive(false); // This will trigger a re-start of the session
         }
     };
@@ -1061,8 +1123,9 @@ const App: React.FC = () => {
             const placeholderLang = translationMode === 'standard' ? currentSet.lang2 : currentSet.lang1;
             const correctAnswer = translationMode === 'standard' ? currentWord.lang2 : currentWord.lang1;
 
-            const currentWordProgress = learnedWords.get(getWordId(currentWord));
-            const knowCount = currentWordProgress ? currentWordProgress.srsStage + 1 : 0;
+            const currentWordStats = wordStats.get(getWordId(currentWord));
+            const knowAttempts = currentWordStats?.knowCount || 0;
+            const totalAttempts = currentWordStats?.totalAttempts || 0;
 
             return (
                 <div className="w-full flex flex-col items-center">
@@ -1095,7 +1158,7 @@ const App: React.FC = () => {
                     <div className="w-full text-center text-sm text-slate-500 dark:text-slate-400 mb-1">{counterText}</div>
                     <ProgressBar current={sessionProgress} total={sessionTotal} />
                     <div className={`w-full transition-opacity duration-200 ${isChangingWord ? 'opacity-0' : 'opacity-100'}`}>
-                        <Flashcard word={currentWord} isFlipped={isFlipped} onFlip={handleFlip} exampleSentence={exampleSentence} isChanging={isChangingWord} isInstantChange={isInstantChange} translationMode={translationMode} lang1={currentSet.lang1} lang2={currentSet.lang2} knowCount={knowCount} />
+                        <Flashcard word={currentWord} isFlipped={isFlipped} onFlip={handleFlip} exampleSentence={exampleSentence} isChanging={isChangingWord} isInstantChange={isInstantChange} translationMode={translationMode} lang1={currentSet.lang1} knowAttempts={knowAttempts} totalAttempts={totalAttempts} />
                     </div>
                     <div className="flex justify-center gap-4 mt-6 w-full">
                         {isDontKnowMode ? (
@@ -1161,7 +1224,7 @@ const App: React.FC = () => {
     if (!loadedDictionary) {
         return (
             <div className="min-h-screen flex flex-col">
-                <header className="relative z-10 w-full p-4 sm:p-6 flex justify-end">
+                 <header className="relative z-10 w-full p-4 sm:p-6 flex justify-end">
                     <div className="flex items-center gap-2">
                         <ThemeToggle theme={theme} setTheme={setTheme} />
                         <Auth user={user} />
@@ -1241,7 +1304,7 @@ const App: React.FC = () => {
 
                 {currentSet && <WordList words={currentSet.words} isVisible={isWordListVisible} lang1={currentSet.lang1} lang2={currentSet.lang2} />}
             </div>
-
+            
             {user && showWelcomeToast && welcomeStats && (
                 <StudyStatsToast
                     streak={welcomeStats.streak}
@@ -1253,10 +1316,10 @@ const App: React.FC = () => {
             <FileSourceModal isOpen={isFileSourceModalOpen && !loadedDictionary} onClose={() => setFileSourceModalOpen(false)} onFilesSelect={handleFilesSelect} isLoading={isLoading} user={user} />
             <InstructionsModal isOpen={isInstructionsModalOpen} onClose={() => setInstructionsModalOpen(false)} />
             <LearnedWordsModal isOpen={isLearnedWordsModalOpen} onClose={() => setLearnedWordsModalOpen(false)} learnedWords={learnedWordsWithDetails} lang1={currentSet?.lang1 || 'Language 1'} lang2={currentSet?.lang2 || 'Language 2'} />
-            <ProfileModal
-                isOpen={isProfileModalOpen}
-                onClose={() => setProfileModalOpen(false)}
-                currentStats={currentDictionaryStats}
+            <ProfileModal 
+                isOpen={isProfileModalOpen} 
+                onClose={() => setProfileModalOpen(false)} 
+                currentStats={currentDictionaryStats} 
                 allTimeStats={allTimeStats}
                 dictionaryName={loadedDictionary.name}
                 onResetAllStats={handleResetAllStats}
