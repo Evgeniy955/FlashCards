@@ -21,6 +21,11 @@ export interface WordProgress {
   nextReviewDate: string; // ISO 8601 date string
 }
 
+export interface WordStats {
+  knowCount: number;
+  totalAttempts: number;
+}
+
 export type TranslationMode = 'standard' | 'reverse'; // standard: lang1 -> lang2, reverse: lang2 -> lang1
 
 export type Theme = 'light' | 'dark';

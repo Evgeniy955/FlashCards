@@ -5,6 +5,7 @@ const DB_VERSION = 1;
 export interface LocalProgress {
   learnedWords: object;
   dontKnowWords: object;
+  wordStats?: object;
   totalWordsInDict?: number;
 }
 
