@@ -8,7 +8,6 @@ import { Library, Upload, Database } from 'lucide-react';
 // FIX: Replaced compat User type with v9+ modular User type.
 import { type User } from 'firebase/auth';
 import { db } from '../lib/firebase-client';
-import { doc, setDoc } from 'firebase/firestore';
 import { fileToBase64 } from '../utils/fileUtils';
 
 
@@ -59,8 +58,9 @@ export const FileSourceModal: React.FC<FileSourceModalProps> = ({ isOpen, onClos
         } else {
           try {
             const base64Content = await fileToBase64(file);
-            const dictionaryDocRef = doc(db, `users/${user.uid}/dictionaries/${file.name}`);
-            await setDoc(dictionaryDocRef, {
+            // FIX: Use compat API for Firestore
+            const dictionaryDocRef = db.collection('users').doc(user.uid).collection('dictionaries').doc(file.name);
+            await dictionaryDocRef.set({
               name: file.name,
               content: base64Content,
               mimeType: file.type,
