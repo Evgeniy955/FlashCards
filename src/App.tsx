@@ -43,9 +43,10 @@ interface ProfileStats {
 // Custom hook to get the previous value of a prop or state.
 function usePrevious<T>(value: T): T | undefined {
     const ref = useRef<T>();
+    // FIX: Added `value` to the dependency array to resolve the reported error, likely from a linter rule requiring exhaustive dependencies for useEffect.
     useEffect(() => {
         ref.current = value;
-    });
+    }, [value]);
     return ref.current;
 }
 
@@ -153,7 +154,8 @@ const App: React.FC = () => {
         if (savedTheme) {
             setTheme(savedTheme);
         } else if (systemPrefersDark) {
-            setTheme('light');
+            // FIX: Correctly set theme to 'dark' when system prefers dark mode.
+            setTheme('dark');
         } else {
             setTheme('light');
         }
