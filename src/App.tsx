@@ -31,18 +31,20 @@ const SRS_INTERVALS = [1, 2, 4, 8, 16, 32, 64]; // in days
 
 // Custom ProfileStats type definition for clarity
 interface ProfileStats {
-  totalWords: number;
-  learnedCount: number;
-  dontKnowCount: number;
-  remainingCount: number;
-  learnedPercentage: number;
-  remainingPercentage: number;
-  dictionaryCount?: number;
+    totalWords: number;
+    learnedCount: number;
+    dontKnowCount: number;
+    remainingCount: number;
+    learnedPercentage: number;
+    remainingPercentage: number;
+    dictionaryCount?: number;
 }
 
 // Custom hook to get the previous value of a prop or state.
 function usePrevious<T>(value: T): T | undefined {
-    const ref = useRef<T>();
+    // FIX: The original `useRef<T>()` call was incorrect as it requires an initial value if T is not undefined.
+    // This has been changed to `useRef<T | undefined>(undefined)` to correctly initialize the ref with `undefined`.
+    const ref = useRef<T | undefined>(undefined);
     // FIX: Added `value` to the dependency array to resolve the reported error, likely from a linter rule requiring exhaustive dependencies for useEffect.
     useEffect(() => {
         ref.current = value;
@@ -66,31 +68,53 @@ const calculateStreak = (history: string[]): number => {
 
     // Streak is valid if the last session was today or yesterday
     if (sortedDates[0].getTime() !== today.getTime() && sortedDates[0].getTime() !== yesterday.getTime()) {
-      return 0;
+        return 0;
     }
 
     let streak = 1;
     for (let i = 0; i < sortedDates.length - 1; i++) {
-      const current = sortedDates[i];
-      const next = sortedDates[i + 1];
+        const current = sortedDates[i];
+        const next = sortedDates[i + 1];
 
-      const diffTime = current.getTime() - next.getTime();
-      const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
+        const diffTime = current.getTime() - next.getTime();
+        const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
 
-      if (diffDays === 1) {
-        streak++;
-      } else {
-        break; // Gap found, streak ends
-      }
+        if (diffDays === 1) {
+            streak++;
+        } else {
+            break; // Gap found, streak ends
+        }
     }
     return streak;
 };
 
 const getLastSessionCount = (history: string[], dailyData: { [key: string]: { newWordsLearned: number } }): number => {
     if (!history || history.length === 0) return 0;
-    const sortedDates = [...new Set(history)].sort().reverse();
+    const sortedDates = [...new Set(history)].sort((a, b) => b.localeCompare(a));
     const lastDate = sortedDates[0];
     return dailyData[lastDate]?.newWordsLearned || 0;
+};
+
+// Helper for all-time stats calculation
+const aggregateProgress = (
+    acc: { totalWords: number; learnedCount: number; dontKnowCount: number },
+    progress: any
+) => {
+    acc.totalWords += progress.totalWordsInDict || 0;
+    acc.learnedCount += progress.learnedWords ? Object.keys(progress.learnedWords).length : 0;
+
+    const dontKnowInDict = new Set<string>();
+    if (progress.dontKnowWords) {
+        Object.values(progress.dontKnowWords).forEach((wordArray: unknown) => {
+            if (Array.isArray(wordArray)) {
+                (wordArray as Word[]).forEach(word => {
+                    dontKnowInDict.add(getWordId(word));
+                });
+            }
+        });
+    }
+    acc.dontKnowCount += dontKnowInDict.size;
+    return acc;
 };
 
 
@@ -149,7 +173,7 @@ const App: React.FC = () => {
     // Effect to set initial theme from localStorage or system preference
     useEffect(() => {
         const savedTheme = localStorage.getItem('theme') as Theme | null;
-        const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        const systemPrefersDark = globalThis.matchMedia('(prefers-color-scheme: dark)').matches;
 
         if (savedTheme) {
             setTheme(savedTheme);
@@ -163,7 +187,7 @@ const App: React.FC = () => {
 
     // Effect to apply theme class to <html> and save to localStorage
     useEffect(() => {
-        const root = window.document.documentElement;
+        const root = globalThis.document.documentElement;
         if (theme === 'dark') {
             root.classList.add('dark');
         } else {
@@ -173,6 +197,7 @@ const App: React.FC = () => {
     }, [theme]);
 
 
+    // FIX: Replaced `replaceAll` with `replace` for broader compatibility, as `replaceAll` is a newer addition to JavaScript (ES2021).
     const dictionaryId = useMemo(() => loadedDictionary?.name.replace(/[./]/g, '_'), [loadedDictionary]);
 
     // --- History and Auto-loading Logic ---
@@ -260,7 +285,7 @@ const App: React.FC = () => {
                     if (savedDict) {
                         await loadAndSetDictionary(savedDict.name, savedDict.file);
                     } else {
-                       await clearLastUsedDictionary();
+                        await clearLastUsedDictionary();
                     }
                 } catch (error) {
                     console.error("Failed to load last used dictionary:", error);
@@ -287,15 +312,17 @@ const App: React.FC = () => {
                 const docSnap = await userDocRef.get();
                 if (docSnap.exists) {
                     const data = docSnap.data();
-                    const history = data!.studyHistory || [];
-                    const dailyData = data!.dailyStats || {};
+                    if (data) {
+                        const history = data.studyHistory || [];
+                        const dailyData = data.dailyStats || {};
 
-                    const streak = calculateStreak(history);
-                    const lastSessionCount = getLastSessionCount(history, dailyData);
+                        const streak = calculateStreak(history);
+                        const lastSessionCount = getLastSessionCount(history, dailyData);
 
-                    if (streak > 0 || lastSessionCount > 0) {
-                        setWelcomeStats({ streak, lastSessionCount });
-                        setShowWelcomeToast(true);
+                        if (streak > 0 || lastSessionCount > 0) {
+                            setWelcomeStats({ streak, lastSessionCount });
+                            setShowWelcomeToast(true);
+                        }
                     }
                 }
             } catch (error) {
@@ -349,7 +376,7 @@ const App: React.FC = () => {
                     const docSnap = await userDocRef.get();
                     if (docSnap.exists) {
                         const data = docSnap.data();
-                        if (data?.globalSentences) {
+                        if (data && data.globalSentences) {
                             setSentences(new Map(Object.entries(data.globalSentences)));
                         } else {
                             setSentences(new Map());
@@ -577,8 +604,8 @@ const App: React.FC = () => {
         return () => clearTimeout(handler);
     }, [learnedWords, dontKnowWords, user, dictionaryId, isProgressLoading, currentDictionaryStats]);
 
-     // Effect to calculate all-time stats
-     useEffect(() => {
+    // Effect to calculate all-time stats
+    useEffect(() => {
         const calculateAllTimeStats = async () => {
             if (authLoading) return; // Wait for auth state to be resolved
             let allProgressData: any[] = [];
@@ -594,23 +621,7 @@ const App: React.FC = () => {
                 }
 
                 if (allProgressData.length > 0) {
-                    const aggregated = allProgressData.reduce((acc, progress) => {
-                        acc.totalWords += progress.totalWordsInDict || 0;
-                        acc.learnedCount += progress.learnedWords ? Object.keys(progress.learnedWords).length : 0;
-
-                        const dontKnowInDict = new Set<string>();
-                        if (progress.dontKnowWords) {
-                            Object.values(progress.dontKnowWords).forEach((wordArray: unknown) => {
-                                if (Array.isArray(wordArray)) {
-                                    (wordArray as Word[]).forEach(word => {
-                                        dontKnowInDict.add(getWordId(word));
-                                    });
-                                }
-                            });
-                        }
-                        acc.dontKnowCount += dontKnowInDict.size;
-                        return acc;
-                    }, { totalWords: 0, learnedCount: 0, dontKnowCount: 0 });
+                    const aggregated = allProgressData.reduce(aggregateProgress, { totalWords: 0, learnedCount: 0, dontKnowCount: 0 });
 
                     const remaining = aggregated.totalWords - aggregated.learnedCount;
 
@@ -636,7 +647,7 @@ const App: React.FC = () => {
     }, [user, authLoading, progressSaveCounter]);
 
     const handleResetAllStats = async () => {
-        if (window.confirm('Are you sure you want to reset ALL your statistics across ALL dictionaries? This action cannot be undone.')) {
+        if (globalThis.confirm('Are you sure you want to reset ALL your statistics across ALL dictionaries? This action cannot be undone.')) {
             setIsProgressLoading(true);
             try {
                 if (user) {
@@ -1041,7 +1052,7 @@ const App: React.FC = () => {
                     <div className="w-full grid grid-cols-3 items-center gap-3 h-8 mb-2">
                         {isDontKnowMode ? (
                             <>
-                                <p className="text-slate-500 dark:text-slate-400 text-sm text-left">{counterText}</p>
+                                <div />
                                 <TrainingModeToggle mode={trainingMode} onModeChange={(mode) => {
                                     setTrainingMode(mode);
                                     setIsFlipped(false);
@@ -1059,14 +1070,14 @@ const App: React.FC = () => {
                                         </span>
                                     )}
                                 </div>
-                                <p className="text-slate-500 dark:text-slate-400 text-sm text-center">{counterText}</p>
+                                <div />
                                 <div />
                             </>
                         )}
                     </div>
                     <ProgressBar current={sessionProgress} total={sessionTotal} />
                     <div className={`w-full transition-opacity duration-200 ${isChangingWord ? 'opacity-0' : 'opacity-100'}`}>
-                        <Flashcard word={currentWord} isFlipped={isFlipped} onFlip={handleFlip} exampleSentence={exampleSentence} isChanging={isChangingWord} isInstantChange={isInstantChange} translationMode={translationMode} lang1={currentSet.lang1} lang2={currentSet.lang2} />
+                        <Flashcard word={currentWord} isFlipped={isFlipped} onFlip={handleFlip} exampleSentence={exampleSentence} isChanging={isChangingWord} isInstantChange={isInstantChange} translationMode={translationMode} lang1={currentSet.lang1} lang2={currentSet.lang2} cardNumber={counterText} />
                     </div>
                     <div className="flex justify-center gap-4 mt-6 w-full">
                         {isDontKnowMode ? (
@@ -1132,7 +1143,7 @@ const App: React.FC = () => {
     if (!loadedDictionary) {
         return (
             <div className="min-h-screen flex flex-col">
-                 <header className="relative z-10 w-full p-4 sm:p-6 flex justify-end">
+                <header className="relative z-10 w-full p-4 sm:p-6 flex justify-end">
                     <div className="flex items-center gap-2">
                         <ThemeToggle theme={theme} setTheme={setTheme} />
                         <Auth user={user} />

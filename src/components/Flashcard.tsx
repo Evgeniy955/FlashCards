@@ -12,9 +12,10 @@ interface FlashcardProps {
   translationMode: TranslationMode;
   lang1: string;
   lang2: string;
+  cardNumber: string;
 }
 
-export const Flashcard: React.FC<FlashcardProps> = ({ word, isFlipped, onFlip, exampleSentence, isChanging, isInstantChange, translationMode, lang1, lang2 }) => {
+export const Flashcard: React.FC<FlashcardProps> = ({ word, isFlipped, onFlip, exampleSentence, isChanging, isInstantChange, translationMode, lang1, lang2, cardNumber }) => {
   
   const handlePlayAudioSequence = (e: React.MouseEvent) => {
     e.stopPropagation(); // Prevent card from flipping when clicking the button
@@ -71,6 +72,7 @@ export const Flashcard: React.FC<FlashcardProps> = ({ word, isFlipped, onFlip, e
         className={`absolute w-full h-full ${isStandardMode ? 'bg-white dark:bg-slate-800' : 'bg-indigo-500 dark:bg-indigo-700'} rounded-2xl shadow-xl flex flex-col justify-center items-center p-6 text-center`}
         style={{ backfaceVisibility: 'hidden', WebkitBackfaceVisibility: 'hidden' }}
     >
+      <span className={`absolute top-4 right-4 text-xs font-mono ${isStandardMode ? 'text-slate-400 dark:text-slate-500' : 'text-indigo-200 dark:text-indigo-300'}`}>{cardNumber}</span>
       <span className={`${getFontSizeClass(frontWord)} font-bold ${isStandardMode ? 'text-slate-900 dark:text-white' : 'text-white'}`}>{frontWord}</span>
     </div>
   );
@@ -80,19 +82,22 @@ export const Flashcard: React.FC<FlashcardProps> = ({ word, isFlipped, onFlip, e
         className={`absolute w-full h-full ${isStandardMode ? 'bg-indigo-500 dark:bg-indigo-700' : 'bg-white dark:bg-slate-800'} rounded-2xl shadow-xl flex flex-col justify-center items-center p-6 text-center`}
         style={{ backfaceVisibility: 'hidden', WebkitBackfaceVisibility: 'hidden', transform: 'rotateY(180deg)' }}
     >
+      <div className="absolute top-4 right-4 flex items-center gap-2">
+        <span className={`text-xs font-mono ${isStandardMode ? 'text-indigo-200 dark:text-indigo-300' : 'text-slate-400 dark:text-slate-500'}`}>{cardNumber}</span>
+        <button
+          onClick={handlePlayAudioSequence}
+          className={`p-2 ${isStandardMode ? 'text-indigo-100 dark:text-indigo-200 hover:text-white hover:bg-indigo-600 dark:hover:bg-indigo-600' : 'text-slate-600 dark:text-slate-300 hover:text-slate-800 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-slate-700'} transition-colors rounded-full`}
+          aria-label="Play English pronunciation"
+        >
+          <Volume2 size={24} />
+        </button>
+      </div>
       <div>
         <span className={`${getFontSizeClass(backWord)} font-bold ${isStandardMode ? 'text-white' : 'text-slate-900 dark:text-white'}`}>{backWord}</span>
         {exampleSentence && (
           <p className={`${isStandardMode ? 'text-indigo-100 dark:text-indigo-200' : 'text-slate-600 dark:text-slate-300'} mt-4 text-sm sm:text-base italic`}>"{exampleSentence}"</p>
         )}
       </div>
-      <button
-        onClick={handlePlayAudioSequence}
-        className={`absolute top-4 right-4 p-2 ${isStandardMode ? 'text-indigo-100 dark:text-indigo-200 hover:text-white hover:bg-indigo-600 dark:hover:bg-indigo-600' : 'text-slate-600 dark:text-slate-300 hover:text-slate-800 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-slate-700'} transition-colors rounded-full`}
-        aria-label="Play English pronunciation"
-      >
-        <Volume2 size={24} />
-      </button>
     </div>
   );
 
