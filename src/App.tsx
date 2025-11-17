@@ -889,7 +889,7 @@ const App: React.FC = () => {
     
             // FIX: Unified and more robust logic to ensure a correctly answered word is always
             // removed from the 'dontKnowWords' list, preventing it from reappearing as a mistake.
-            if (selectedSetIndex !== null) {
+            if (isDontKnowMode && selectedSetIndex !== null) {
                 setDontKnowWords((prev: Map<number, Word[]>) => {
                     const newMap = new Map(prev);
                     // Ensure we operate on an array, even if the key doesn't exist yet.
