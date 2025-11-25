@@ -2,26 +2,26 @@ import { GoogleGenAI, Type } from "@google/genai";
 
 // Safely access API Key from various possible sources
 const getApiKey = (): string => {
-    // 1. Try process.env.API_KEY (injected by Vite config override)
-    try {
-        // @ts-ignore
-        if (typeof process !== 'undefined' && process.env?.API_KEY) {
-            // @ts-ignore
-            return process.env.API_KEY;
-        }
-    } catch (e) {
-        // ignore
+  // 1. Try process.env.API_KEY (injected by Vite config override)
+  try {
+    // @ts-ignore
+    if (typeof process !== 'undefined' && process.env?.API_KEY) {
+      // @ts-ignore
+      return process.env.API_KEY;
     }
+  } catch (e) {
+    // ignore
+  }
 
-    // 2. Try standard Vite env vars (if user used VITE_ prefix in .env)
-    if (import.meta.env.VITE_GEMINI_API_KEY) {
-        return import.meta.env.VITE_GEMINI_API_KEY;
-    }
-    if (import.meta.env.VITE_API_KEY) {
-        return import.meta.env.VITE_API_KEY;
-    }
-
-    return '';
+  // 2. Try standard Vite env vars (if user used VITE_ prefix in .env)
+  if (import.meta.env.VITE_GEMINI_API_KEY) {
+    return import.meta.env.VITE_GEMINI_API_KEY;
+  }
+  if (import.meta.env.VITE_API_KEY) {
+    return import.meta.env.VITE_API_KEY;
+  }
+  
+  return '';
 };
 
 const apiKey = getApiKey();
@@ -37,53 +37,53 @@ if (apiKey) {
     }
 } else {
     // Only warn in development console, don't crash
-    console.debug("Gemini API Key is missing.");
+    console.debug("Gemini API Key is missing. AI features will be disabled.");
 }
 
 export const generateExampleSentence = async (word: string): Promise<string> => {
-    if (!ai) {
-        console.error("GoogleGenAI client is not initialized (Missing API Key).");
-        return '';
-    }
-    try {
-        const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
-            contents: `Generate a short, simple, and memorable example sentence in English containing the word "${word}". Return ONLY the sentence text. Do not include the translation or any explanations.`,
-        });
-        return response.text ? response.text.trim() : '';
-    } catch (error) {
-        console.error("Gemini generation error:", error);
-        return '';
-    }
+  if (!ai) {
+    console.error("GoogleGenAI client is not initialized (Missing API Key).");
+    return '';
+  }
+  try {
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: `Generate a short, simple, and memorable example sentence in English containing the word "${word}". Return ONLY the sentence text. Do not include the translation or any explanations.`,
+    });
+    return response.text ? response.text.trim() : '';
+  } catch (error) {
+    console.error("Gemini generation error:", error);
+    return '';
+  }
 };
 
 export const validateAnswerWithAI = async (
-    userAnswer: string,
-    correctAnswer: string
+  userAnswer: string, 
+  correctAnswer: string
 ): Promise<{ isCorrect: boolean; feedback: string }> => {
-    if (!ai) {
-        return { isCorrect: false, feedback: "AI unavailable (Check Key)" };
-    }
+  if (!ai) {
+    return { isCorrect: false, feedback: "AI unavailable (Check Key)" };
+  }
 
-    const schema = {
-        type: Type.OBJECT,
-        properties: {
-            isCorrect: {
-                type: Type.BOOLEAN,
-                description: "True if the user answer is a valid translation, synonym, or has only minor typos. False otherwise."
-            },
-            feedback: {
-                type: Type.STRING,
-                description: "A short, encouraging feedback message (max 10 words). If correct but different, explain why (e.g., 'Correct! That's a synonym'). If incorrect, briefly hint why."
-            },
-        },
-        required: ["isCorrect", "feedback"],
-    };
+  const schema = {
+    type: Type.OBJECT,
+    properties: {
+      isCorrect: { 
+        type: Type.BOOLEAN,
+        description: "True if the user answer is a valid translation, synonym, or has only minor typos. False otherwise."
+      },
+      feedback: { 
+        type: Type.STRING,
+        description: "A short, encouraging feedback message (max 10 words). If correct but different, explain why (e.g., 'Correct! That's a synonym'). If incorrect, briefly hint why."
+      },
+    },
+    required: ["isCorrect", "feedback"],
+  };
 
-    try {
-        const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
-            contents: `
+  try {
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: `
         Task: Validate a vocabulary flashcard answer.
         Target Word (Correct Answer): "${correctAnswer}"
         User's Answer: "${userAnswer}"
@@ -96,18 +96,18 @@ export const validateAnswerWithAI = async (
         
         Respond in JSON.
       `,
-            config: {
-                responseMimeType: "application/json",
-                responseSchema: schema,
-            },
-        });
-
-        const text = response.text;
-        if (!text) return { isCorrect: false, feedback: "AI error" };
-
-        return JSON.parse(text);
-    } catch (error) {
-        console.error("Gemini validation error:", error);
-        return { isCorrect: false, feedback: "" };
-    }
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: schema,
+      },
+    });
+    
+    const text = response.text;
+    if (!text) return { isCorrect: false, feedback: "AI error" };
+    
+    return JSON.parse(text);
+  } catch (error) {
+    console.error("Gemini validation error:", error);
+    return { isCorrect: false, feedback: "" };
+  }
 };
