@@ -1,5 +1,5 @@
 import React from 'react';
-import { Volume2, Check, Sparkles, Loader2, RefreshCw } from 'lucide-react';
+import { Volume2, Check, Sparkles, Loader2, RefreshCw, AlertCircle } from 'lucide-react';
 import type { Word, TranslationMode } from '../types';
 
 interface FlashcardProps {
@@ -15,6 +15,7 @@ interface FlashcardProps {
   totalAttempts: number;
   onGenerateContext?: () => void;
   isGeneratingContext?: boolean;
+  generationError?: string | null;
 }
 
 export const Flashcard: React.FC<FlashcardProps> = ({ 
@@ -29,7 +30,8 @@ export const Flashcard: React.FC<FlashcardProps> = ({
   knowAttempts, 
   totalAttempts,
   onGenerateContext,
-  isGeneratingContext
+  isGeneratingContext,
+  generationError
 }) => {
   
   const handlePlayAudioSequence = (e: React.MouseEvent) => {
@@ -172,6 +174,13 @@ export const Flashcard: React.FC<FlashcardProps> = ({
                 )}
               </button>
             )
+          )}
+          
+          {generationError && (
+            <div className="mt-2 flex items-center gap-1 text-xs text-rose-500 dark:text-rose-400 bg-rose-100 dark:bg-rose-900/30 px-2 py-1 rounded max-w-xs mx-auto text-center">
+                <AlertCircle size={12} className="flex-shrink-0" />
+                <span>{generationError}</span>
+            </div>
           )}
         </div>
       </div>
