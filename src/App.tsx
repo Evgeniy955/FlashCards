@@ -24,6 +24,7 @@ import { ThemeToggle } from './components/ThemeToggle';
 import { getDictionary } from './lib/indexedDB';
 import { StudyStatsToast } from './components/StudyStatsToast';
 import { loadSentences as loadLocalSentences, saveSentences as saveLocalSentences } from './lib/sentenceDB';
+import { generateExampleSentence, validateAnswerWithAI } from './lib/gemini';
 
 
 // --- Constants ---
@@ -42,10 +43,7 @@ interface ProfileStats {
 
 // Custom hook to get the previous value of a prop or state.
 function usePrevious<T>(value: T): T | undefined {
-    // FIX: The original `useRef<T>()` call was incorrect as it requires an initial value if T is not undefined.
-    // This has been changed to `useRef<T | undefined>(undefined)` to correctly initialize the ref with `undefined`.
     const ref = useRef<T | undefined>(undefined);
-    // FIX: Added `value` to the dependency array to resolve the reported error, likely from a linter rule requiring exhaustive dependencies for useEffect.
     useEffect(() => {
         ref.current = value;
     }, [value]);
@@ -105,13 +103,14 @@ const aggregateProgress = (
     
     const dontKnowInDict = new Set<string>();
     if (progress.dontKnowWords) {
-        Object.values(progress.dontKnowWords).forEach((wordArray: unknown) => {
+        const wordsLists = Object.values(progress.dontKnowWords);
+        for (const wordArray of wordsLists) {
             if (Array.isArray(wordArray)) {
-                (wordArray as Word[]).forEach(word => {
+                for (const word of (wordArray as Word[])) {
                     dontKnowInDict.add(getWordId(word));
-                });
+                }
             }
-        });
+        }
     }
     acc.dontKnowCount += dontKnowInDict.size;
     return acc;
@@ -155,6 +154,11 @@ const App: React.FC = () => {
     const [trainingMode, setTrainingMode] = useState<'write' | 'guess'>('write');
     const [translationMode, setTranslationMode] = useState<TranslationMode>('standard');
     const [guessOptions, setGuessOptions] = useState<string[]>([]);
+    
+    // AI Integration States
+    const [isGeneratingSentence, setIsGeneratingSentence] = useState(false);
+    const [isValidatingAnswer, setIsValidatingAnswer] = useState(false);
+    const [aiFeedback, setAiFeedback] = useState<string>('');
 
     const [isFileSourceModalOpen, setFileSourceModalOpen] = useState(false);
     const [isInstructionsModalOpen, setInstructionsModalOpen] = useState(false);
@@ -179,7 +183,6 @@ const App: React.FC = () => {
         if (savedTheme) {
             setTheme(savedTheme);
         } else if (systemPrefersDark) {
-            // FIX: Correctly set theme to 'dark' when system prefers dark mode.
             setTheme('dark');
         } else {
             setTheme('light');
@@ -198,14 +201,12 @@ const App: React.FC = () => {
     }, [theme]);
 
 
-    // FIX: Replaced `replaceAll` with `replace` for broader compatibility, as `replaceAll` is a newer addition to JavaScript (ES2021).
     const dictionaryId = useMemo(() => loadedDictionary?.name.replace(/[./]/g, '_'), [loadedDictionary]);
     
     // --- History and Auto-loading Logic ---
 
     const saveLastUsedDictionary = useCallback(async (name: string) => {
         if (user) {
-            // FIX: Use compat API for Firestore
             const userDocRef = db.collection('users').doc(user.uid);
             await userDocRef.set({ lastUsedDictionary: name }, { merge: true });
         } else {
@@ -215,7 +216,6 @@ const App: React.FC = () => {
 
     const clearLastUsedDictionary = useCallback(async () => {
         if (user) {
-            // FIX: Use compat API for Firestore
             const userDocRef = db.collection('users').doc(user.uid);
             await userDocRef.set({ lastUsedDictionary: null }, { merge: true });
         } else {
@@ -223,20 +223,26 @@ const App: React.FC = () => {
         }
     }, [user]);
 
+    // Helper to parse sentences from file
+    const parseSentencesFile = async (sentencesFile: File): Promise<Map<string, string>> => {
+        const text = await sentencesFile.text();
+        const jsonObj = JSON.parse(text);
+        const sentenceMap = new Map<string, string>();
+        for (const key in jsonObj) {
+            if (typeof jsonObj[key] === 'string') {
+                sentenceMap.set(key.trim().toLowerCase(), jsonObj[key]);
+            }
+        }
+        return sentenceMap;
+    }
+
     const loadAndSetDictionary = useCallback(async (name: string, wordsFile: File, sentencesFile?: File) => {
         setIsLoading(true);
-        setIsProgressLoading(true); // Immediately set progress loading to true to prevent race conditions
+        setIsProgressLoading(true);
         try {
             let sentenceMapFromFile: Map<string, string> | null = null;
             if (sentencesFile) {
-                const text = await sentencesFile.text();
-                const jsonObj = JSON.parse(text);
-                sentenceMapFromFile = new Map<string, string>();
-                for (const key in jsonObj) {
-                    if (typeof jsonObj[key] === 'string') {
-                        sentenceMapFromFile.set(key.trim().toLowerCase(), jsonObj[key]);
-                    }
-                }
+                sentenceMapFromFile = await parseSentencesFile(sentencesFile);
             }
 
             setLearnedWords(new Map());
@@ -258,7 +264,7 @@ const App: React.FC = () => {
         } catch (error) {
             alert((error as Error).message);
             setLoadedDictionary(null);
-            setIsProgressLoading(false); // Ensure loading state is reset on error
+            setIsProgressLoading(false);
         } finally {
             setIsLoading(false);
         }
@@ -271,7 +277,6 @@ const App: React.FC = () => {
 
             let lastUsedDictName: string | null = null;
             if (user) {
-                // FIX: Use compat API for Firestore
                 const userDocRef = db.collection('users').doc(user.uid);
                 const docSnap = await userDocRef.get();
                 if (docSnap.exists) {
@@ -308,7 +313,6 @@ const App: React.FC = () => {
         if (!user || authLoading) return;
     
         const fetchUserStats = async () => {
-            // FIX: Use compat API for Firestore
             const userDocRef = db.collection('users').doc(user.uid);
             try {
                 const docSnap = await userDocRef.get();
@@ -339,23 +343,17 @@ const App: React.FC = () => {
         if (!user) return;
     
         const todayStr = new Date().toISOString().split('T')[0]; // YYYY-MM-DD format
-        // FIX: Use compat API for Firestore
         const userDocRef = db.collection('users').doc(user.uid);
     
         try {
             const updates: { [key: string]: any } = {
-                // FIX: Use compat API for arrayUnion
                 studyHistory: firebase.firestore.FieldValue.arrayUnion(todayStr)
             };
     
             if (isNewWord) {
-                // This syntax allows for a dynamic key in the update object.
-                // It will increment 'newWordsLearned' for the current date.
-                // FIX: Use compat API for increment
                 updates[`dailyStats.${todayStr}.newWordsLearned`] = firebase.firestore.FieldValue.increment(1);
             }
     
-            // Using setDoc with merge is safer than updateDoc as it creates the doc if it doesn't exist.
             await userDocRef.set(updates, { merge: true });
     
         } catch (error) {
@@ -369,10 +367,9 @@ const App: React.FC = () => {
     // Load sentences from Firestore (for logged-in users) or IndexedDB (for anonymous users)
     useEffect(() => {
         const loadUserSentences = async () => {
-            if (authLoading) return; // Wait for auth state to be confirmed
+            if (authLoading) return;
             
             if (user) {
-                // FIX: Use compat API for Firestore
                 const userDocRef = db.collection('users').doc(user.uid);
                 try {
                     const docSnap = await userDocRef.get();
@@ -389,7 +386,6 @@ const App: React.FC = () => {
                     setSentences(new Map());
                 }
             } else {
-                // User is logged out, load from local storage
                 try {
                     const localSentences = await loadLocalSentences('local');
                     setSentences(localSentences);
@@ -404,11 +400,10 @@ const App: React.FC = () => {
 
     // Save sentences to Firestore or IndexedDB, with debouncing
     useEffect(() => {
-        if (authLoading) return; // Don't save until auth state is known
+        if (authLoading) return;
 
         const handler = setTimeout(async () => {
             if (user) {
-                // FIX: Use compat API for Firestore
                 const userDocRef = db.collection('users').doc(user.uid);
                 try {
                     await userDocRef.set({
@@ -432,13 +427,10 @@ const App: React.FC = () => {
     // Effect to handle merging local progress to remote on login
     useEffect(() => {
         const syncOnLogin = async () => {
-            // Condition: user just logged in and a dictionary is loaded.
             if (user && !prevUser && dictionaryId) {
                 setIsSyncing(true);
                 try {
-                    // 1. Load both local and remote progress to reconcile them.
                     const localData = await loadLocalProgress(dictionaryId);
-                    // FIX: Use compat API for Firestore
                     const docRef = db.collection('users').doc(user.uid).collection('progress').doc(dictionaryId);
                     const docSnap = await docRef.get();
 
@@ -451,42 +443,36 @@ const App: React.FC = () => {
                     const remoteDontKnow = remoteData?.dontKnowWords ? new Map(Object.entries(remoteData.dontKnowWords).map(([k, v]) => [Number(k), v as Word[]])) : new Map<number, Word[]>();
                     const remoteStats = remoteData?.wordStats ? new Map(Object.entries(remoteData.wordStats as { [s: string]: WordStats })) : new Map<string, WordStats>();
 
-
-                    // 2. Merge data: Remote data takes precedence for learned words to prevent overwrites,
-                    // while 'don't know' words are combined to not lose any.
                     const mergedLearned = new Map([...localLearned, ...remoteLearned]);
 
                     const mergedDontKnow = new Map<number, Word[]>();
                     const allDontKnowKeys = new Set([...localDontKnow.keys(), ...remoteDontKnow.keys()]);
                     
-                    allDontKnowKeys.forEach(key => {
+                    for (const key of allDontKnowKeys) {
                         const localWords = localDontKnow.get(key) || [];
                         const remoteWords = remoteDontKnow.get(key) || [];
                         const combined = [...localWords, ...remoteWords];
-                        // Deduplicate the combined array
                         const uniqueWords = Array.from(new Map(combined.map(w => [getWordId(w), w])).values());
                         mergedDontKnow.set(key, uniqueWords);
-                    });
+                    }
                     
                     const mergedStats = new Map(localStats);
-                    remoteStats.forEach((stats, wordId) => {
-                        const local = mergedStats.get(wordId);
-                        if (local) {
-                            mergedStats.set(wordId, {
-                                knowCount: local.knowCount + stats.knowCount,
-                                totalAttempts: local.totalAttempts + stats.totalAttempts,
-                            });
-                        } else {
-                            mergedStats.set(wordId, stats);
-                        }
-                    });
+                    for (const [wordId, stats] of remoteStats) {
+                         const local = mergedStats.get(wordId);
+                         if (local) {
+                             mergedStats.set(wordId, {
+                                 knowCount: local.knowCount + stats.knowCount,
+                                 totalAttempts: local.totalAttempts + stats.totalAttempts,
+                             });
+                         } else {
+                             mergedStats.set(wordId, stats);
+                         }
+                    }
 
-                    // 3. Update state with the definitive merged data.
                     setLearnedWords(mergedLearned);
                     setDontKnowWords(mergedDontKnow);
                     setWordStats(mergedStats);
 
-                    // 4. Clean up local progress after successful merge.
                     if (localData) {
                         await deleteLocalProgress(dictionaryId);
                     }
@@ -505,23 +491,18 @@ const App: React.FC = () => {
     // Load DICTIONARY-SPECIFIC progress from Firestore or Local Storage
     useEffect(() => {
         const loadProgress = async () => {
-            if (!dictionaryId) {
-                setLearnedWords(new Map());
-                setDontKnowWords(new Map());
-                setWordStats(new Map());
-                // isProgressLoading remains true from its initial state, which is correct.
+            if (!dictionaryId || isSyncing) {
+                if(!dictionaryId) {
+                     setLearnedWords(new Map());
+                     setDontKnowWords(new Map());
+                     setWordStats(new Map());
+                }
                 return;
             }
             
-            // If a sync is in progress, let it finish. Don't run this load.
-            if (isSyncing) {
-                return;
-            }
-    
             setIsProgressLoading(true);
             try {
-                if (user) { // User is logged in, use Firestore
-                    // FIX: Use compat API for Firestore
+                if (user) {
                     const docRef = db.collection('users').doc(user.uid).collection('progress').doc(dictionaryId);
                     const docSnap = await docRef.get();
                     if (docSnap.exists) {
@@ -541,7 +522,7 @@ const App: React.FC = () => {
                         setDontKnowWords(new Map());
                         setWordStats(new Map());
                     }
-                } else { // User is not logged in, use IndexedDB
+                } else {
                     const localProgress = await loadLocalProgress(dictionaryId);
                     if (localProgress) {
                         const learnedData = localProgress.learnedWords || {};
@@ -579,11 +560,11 @@ const App: React.FC = () => {
         const learnedCount = learnedWords.size;
         
         const allDontKnowWords = new Set<string>();
-        dontKnowWords.forEach(wordArray => {
-            wordArray.forEach(word => {
-                allDontKnowWords.add(getWordId(word));
-            });
-        });
+        for (const wordArray of dontKnowWords.values()) {
+             for (const word of wordArray) {
+                 allDontKnowWords.add(getWordId(word));
+             }
+        }
         const dontKnowCount = allDontKnowWords.size;
 
         const remainingCount = totalWords - learnedCount;
@@ -613,7 +594,6 @@ const App: React.FC = () => {
             const totalWordsInDict = currentDictionaryStats?.totalWords;
 
             if (user) {
-                // FIX: Use compat API for Firestore
                 const docRef = db.collection('users').doc(user.uid).collection('progress').doc(dictionaryId);
                 try {
                     await docRef.set({ ...dataToSave, totalWordsInDict }, { merge: true });
@@ -641,7 +621,6 @@ const App: React.FC = () => {
 
             try {
                 if (user) {
-                    // FIX: Use compat API for Firestore
                     const progressColRef = db.collection('users').doc(user.uid).collection('progress');
                     const querySnapshot = await progressColRef.get();
                     querySnapshot.forEach(doc => allProgressData.push(doc.data()));
@@ -651,17 +630,17 @@ const App: React.FC = () => {
 
                 if (allProgressData.length > 0) {
                     const aggregated = allProgressData.reduce(aggregateProgress, { totalWords: 0, learnedCount: 0, dontKnowCount: 0 });
-
                     const remaining = aggregated.totalWords - aggregated.learnedCount;
+                    const safeRemaining = Math.max(0, remaining);
 
                     setAllTimeStats({
                         dictionaryCount: allProgressData.length,
                         totalWords: aggregated.totalWords,
                         learnedCount: aggregated.learnedCount,
                         dontKnowCount: aggregated.dontKnowCount,
-                        remainingCount: remaining > 0 ? remaining : 0,
+                        remainingCount: safeRemaining,
                         learnedPercentage: aggregated.totalWords > 0 ? (aggregated.learnedCount / aggregated.totalWords) * 100 : 0,
-                        remainingPercentage: aggregated.totalWords > 0 ? (remaining / aggregated.totalWords) * 100 : 0,
+                        remainingPercentage: aggregated.totalWords > 0 ? (safeRemaining / aggregated.totalWords) * 100 : 0,
                     });
                 } else {
                     setAllTimeStats(null);
@@ -680,7 +659,6 @@ const App: React.FC = () => {
             setIsProgressLoading(true);
             try {
                 if (user) {
-                    // FIX: Use compat API for Firestore
                     const progressColRef = db.collection('users').doc(user.uid).collection('progress');
                     const querySnapshot = await progressColRef.get();
                     const deletePromises = querySnapshot.docs.map(doc => doc.ref.delete());
@@ -689,11 +667,9 @@ const App: React.FC = () => {
                     await clearAllLocalProgress();
                 }
     
-                // Also clear the current dictionary's progress from state
                 setLearnedWords(new Map());
                 setDontKnowWords(new Map());
                 
-                // Force a refresh of the stats
                 setAllTimeStats(null);
                 setProgressSaveCounter(c => c + 1);
     
@@ -704,7 +680,7 @@ const App: React.FC = () => {
                 alert("An error occurred while resetting statistics. Please try again.");
             } finally {
                 setIsProgressLoading(false);
-                setProfileModalOpen(false); // Close modal after reset
+                setProfileModalOpen(false);
             }
         }
     };
@@ -887,12 +863,9 @@ const App: React.FC = () => {
             nextReviewDate.setDate(nextReviewDate.getDate() + SRS_INTERVALS[nextStage]);
             setLearnedWords(prev => new Map(prev).set(wordId, { srsStage: nextStage, nextReviewDate: nextReviewDate.toISOString() }));
     
-            // FIX: Unified and more robust logic to ensure a correctly answered word is always
-            // removed from the 'dontKnowWords' list, preventing it from reappearing as a mistake.
             if (isDontKnowMode && selectedSetIndex !== null) {
                 setDontKnowWords((prev: Map<number, Word[]>) => {
                     const newMap = new Map(prev);
-                    // Ensure we operate on an array, even if the key doesn't exist yet.
                     const currentMistakes = newMap.get(selectedSetIndex) || [];
                     const updatedMistakes = currentMistakes.filter(w => getWordId(w) !== wordId);
 
@@ -951,7 +924,7 @@ const App: React.FC = () => {
 
     const handleFlip = () => {
         if (isDontKnowMode && answerState !== 'idle' && trainingMode === 'write') return;
-        if (isDontKnowMode && trainingMode === 'guess' && isFlipped) return; // Don't allow flipping back in guess mode
+        if (isDontKnowMode && trainingMode === 'guess' && isFlipped) return;
         setIsFlipped(prev => !prev);
     };
 
@@ -980,6 +953,7 @@ const App: React.FC = () => {
             setIsFlipped(false);
             setAnswerState('idle');
             setUserAnswer('');
+            setAiFeedback('');
             setIsDontKnowMode(true);
             setIsPracticeMode(false);
             setSessionActive(true);
@@ -1007,15 +981,34 @@ const App: React.FC = () => {
         }
     };
 
-    const handleTrainingAnswer = () => {
+    const handleTrainingAnswer = async () => {
         if (!currentWord || answerState !== 'idle') return;
 
         const correctAnswer = translationMode === 'standard' ? currentWord.lang2 : currentWord.lang1;
-        const isCorrect = userAnswer.trim().toLowerCase() === correctAnswer.toLowerCase();
+        const simpleIsCorrect = userAnswer.trim().toLowerCase() === correctAnswer.toLowerCase();
         
-        recordStudyActivity(isCorrect && !learnedWords.has(getWordId(currentWord)));
+        let finalIsCorrect = simpleIsCorrect;
+        let finalFeedback = '';
 
-        if (isCorrect) {
+        // Smart check with AI if simple match fails and we are in Write mode
+        if (!simpleIsCorrect && trainingMode === 'write') {
+            setIsValidatingAnswer(true);
+            try {
+                const aiResult = await validateAnswerWithAI(userAnswer, correctAnswer);
+                finalIsCorrect = aiResult.isCorrect;
+                finalFeedback = aiResult.feedback;
+            } catch (e) {
+                console.error("AI Validation Failed", e);
+                // Fallback to incorrect if AI fails
+            } finally {
+                setIsValidatingAnswer(false);
+            }
+        }
+        
+        recordStudyActivity(finalIsCorrect && !learnedWords.has(getWordId(currentWord)));
+        setAiFeedback(finalFeedback);
+
+        if (finalIsCorrect) {
             setAnswerState('correct');
             handleKnow();
 
@@ -1023,7 +1016,8 @@ const App: React.FC = () => {
                 setIsFlipped(false);
                 setAnswerState('idle');
                 setUserAnswer('');
-            }, 1000);
+                setAiFeedback('');
+            }, 1000 + (finalFeedback ? 2000 : 0)); // Extra time to read AI feedback
         } else {
             setAnswerState('incorrect');
             setIsFlipped(true);
@@ -1034,6 +1028,7 @@ const App: React.FC = () => {
         advanceToNextWord(() => {
             setAnswerState('idle');
             setUserAnswer('');
+            setAiFeedback('');
             return true;
         }, isFlipped);
     };
@@ -1060,7 +1055,6 @@ const App: React.FC = () => {
             nextReviewDate.setDate(nextReviewDate.getDate() + SRS_INTERVALS[nextStage]);
             setLearnedWords(prev => new Map(prev).set(wordId, { srsStage: nextStage, nextReviewDate: nextReviewDate.toISOString() }));
 
-            // FIX: Unified and more robust logic for removing a word from the 'dontKnowWords' list.
             if (isDontKnowMode && selectedSetIndex !== null) {
                 setDontKnowWords((prev: Map<number, Word[]>) => {
                     const newMap = new Map(prev);
@@ -1079,6 +1073,23 @@ const App: React.FC = () => {
             setIsFlipped(true);
         }
     };
+    
+    const handleGenerateSentence = async () => {
+        if (!currentWord) return;
+        setIsGeneratingSentence(true);
+        try {
+            // Assume lang2 is the target language for examples (typically English)
+            const sentence = await generateExampleSentence(currentWord.lang2);
+            if (sentence) {
+                setSentences(prev => new Map(prev).set(currentWord.lang2.toLowerCase(), sentence));
+            }
+        } catch (e) {
+            console.error(e);
+            alert("Failed to generate sentence. Please try again.");
+        } finally {
+            setIsGeneratingSentence(false);
+        }
+    };
 
 
     const handleResetProgress = async () => {
@@ -1094,7 +1105,7 @@ const App: React.FC = () => {
             setLearnedWords(new Map());
             setDontKnowWords(new Map());
             setWordStats(new Map());
-            setSessionActive(false); // This will trigger a re-start of the session
+            setSessionActive(false); 
         }
     };
 
@@ -1105,112 +1116,106 @@ const App: React.FC = () => {
         setFileSourceModalOpen(true);
     };
 
-    const renderContent = () => {
-        if (isProgressLoading) {
-            return (
-                <div className="w-full aspect-[3/2] flex justify-center items-center text-slate-500 dark:text-slate-400">
-                    <Loader2 className="animate-spin h-8 w-8 mr-3" />
-                    <span>Loading progress...</span>
-                </div>
-            );
+    const getCounterText = () => {
+        if (isDontKnowMode) {
+            return `Reviewing Mistake: ${sessionProgress} / ${sessionTotal}`;
+        }
+        if (staticCardNumber > 0) {
+            return `Card: ${staticCardNumber} / ${staticTotalCards}`;
+        }
+        return '...';
+    };
+
+    const renderFlashcardSection = () => {
+        if (reviewWords.length === 0 || !currentWord || !currentSet) {
+             return null;
         }
 
-        if (reviewWords.length > 0 && currentWord && currentSet) {
-            const counterText = isDontKnowMode
-                ? `Reviewing Mistake: ${sessionProgress} / ${sessionTotal}`
-                : (staticCardNumber > 0 ? `Card: ${staticCardNumber} / ${staticTotalCards}` : '...');
+        const counterText = getCounterText();
+        const placeholderLang = translationMode === 'standard' ? currentSet.lang2 : currentSet.lang1;
+        const correctAnswer = translationMode === 'standard' ? currentWord.lang2 : currentWord.lang1;
 
-            const placeholderLang = translationMode === 'standard' ? currentSet.lang2 : currentSet.lang1;
-            const correctAnswer = translationMode === 'standard' ? currentWord.lang2 : currentWord.lang1;
-
-            const currentWordStats = wordStats.get(getWordId(currentWord));
-            const knowAttempts = currentWordStats?.knowCount || 0;
-            const totalAttempts = currentWordStats?.totalAttempts || 0;
-
-            return (
-                <div className="w-full flex flex-col items-center">
-                    <div className="w-full grid grid-cols-3 items-center gap-3 h-8 mb-2">
-                        {isDontKnowMode ? (
-                            <>
-                                <div />
-                                <TrainingModeToggle mode={trainingMode} onModeChange={(mode) => {
-                                    setTrainingMode(mode);
-                                    setIsFlipped(false);
-                                    setAnswerState('idle');
-                                    setUserAnswer('');
-                                }} />
-                                <div /> {/* Placeholder for grid */}
-                            </>
-                        ) : (
-                            <>
-                                <div className="text-left">
-                                    {isPracticeMode && (
-                                        <span className="text-xs font-semibold uppercase tracking-wider text-sky-500 dark:text-sky-400 bg-sky-500/10 px-2.5 py-1 rounded-full">
-                                            Practice
-                                        </span>
-                                    )}
-                                </div>
-                                <div />
-                                <div />
-                            </>
-                        )}
-                    </div>
-                    <div className="w-full text-center text-sm text-slate-500 dark:text-slate-400 mb-1">{counterText}</div>
-                    <ProgressBar current={sessionProgress} total={sessionTotal} />
-                    <div className={`w-full transition-opacity duration-200 ${isChangingWord ? 'opacity-0' : 'opacity-100'}`}>
-                        <Flashcard word={currentWord} isFlipped={isFlipped} onFlip={handleFlip} exampleSentence={exampleSentence} isChanging={isChangingWord} isInstantChange={isInstantChange} translationMode={translationMode} lang1={currentSet.lang1} knowAttempts={knowAttempts} totalAttempts={totalAttempts} />
-                    </div>
-                    <div className="flex justify-center gap-4 mt-6 w-full">
-                        {isDontKnowMode ? (
-                            trainingMode === 'write' ? (
-                                <TrainingModeInput
-                                    answer={userAnswer}
-                                    setAnswer={setUserAnswer}
-                                    onCheck={handleTrainingAnswer}
-                                    onNext={handleTrainingNext}
-                                    answerState={answerState}
-                                    placeholder={`Type the ${placeholderLang} translation...`}
-                                />
-                            ) : (
-                                <TrainingModeGuess
-                                    options={guessOptions}
-                                    correctAnswer={correctAnswer}
-                                    onGuess={handleGuess}
-                                    onNext={handleTrainingNext}
-                                />
-                            )
-                        ) : (
-                            <>
-                                <button onClick={handleDontKnow} disabled={isProgressLoading || isChangingWord} className="w-full py-3 text-lg font-semibold text-white bg-rose-600 hover:bg-rose-700 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-wait">Don't know</button>
-                                <button onClick={handleKnow} disabled={isProgressLoading || isChangingWord} className="w-full py-3 text-lg font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-wait">Know</button>
-                            </>
-                        )}
-                    </div>
-                </div>
-            );
-        }
+        const currentWordStats = wordStats.get(getWordId(currentWord));
+        const knowAttempts = currentWordStats?.knowCount || 0;
+        const totalAttempts = currentWordStats?.totalAttempts || 0;
 
         return (
-            <div className="text-center my-16">
-                <h2 className="text-2xl font-semibold mb-4 text-slate-800 dark:text-slate-300">Session Complete!</h2>
-                <p className="text-slate-500 dark:text-slate-400">You've reviewed all available cards for this set.</p>
-                <div className="flex flex-col sm:flex-row justify-center items-center gap-4 mt-6">
-                    {selectedSetIndex !== null && dontKnowWords.get(selectedSetIndex) && dontKnowWords.get(selectedSetIndex)!.length > 0 && (
-                        <button onClick={startDontKnowSession} className="px-5 py-2.5 text-white bg-amber-600 hover:bg-amber-700 rounded-lg font-semibold transition-colors flex items-center gap-2">
-                            <Repeat size={18} />
-                            Review {dontKnowWords.get(selectedSetIndex)?.length} Mistake(s)
-                        </button>
+            <div className="w-full flex flex-col items-center">
+                <div className="w-full grid grid-cols-3 items-center gap-3 h-8 mb-2">
+                    {isDontKnowMode ? (
+                        <>
+                            <div />
+                            <TrainingModeToggle mode={trainingMode} onModeChange={(mode) => {
+                                setTrainingMode(mode);
+                                setIsFlipped(false);
+                                setAnswerState('idle');
+                                setUserAnswer('');
+                            }} />
+                            <div />
+                        </>
+                    ) : (
+                        <>
+                            <div className="text-left">
+                                {isPracticeMode && (
+                                    <span className="text-xs font-semibold uppercase tracking-wider text-sky-500 dark:text-sky-400 bg-sky-500/10 px-2.5 py-1 rounded-full">
+                                        Practice
+                                    </span>
+                                )}
+                            </div>
+                            <div />
+                            <div />
+                        </>
                     )}
-                    {currentSet && (
-                        <button onClick={startPracticeSession} className="px-5 py-2.5 text-white bg-sky-600 hover:bg-sky-700 rounded-lg font-semibold transition-colors flex items-center gap-2">
-                            <RefreshCw size={18} />
-                            Practice Again
-                        </button>
+                </div>
+                <div className="w-full text-center text-sm text-slate-500 dark:text-slate-400 mb-1">{counterText}</div>
+                <ProgressBar current={sessionProgress} total={sessionTotal} />
+                <div className={`w-full transition-opacity duration-200 ${isChangingWord ? 'opacity-0' : 'opacity-100'}`}>
+                    <Flashcard 
+                        word={currentWord} 
+                        isFlipped={isFlipped} 
+                        onFlip={handleFlip} 
+                        exampleSentence={exampleSentence} 
+                        isChanging={isChangingWord} 
+                        isInstantChange={isInstantChange} 
+                        translationMode={translationMode} 
+                        lang1={currentSet.lang1} 
+                        knowAttempts={knowAttempts} 
+                        totalAttempts={totalAttempts}
+                        onGenerateContext={handleGenerateSentence}
+                        isGeneratingContext={isGeneratingSentence}
+                    />
+                </div>
+                <div className="flex justify-center gap-4 mt-6 w-full">
+                    {isDontKnowMode ? (
+                        trainingMode === 'write' ? (
+                            <TrainingModeInput
+                                answer={userAnswer}
+                                setAnswer={setUserAnswer}
+                                onCheck={handleTrainingAnswer}
+                                onNext={handleTrainingNext}
+                                answerState={answerState}
+                                placeholder={`Type the ${placeholderLang} translation...`}
+                                isValidating={isValidatingAnswer}
+                                aiFeedback={aiFeedback}
+                            />
+                        ) : (
+                            <TrainingModeGuess
+                                options={guessOptions}
+                                correctAnswer={correctAnswer}
+                                onGuess={handleGuess}
+                                onNext={handleTrainingNext}
+                            />
+                        )
+                    ) : (
+                        <>
+                            <button onClick={handleDontKnow} disabled={isProgressLoading || isChangingWord} className="w-full py-3 text-lg font-semibold text-white bg-rose-600 hover:bg-rose-700 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-wait">Don't know</button>
+                            <button onClick={handleKnow} disabled={isProgressLoading || isChangingWord} className="w-full py-3 text-lg font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-wait">Know</button>
+                        </>
                     )}
                 </div>
             </div>
         );
-    };
+    }
 
     if (isInitialLoading) {
         return (
@@ -1284,7 +1289,33 @@ const App: React.FC = () => {
 
                 <SetSelector sets={loadedDictionary.sets} selectedSetIndex={selectedSetIndex} onSelectSet={handleSelectSet} />
 
-                {renderContent()}
+                {isProgressLoading ? (
+                    <div className="w-full aspect-[3/2] flex justify-center items-center text-slate-500 dark:text-slate-400">
+                        <Loader2 className="animate-spin h-8 w-8 mr-3" />
+                        <span>Loading progress...</span>
+                    </div>
+                ) : reviewWords.length > 0 && currentWord && currentSet ? (
+                    renderFlashcardSection()
+                ) : (
+                    <div className="text-center my-16">
+                        <h2 className="text-2xl font-semibold mb-4 text-slate-800 dark:text-slate-300">Session Complete!</h2>
+                        <p className="text-slate-500 dark:text-slate-400">You've reviewed all available cards for this set.</p>
+                        <div className="flex flex-col sm:flex-row justify-center items-center gap-4 mt-6">
+                            {selectedSetIndex !== null && dontKnowWords.get(selectedSetIndex) && dontKnowWords.get(selectedSetIndex)!.length > 0 && (
+                                <button onClick={startDontKnowSession} className="px-5 py-2.5 text-white bg-amber-600 hover:bg-amber-700 rounded-lg font-semibold transition-colors flex items-center gap-2">
+                                    <Repeat size={18} />
+                                    Review {dontKnowWords.get(selectedSetIndex)?.length} Mistake(s)
+                                </button>
+                            )}
+                            {currentSet && (
+                                <button onClick={startPracticeSession} className="px-5 py-2.5 text-white bg-sky-600 hover:bg-sky-700 rounded-lg font-semibold transition-colors flex items-center gap-2">
+                                    <RefreshCw size={18} />
+                                    Practice Again
+                                </button>
+                            )}
+                        </div>
+                    </div>
+                )}
 
                 <div className="w-full mt-8 p-3 bg-white/50 dark:bg-slate-800/50 rounded-lg shadow-sm dark:shadow-none border border-slate-200 dark:border-slate-700">
                     <SentenceUpload onSentencesLoaded={(newMap) => setSentences(prev => new Map([...prev, ...newMap]))} onClearSentences={() => setSentences(new Map())} hasSentences={sentences.size > 0}/>

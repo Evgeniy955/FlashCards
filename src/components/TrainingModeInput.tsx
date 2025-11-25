@@ -1,5 +1,5 @@
 import React from 'react';
-import { Check, ArrowRight, X } from 'lucide-react';
+import { Check, ArrowRight, X, Loader2, Sparkles } from 'lucide-react';
 
 export type AnswerState = 'idle' | 'correct' | 'incorrect';
 
@@ -10,11 +10,24 @@ interface TrainingModeInputProps {
   onNext: () => void;
   answerState: AnswerState;
   placeholder: string;
+  isValidating?: boolean;
+  aiFeedback?: string;
 }
 
-export const TrainingModeInput: React.FC<TrainingModeInputProps> = ({ answer, setAnswer, onCheck, onNext, answerState, placeholder }) => {
+export const TrainingModeInput: React.FC<TrainingModeInputProps> = ({ 
+  answer, 
+  setAnswer, 
+  onCheck, 
+  onNext, 
+  answerState, 
+  placeholder,
+  isValidating,
+  aiFeedback
+}) => {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (isValidating) return;
+    
     if (answerState === 'idle') {
       onCheck();
     } else {
@@ -42,18 +55,30 @@ export const TrainingModeInput: React.FC<TrainingModeInputProps> = ({ answer, se
           value={answer}
           onChange={(e) => setAnswer(e.target.value)}
           placeholder={placeholder}
-          disabled={answerState !== 'idle'}
+          disabled={answerState !== 'idle' || isValidating}
           className={`w-full p-3 text-center text-lg bg-white dark:bg-slate-800 rounded-lg border-2 transition-colors duration-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-white dark:focus:ring-offset-slate-900 disabled:opacity-70 ${stateStyles[answerState]}`}
           autoFocus
           autoComplete="off"
         />
-        {answerState === 'correct' && <Check className="absolute right-3 top-1/2 -translate-y-1/2 text-emerald-500 dark:text-emerald-400" />}
-        {answerState === 'incorrect' && <X className="absolute right-3 top-1/2 -translate-y-1/2 text-rose-500 dark:text-rose-400" />}
+        {isValidating && <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 text-indigo-500 animate-spin" />}
+        {!isValidating && answerState === 'correct' && <Check className="absolute right-3 top-1/2 -translate-y-1/2 text-emerald-500 dark:text-emerald-400" />}
+        {!isValidating && answerState === 'incorrect' && <X className="absolute right-3 top-1/2 -translate-y-1/2 text-rose-500 dark:text-rose-400" />}
       </div>
       
+      {aiFeedback && (
+        <div className={`text-sm flex items-center gap-2 ${answerState === 'correct' ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
+          <Sparkles size={14} />
+          <span>{aiFeedback}</span>
+        </div>
+      )}
+
       {answerState === 'idle' ? (
-        <button type="submit" className={`w-full py-3 text-lg font-semibold rounded-lg transition-colors ${buttonStyles.idle}`}>
-          Check
+        <button 
+          type="submit" 
+          disabled={isValidating}
+          className={`w-full py-3 text-lg font-semibold rounded-lg transition-colors flex items-center justify-center gap-2 ${buttonStyles.idle} ${isValidating ? 'opacity-70 cursor-not-allowed' : ''}`}
+        >
+          {isValidating ? 'Checking with AI...' : 'Check'}
         </button>
       ) : (
         <button type="submit" className={`w-full py-3 text-lg font-semibold rounded-lg transition-colors flex items-center justify-center gap-2 ${buttonStyles[answerState === 'correct' ? 'correct' : 'incorrect']}`}>
