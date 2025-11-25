@@ -139,11 +139,11 @@ export const Flashcard: React.FC<FlashcardProps> = ({
               <button
                 onClick={handleGenerateClick}
                 disabled={isGeneratingContext}
-                className={`mt-2 flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
+                className={`mt-4 flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-300 ${
                   isStandardMode 
                     ? 'bg-indigo-600/50 text-indigo-100 hover:bg-indigo-600 hover:text-white' 
                     : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600'
-                }`}
+                } hover:scale-105 active:scale-95`}
               >
                 {isGeneratingContext ? (
                   <>
@@ -151,7 +151,7 @@ export const Flashcard: React.FC<FlashcardProps> = ({
                   </>
                 ) : (
                   <>
-                    <Sparkles size={12} /> Generate Example
+                    <Sparkles size={12} /> Magic Example
                   </>
                 )}
               </button>
