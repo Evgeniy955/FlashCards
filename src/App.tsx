@@ -24,6 +24,7 @@ import { ThemeToggle } from './components/ThemeToggle';
 import { getDictionary } from './lib/indexedDB';
 import { StudyStatsToast } from './components/StudyStatsToast';
 import { loadSentences as loadLocalSentences, saveSentences as saveLocalSentences } from './lib/sentenceDB';
+import { generateExampleSentence, validateAnswerWithAI } from './lib/gemini';
 
 
 // --- Constants ---
@@ -155,6 +156,11 @@ const App: React.FC = () => {
     const [trainingMode, setTrainingMode] = useState<'write' | 'guess'>('write');
     const [translationMode, setTranslationMode] = useState<TranslationMode>('standard');
     const [guessOptions, setGuessOptions] = useState<string[]>([]);
+    
+    // AI Integration States
+    const [isGeneratingSentence, setIsGeneratingSentence] = useState(false);
+    const [isValidatingAnswer, setIsValidatingAnswer] = useState(false);
+    const [aiFeedback, setAiFeedback] = useState<string>('');
 
     const [isFileSourceModalOpen, setFileSourceModalOpen] = useState(false);
     const [isInstructionsModalOpen, setInstructionsModalOpen] = useState(false);
@@ -389,7 +395,7 @@ const App: React.FC = () => {
                     setSentences(new Map());
                 }
             } else {
-                // User is logged out, load from local storage
+                // User is logged in, load from local storage
                 try {
                     const localSentences = await loadLocalSentences('local');
                     setSentences(localSentences);
@@ -980,6 +986,7 @@ const App: React.FC = () => {
             setIsFlipped(false);
             setAnswerState('idle');
             setUserAnswer('');
+            setAiFeedback('');
             setIsDontKnowMode(true);
             setIsPracticeMode(false);
             setSessionActive(true);
@@ -1007,15 +1014,34 @@ const App: React.FC = () => {
         }
     };
 
-    const handleTrainingAnswer = () => {
+    const handleTrainingAnswer = async () => {
         if (!currentWord || answerState !== 'idle') return;
 
         const correctAnswer = translationMode === 'standard' ? currentWord.lang2 : currentWord.lang1;
-        const isCorrect = userAnswer.trim().toLowerCase() === correctAnswer.toLowerCase();
+        const simpleIsCorrect = userAnswer.trim().toLowerCase() === correctAnswer.toLowerCase();
         
-        recordStudyActivity(isCorrect && !learnedWords.has(getWordId(currentWord)));
+        let finalIsCorrect = simpleIsCorrect;
+        let finalFeedback = '';
 
-        if (isCorrect) {
+        // If simple check failed and we are in write mode, try AI check
+        if (!simpleIsCorrect && trainingMode === 'write') {
+            setIsValidatingAnswer(true);
+            try {
+                const aiResult = await validateAnswerWithAI(userAnswer, correctAnswer);
+                finalIsCorrect = aiResult.isCorrect;
+                finalFeedback = aiResult.feedback;
+            } catch (e) {
+                console.error("AI Validation Failed", e);
+                // Fallback to simple check
+            } finally {
+                setIsValidatingAnswer(false);
+            }
+        }
+        
+        recordStudyActivity(finalIsCorrect && !learnedWords.has(getWordId(currentWord)));
+        setAiFeedback(finalFeedback);
+
+        if (finalIsCorrect) {
             setAnswerState('correct');
             handleKnow();
 
@@ -1023,7 +1049,8 @@ const App: React.FC = () => {
                 setIsFlipped(false);
                 setAnswerState('idle');
                 setUserAnswer('');
-            }, 1000);
+                setAiFeedback('');
+            }, 1000 + (finalFeedback ? 2000 : 0)); // Give a bit more time to read feedback if present
         } else {
             setAnswerState('incorrect');
             setIsFlipped(true);
@@ -1034,6 +1061,7 @@ const App: React.FC = () => {
         advanceToNextWord(() => {
             setAnswerState('idle');
             setUserAnswer('');
+            setAiFeedback('');
             return true;
         }, isFlipped);
     };
@@ -1077,6 +1105,23 @@ const App: React.FC = () => {
             }
         } else {
             setIsFlipped(true);
+        }
+    };
+    
+    const handleGenerateSentence = async () => {
+        if (!currentWord) return;
+        setIsGeneratingSentence(true);
+        try {
+            // Assume lang2 is the target language for examples (typically English)
+            const sentence = await generateExampleSentence(currentWord.lang2);
+            if (sentence) {
+                setSentences(prev => new Map(prev).set(currentWord.lang2.toLowerCase(), sentence));
+            }
+        } catch (e) {
+            console.error(e);
+            alert("Failed to generate sentence. Please try again.");
+        } finally {
+            setIsGeneratingSentence(false);
         }
     };
 
@@ -1158,7 +1203,20 @@ const App: React.FC = () => {
                     <div className="w-full text-center text-sm text-slate-500 dark:text-slate-400 mb-1">{counterText}</div>
                     <ProgressBar current={sessionProgress} total={sessionTotal} />
                     <div className={`w-full transition-opacity duration-200 ${isChangingWord ? 'opacity-0' : 'opacity-100'}`}>
-                        <Flashcard word={currentWord} isFlipped={isFlipped} onFlip={handleFlip} exampleSentence={exampleSentence} isChanging={isChangingWord} isInstantChange={isInstantChange} translationMode={translationMode} lang1={currentSet.lang1} knowAttempts={knowAttempts} totalAttempts={totalAttempts} />
+                        <Flashcard 
+                            word={currentWord} 
+                            isFlipped={isFlipped} 
+                            onFlip={handleFlip} 
+                            exampleSentence={exampleSentence} 
+                            isChanging={isChangingWord} 
+                            isInstantChange={isInstantChange} 
+                            translationMode={translationMode} 
+                            lang1={currentSet.lang1} 
+                            knowAttempts={knowAttempts} 
+                            totalAttempts={totalAttempts}
+                            onGenerateContext={handleGenerateSentence}
+                            isGeneratingContext={isGeneratingSentence}
+                        />
                     </div>
                     <div className="flex justify-center gap-4 mt-6 w-full">
                         {isDontKnowMode ? (
@@ -1170,6 +1228,8 @@ const App: React.FC = () => {
                                     onNext={handleTrainingNext}
                                     answerState={answerState}
                                     placeholder={`Type the ${placeholderLang} translation...`}
+                                    isValidating={isValidatingAnswer}
+                                    aiFeedback={aiFeedback}
                                 />
                             ) : (
                                 <TrainingModeGuess

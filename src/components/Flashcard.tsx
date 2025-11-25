@@ -1,5 +1,5 @@
 import React from 'react';
-import { Volume2, Check } from 'lucide-react';
+import { Volume2, Check, Sparkles, Loader2 } from 'lucide-react';
 import type { Word, TranslationMode } from '../types';
 
 interface FlashcardProps {
@@ -13,9 +13,24 @@ interface FlashcardProps {
   lang1: string;
   knowAttempts: number;
   totalAttempts: number;
+  onGenerateContext?: () => void;
+  isGeneratingContext?: boolean;
 }
 
-export const Flashcard: React.FC<FlashcardProps> = ({ word, isFlipped, onFlip, exampleSentence, isChanging, isInstantChange, translationMode, lang1, knowAttempts, totalAttempts }) => {
+export const Flashcard: React.FC<FlashcardProps> = ({ 
+  word, 
+  isFlipped, 
+  onFlip, 
+  exampleSentence, 
+  isChanging, 
+  isInstantChange, 
+  translationMode, 
+  lang1, 
+  knowAttempts, 
+  totalAttempts,
+  onGenerateContext,
+  isGeneratingContext
+}) => {
   
   const handlePlayAudioSequence = (e: React.MouseEvent) => {
     e.stopPropagation(); // Prevent card from flipping when clicking the button
@@ -43,6 +58,13 @@ export const Flashcard: React.FC<FlashcardProps> = ({ word, isFlipped, onFlip, e
     }
 
     globalThis.speechSynthesis.speak(wordUtterance);
+  };
+
+  const handleGenerateClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (onGenerateContext) {
+      onGenerateContext();
+    }
   };
 
   const handleFlipDuringChange = () => {
@@ -104,11 +126,38 @@ export const Flashcard: React.FC<FlashcardProps> = ({ word, isFlipped, onFlip, e
               <span>{knowAttempts}/{totalAttempts}</span>
           </div>
       )}
-      <div>
+      <div className="flex flex-col items-center">
         <span className={`${getFontSizeClass(backWord)} font-bold ${isStandardMode ? 'text-white' : 'text-slate-900 dark:text-white'}`}>{backWord}</span>
-        {exampleSentence && (
-          <p className={`${isStandardMode ? 'text-indigo-100 dark:text-indigo-200' : 'text-slate-600 dark:text-slate-300'} mt-4 text-sm sm:text-base italic`}>"{exampleSentence}"</p>
-        )}
+        
+        <div className="mt-4 flex flex-col items-center">
+          {exampleSentence ? (
+            <p className={`${isStandardMode ? 'text-indigo-100 dark:text-indigo-200' : 'text-slate-600 dark:text-slate-300'} text-sm sm:text-base italic max-w-xs mx-auto`}>
+              "{exampleSentence}"
+            </p>
+          ) : (
+            onGenerateContext && (
+              <button
+                onClick={handleGenerateClick}
+                disabled={isGeneratingContext}
+                className={`mt-2 flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
+                  isStandardMode 
+                    ? 'bg-indigo-600/50 text-indigo-100 hover:bg-indigo-600 hover:text-white' 
+                    : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600'
+                }`}
+              >
+                {isGeneratingContext ? (
+                  <>
+                    <Loader2 size={12} className="animate-spin" /> Generating...
+                  </>
+                ) : (
+                  <>
+                    <Sparkles size={12} /> Generate Example
+                  </>
+                )}
+              </button>
+            )
+          )}
+        </div>
       </div>
     </div>
   );
