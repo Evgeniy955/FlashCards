@@ -1,6 +1,13 @@
-import { GoogleGenAI, Type, Schema } from "@google/genai";
+import { GoogleGenAI, Type } from "@google/genai";
 
-const apiKey = process.env.API_KEY || '';
+// Declare process to avoid TypeScript errors since we are using process.env.API_KEY
+declare var process: {
+  env: {
+    API_KEY: string;
+  }
+};
+
+const apiKey = process.env.API_KEY;
 const ai = new GoogleGenAI({ apiKey });
 
 export const generateExampleSentence = async (word: string): Promise<string> => {
@@ -28,7 +35,7 @@ export const validateAnswerWithAI = async (
     return { isCorrect: false, feedback: "AI configuration missing." };
   }
 
-  const schema: Schema = {
+  const schema = {
     type: Type.OBJECT,
     properties: {
       isCorrect: { 
