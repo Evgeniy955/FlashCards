@@ -1,51 +1,48 @@
-// Removed reference to vite/client to fix "Cannot find type definition file" error
-// /// <reference types="vite/client" />
+/// <reference types="vite/client" />
 
 interface ImportMetaEnv {
-  readonly VITE_FIREBASE_API_KEY: string;
-  readonly VITE_FIREBASE_AUTH_DOMAIN: string;
-  readonly VITE_FIREBASE_PROJECT_ID: string;
-  readonly VITE_FIREBASE_MESSAGING_SENDER_ID: string;
-  readonly VITE_FIREBASE_APP_ID: string;
-  readonly VITE_FIREBASE_MEASUREMENT_ID: string;
+    readonly VITE_FIREBASE_API_KEY: string;
+    readonly VITE_FIREBASE_AUTH_DOMAIN: string;
+    readonly VITE_FIREBASE_PROJECT_ID: string;
+    readonly VITE_FIREBASE_MESSAGING_SENDER_ID: string;
+    readonly VITE_FIREBASE_APP_ID: string;
+    readonly VITE_FIREBASE_MEASUREMENT_ID: string;
+    readonly VITE_GEMINI_API_KEY?: string;
+    readonly VITE_API_KEY?: string;
 }
 
 interface ImportMeta {
-  readonly env: ImportMetaEnv;
+    readonly env: ImportMetaEnv;
 }
 
-// Fix TS2591: The global process variable is apparently already declared in this environment.
-// Removed explicit declaration to prevent "Cannot redeclare block-scoped variable 'process'" error.
-// The existing declaration is assumed to be compatible or sufficient.
-/*
+// Explicitly declare process to fix "Cannot find name 'process'" error
 declare const process: {
-  env: {
-    API_KEY?: string;
-    [key: string]: any;
-  }
+    env: {
+        API_KEY?: string;
+        [key: string]: any;
+    }
 };
-*/
 
 // Fix TS2307: Cannot find module '@google/genai'
 declare module '@google/genai' {
-  export class GoogleGenAI {
-    constructor(config: { apiKey: string });
-    models: {
-      generateContent(params: any): Promise<{
-        text?: string;
-        candidates?: any[];
-      }>;
+    export class GoogleGenAI {
+        constructor(config: { apiKey: string });
+        models: {
+            generateContent(params: any): Promise<{
+                text?: string;
+                candidates?: any[];
+            }>;
+        };
+    }
+
+    export const Type: {
+        TYPE_UNSPECIFIED: string;
+        STRING: string;
+        NUMBER: string;
+        INTEGER: string;
+        BOOLEAN: string;
+        ARRAY: string;
+        OBJECT: string;
+        NULL: string;
     };
-  }
-  
-  export const Type: {
-    TYPE_UNSPECIFIED: string;
-    STRING: string;
-    NUMBER: string;
-    INTEGER: string;
-    BOOLEAN: string;
-    ARRAY: string;
-    OBJECT: string;
-    NULL: string;
-  };
 }
