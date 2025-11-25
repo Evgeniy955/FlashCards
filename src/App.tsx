@@ -456,7 +456,7 @@ const App: React.FC = () => {
                         mergedDontKnow.set(key, uniqueWords);
                     }
                     
-                    const mergedStats = new Map(localStats);
+                    const mergedStats = new Map<string, WordStats>(localStats);
                     for (const [wordId, stats] of remoteStats) {
                          const local = mergedStats.get(wordId);
                          if (local) {
@@ -514,7 +514,7 @@ const App: React.FC = () => {
                             Object.entries(dontKnowData).map(([key, value]) => [Number(key), value as Word[]])
                         );
                         setDontKnowWords(dontKnowMap);
-                        const statsData = data?.wordStats || {};
+                        const statsData = (data?.wordStats || {}) as {[key: string]: WordStats};
                         setWordStats(new Map(Object.entries(statsData)));
 
                     } else {
@@ -532,8 +532,8 @@ const App: React.FC = () => {
                             Object.entries(dontKnowData).map(([key, value]) => [Number(key), value as Word[]])
                         );
                         setDontKnowWords(dontKnowMap);
-                        const statsData = localProgress.wordStats || {};
-                        setWordStats(new Map(Object.entries(statsData as object)));
+                        const statsData = (localProgress.wordStats || {}) as {[key: string]: WordStats};
+                        setWordStats(new Map(Object.entries(statsData)));
                     } else {
                         setLearnedWords(new Map());
                         setDontKnowWords(new Map());
@@ -847,7 +847,7 @@ const App: React.FC = () => {
             const wordId = getWordId(currentWord);
             
             setWordStats(prev => {
-                const newMap = new Map(prev);
+                const newMap = new Map<string, WordStats>(prev);
                 const stats = newMap.get(wordId) || { knowCount: 0, totalAttempts: 0 };
                 newMap.set(wordId, { 
                     knowCount: stats.knowCount + 1,
@@ -892,7 +892,7 @@ const App: React.FC = () => {
             const wordId = getWordId(currentWord);
 
             setWordStats(prev => {
-                const newMap = new Map(prev);
+                const newMap = new Map<string, WordStats>(prev);
                 const stats = newMap.get(wordId) || { knowCount: 0, totalAttempts: 0 };
                 newMap.set(wordId, { 
                     knowCount: stats.knowCount,
@@ -1038,7 +1038,7 @@ const App: React.FC = () => {
         const wordId = getWordId(currentWord);
 
         setWordStats(prev => {
-            const newMap = new Map(prev);
+            const newMap = new Map<string, WordStats>(prev);
             const stats = newMap.get(wordId) || { knowCount: 0, totalAttempts: 0 };
             newMap.set(wordId, {
                 knowCount: stats.knowCount + (isCorrect ? 1 : 0),
@@ -1135,7 +1135,7 @@ const App: React.FC = () => {
         const placeholderLang = translationMode === 'standard' ? currentSet.lang2 : currentSet.lang1;
         const correctAnswer = translationMode === 'standard' ? currentWord.lang2 : currentWord.lang1;
 
-        const currentWordStats = wordStats.get(getWordId(currentWord));
+        const currentWordStats = wordStats.get(getWordId(currentWord)) as WordStats | undefined;
         const knowAttempts = currentWordStats?.knowCount || 0;
         const totalAttempts = currentWordStats?.totalAttempts || 0;
 

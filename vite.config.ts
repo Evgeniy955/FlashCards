@@ -8,5 +8,11 @@ export default defineConfig({
     rollupOptions: {
       external: ['@google/genai']
     }
+  },
+  define: {
+    // This replaces process.env.API_KEY in the code with the actual value string
+    'process.env.API_KEY': JSON.stringify(process.env.API_KEY || ''),
+    // This handles other random process.env accesses to prevent crashes
+    'process.env': {} 
   }
 })
