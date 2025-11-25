@@ -1082,6 +1082,8 @@ const App: React.FC = () => {
             const sentence = await generateExampleSentence(currentWord.lang2);
             if (sentence) {
                 setSentences(prev => new Map(prev).set(currentWord.lang2.toLowerCase(), sentence));
+            } else {
+                alert("Failed to generate sentence. Please check if your API key is correctly configured.");
             }
         } catch (e) {
             console.error(e);
