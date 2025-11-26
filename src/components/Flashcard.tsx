@@ -177,8 +177,8 @@ export const Flashcard: React.FC<FlashcardProps> = ({
           )}
           
           {generationError && (
-            <div className="mt-2 flex items-center gap-1 text-xs text-rose-500 dark:text-rose-400 bg-rose-100 dark:bg-rose-900/30 px-2 py-1 rounded max-w-xs mx-auto text-center">
-                <AlertCircle size={12} className="flex-shrink-0" />
+            <div className="mt-4 flex items-start justify-center gap-2 text-xs text-rose-500 dark:text-rose-400 bg-rose-100 dark:bg-rose-900/30 px-3 py-2 rounded-lg w-full text-center leading-normal whitespace-normal">
+                <AlertCircle size={16} className="flex-shrink-0 mt-0.5" />
                 <span>{generationError}</span>
             </div>
           )}
