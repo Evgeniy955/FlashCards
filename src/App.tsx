@@ -14,7 +14,7 @@ import { SentenceUpload } from './components/SentenceUpload';
 import { Auth } from './components/Auth';
 import { Word, LoadedDictionary, WordProgress, TranslationMode, Theme, WordStats } from './types';
 import { parseDictionaryFile, shuffleArray, getWordId } from './utils/dictionaryUtils';
-import { Shuffle, ChevronsUpDown, Info, BookUser, Trash2, Repeat, Library, Loader2, User as UserIcon, RefreshCw } from 'lucide-react';
+import { Shuffle, ChevronsUpDown, Info, BookUser, Trash2, Repeat, Library, Loader2, User as UserIcon, RefreshCw, Flame } from 'lucide-react';
 import { TrainingModeInput, AnswerState } from './components/TrainingModeInput';
 import { TrainingModeGuess } from './components/TrainingModeGuess';
 import { TrainingModeToggle } from './components/TrainingModeToggle';
@@ -168,7 +168,8 @@ const App: React.FC = () => {
     const [theme, setTheme] = useState<Theme>('dark');
     const [allTimeStats, setAllTimeStats] = useState<ProfileStats | null>(null);
 
-    // State for welcome toast
+    // State for welcome toast & streak
+    const [currentStreak, setCurrentStreak] = useState(0);
     const [welcomeStats, setWelcomeStats] = useState<{ streak: number; lastSessionCount: number } | null>(null);
     const [showWelcomeToast, setShowWelcomeToast] = useState(false);
     
@@ -324,6 +325,7 @@ const App: React.FC = () => {
                         const dailyData = data.dailyStats || {};
         
                         const streak = calculateStreak(history);
+                        setCurrentStreak(streak);
                         const lastSessionCount = getLastSessionCount(history, dailyData);
         
                         if (streak > 0 || lastSessionCount > 0) {
@@ -1274,7 +1276,13 @@ const App: React.FC = () => {
                 <div className="text-center">
                     <h1 className="text-lg sm:text-xl font-bold truncate max-w-[200px] sm:max-w-xs" title={loadedDictionary.name}>{loadedDictionary.name}</h1>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-3">
+                    {/* Gamification: Daily Streak */}
+                    <div className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 font-semibold text-sm" title="Daily Streak">
+                        <Flame size={18} className={currentStreak > 0 ? "fill-orange-500 text-orange-600" : ""} />
+                        <span>{currentStreak}</span>
+                    </div>
+
                     <button onClick={() => setProfileModalOpen(true)} className="text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors">
                         <UserIcon size={20} />
                     </button>
@@ -1293,7 +1301,12 @@ const App: React.FC = () => {
                     </button>
                 </div>
 
-                <SetSelector sets={loadedDictionary.sets} selectedSetIndex={selectedSetIndex} onSelectSet={handleSelectSet} />
+                <SetSelector 
+                    sets={loadedDictionary.sets} 
+                    selectedSetIndex={selectedSetIndex} 
+                    onSelectSet={handleSelectSet}
+                    learnedWords={learnedWords}
+                />
 
                 {isProgressLoading ? (
                     <div className="w-full aspect-[3/2] flex justify-center items-center text-slate-500 dark:text-slate-400">
