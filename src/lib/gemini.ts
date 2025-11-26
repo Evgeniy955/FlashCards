@@ -7,7 +7,6 @@ const getApiKey = (): string => {
   // 1. Try process.env.API_KEY (injected by Vite config override)
   try {
     // We use specific access pattern to ensure Vite replaces the string literal.
-    // Do not use optional chaining (process.env?.API_KEY) here as it might block replacement.
     // @ts-ignore
     if (typeof process !== 'undefined' && process.env.API_KEY) {
       // @ts-ignore
@@ -31,6 +30,18 @@ const getApiKey = (): string => {
 
 const apiKey = getApiKey();
 
+// --- DEBUGGING: Check if key is loaded ---
+if (apiKey) {
+    // Log masked key to console to verify installation without exposing full secret
+    const masked = apiKey.length > 8 
+        ? `${apiKey.substring(0, 4)}...${apiKey.substring(apiKey.length - 4)}` 
+        : '***';
+    console.log(`%c[Gemini] API Key loaded successfully: ${masked} (Length: ${apiKey.length})`, 'color: green; font-weight: bold;');
+} else {
+    console.error('%c[Gemini] API Key is MISSING. Check your .env file or Vercel settings.', 'color: red; font-weight: bold;');
+}
+// ----------------------------------------
+
 // Initialize the client lazily or safely
 let ai: GoogleGenAI | null = null;
 
@@ -40,8 +51,6 @@ if (apiKey) {
     } catch (error) {
         console.error("Failed to initialize GoogleGenAI client:", error);
     }
-} else {
-    console.debug("Gemini API Key is missing. AI features will be disabled.");
 }
 
 export const generateExampleSentence = async (word: string): Promise<string> => {
@@ -60,7 +69,7 @@ export const generateExampleSentence = async (word: string): Promise<string> => 
     
     // Handle 403 specifically
     if (error.status === 403 || error.toString().includes('403')) {
-       throw new Error("Access Denied (403). Your API Key is restricted or invalid. If you are on localhost, check your API Key Referrer restrictions.");
+       throw new Error("Access Denied (403). Google rejected the key. If using 'HTTP Referrer' restrictions, add 'localhost' and 'localhost:5173'.");
     }
     
     throw error;

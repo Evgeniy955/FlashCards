@@ -4,7 +4,8 @@ import react from '@vitejs/plugin-react'
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
   // Load env file based on `mode` in the current working directory.
-  const env = loadEnv(mode, process.cwd(), '');
+  // Cast process to any to avoid TS error if Node types are missing/conflicted
+  const env = loadEnv(mode, (process as any).cwd(), '');
 
   // Check both the loaded env file AND the system process.env (for Vercel/CI)
   const apiKey = env.GEMINI_API_KEY || env.VITE_GEMINI_API_KEY || env.API_KEY || 
