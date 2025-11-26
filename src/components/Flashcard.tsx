@@ -1,6 +1,7 @@
 import React from 'react';
 import { Volume2, Check, Sparkles, Loader2, RefreshCw, AlertCircle } from 'lucide-react';
 import type { Word, TranslationMode } from '../types';
+import { Tooltip } from './Tooltip';
 
 interface FlashcardProps {
   word: Word;
@@ -113,14 +114,16 @@ export const Flashcard: React.FC<FlashcardProps> = ({
         style={{ backfaceVisibility: 'hidden', WebkitBackfaceVisibility: 'hidden', transform: 'rotateY(180deg)' }}
     >
       <div className="absolute top-4 right-4 flex items-center gap-2">
-        <button
-          type="button"
-          onClick={handlePlayAudioSequence}
-          className={`p-2 ${isStandardMode ? 'text-indigo-100 dark:text-indigo-200 hover:text-white hover:bg-indigo-600 dark:hover:bg-indigo-600' : 'text-slate-600 dark:text-slate-300 hover:text-slate-800 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-slate-700'} transition-colors rounded-full`}
-          aria-label="Play English pronunciation"
-        >
-          <Volume2 size={24} />
-        </button>
+        <Tooltip content="Listen to pronunciation" position="left">
+          <button
+            type="button"
+            onClick={handlePlayAudioSequence}
+            className={`p-2 ${isStandardMode ? 'text-indigo-100 dark:text-indigo-200 hover:text-white hover:bg-indigo-600 dark:hover:bg-indigo-600' : 'text-slate-600 dark:text-slate-300 hover:text-slate-800 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-slate-700'} transition-colors rounded-full`}
+            aria-label="Play English pronunciation"
+          >
+            <Volume2 size={24} />
+          </button>
+        </Tooltip>
       </div>
       {totalAttempts > 0 && (
           <div className={`absolute top-4 left-4 flex items-center gap-1 text-xs font-mono px-2 py-1 rounded-full ${isStandardMode ? 'bg-emerald-400/50 text-white' : 'bg-emerald-100 dark:bg-emerald-900/50 text-emerald-600 dark:text-emerald-400'}`}>
@@ -138,41 +141,44 @@ export const Flashcard: React.FC<FlashcardProps> = ({
                 "{exampleSentence}"
               </p>
               {onGenerateContext && (
-                 <button
-                 onClick={handleGenerateClick}
-                 disabled={isGeneratingContext}
-                 className={`p-1.5 rounded-full transition-all duration-300 opacity-60 hover:opacity-100 ${
-                   isStandardMode 
-                     ? 'text-indigo-200 hover:bg-indigo-600 hover:text-white' 
-                     : 'text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 dark:text-slate-500 dark:hover:text-white'
-                 }`}
-                 title="Regenerate example with AI"
-               >
-                 {isGeneratingContext ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
-               </button>
+                 <Tooltip content="Regenerate with AI" position="bottom">
+                   <button
+                   onClick={handleGenerateClick}
+                   disabled={isGeneratingContext}
+                   className={`p-1.5 rounded-full transition-all duration-300 opacity-60 hover:opacity-100 ${
+                     isStandardMode 
+                       ? 'text-indigo-200 hover:bg-indigo-600 hover:text-white' 
+                       : 'text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 dark:text-slate-500 dark:hover:text-white'
+                   }`}
+                 >
+                   {isGeneratingContext ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+                 </button>
+                </Tooltip>
               )}
             </div>
           ) : (
             onGenerateContext && (
-              <button
-                onClick={handleGenerateClick}
-                disabled={isGeneratingContext}
-                className={`mt-4 flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-300 ${
-                  isStandardMode 
-                    ? 'bg-indigo-600/50 text-indigo-100 hover:bg-indigo-600 hover:text-white' 
-                    : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600'
-                } hover:scale-105 active:scale-95`}
-              >
-                {isGeneratingContext ? (
-                  <>
-                    <Loader2 size={12} className="animate-spin" /> Generating...
-                  </>
-                ) : (
-                  <>
-                    <Sparkles size={12} /> Magic Example
-                  </>
-                )}
-              </button>
+              <Tooltip content="Generate example sentence using AI" position="bottom">
+                <button
+                  onClick={handleGenerateClick}
+                  disabled={isGeneratingContext}
+                  className={`mt-4 flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-300 ${
+                    isStandardMode 
+                      ? 'bg-indigo-600/50 text-indigo-100 hover:bg-indigo-600 hover:text-white' 
+                      : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600'
+                  } hover:scale-105 active:scale-95`}
+                >
+                  {isGeneratingContext ? (
+                    <>
+                      <Loader2 size={12} className="animate-spin" /> Generating...
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles size={12} /> Magic Example
+                    </>
+                  )}
+                </button>
+              </Tooltip>
             )
           )}
           
