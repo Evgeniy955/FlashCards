@@ -1,5 +1,5 @@
-import React from 'react';
-import { Volume2, Check, Sparkles, Loader2, RefreshCw, AlertCircle } from 'lucide-react';
+import React, { useState, useRef, useEffect } from 'react';
+import { Volume2, Check, Sparkles, Loader2, RefreshCw, AlertCircle, Gauge } from 'lucide-react';
 import type { Word, TranslationMode } from '../types';
 import { Tooltip } from './Tooltip';
 
@@ -17,6 +17,8 @@ interface FlashcardProps {
     onGenerateContext?: () => void;
     isGeneratingContext?: boolean;
     generationError?: string | null;
+    onSwipeLeft?: () => void; // Action for "Don't Know"
+    onSwipeRight?: () => void; // Action for "Know"
 }
 
 export const Flashcard: React.FC<FlashcardProps> = ({
@@ -32,35 +34,61 @@ export const Flashcard: React.FC<FlashcardProps> = ({
                                                         totalAttempts,
                                                         onGenerateContext,
                                                         isGeneratingContext,
-                                                        generationError
+                                                        generationError,
+                                                        onSwipeLeft,
+                                                        onSwipeRight
                                                     }) => {
+    const [speechRate, setSpeechRate] = useState<number>(1);
+
+    // Swipe Logic States
+    const [dragStart, setDragStart] = useState<{ x: number; y: number } | null>(null);
+    const [dragOffset, setDragOffset] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+    const [isDragging, setIsDragging] = useState(false);
+    const cardRef = useRef<HTMLDivElement>(null);
+
+    // Reset drag state when word changes
+    useEffect(() => {
+        setDragOffset({ x: 0, y: 0 });
+        setIsDragging(false);
+    }, [word]);
 
     const handlePlayAudioSequence = (e: React.MouseEvent) => {
-        e.stopPropagation(); // Prevent card from flipping when clicking the button
+        e.stopPropagation();
 
         if (!('speechSynthesis' in globalThis)) {
             alert('Sorry, your browser does not support text-to-speech.');
             return;
         }
 
-        globalThis.speechSynthesis.cancel(); // Stop any ongoing speech to prevent overlap
+        globalThis.speechSynthesis.cancel();
 
-        // Always speak the English word (lang2)
         const wordToSpeak = word.lang2;
         const wordUtterance = new SpeechSynthesisUtterance(wordToSpeak);
         wordUtterance.lang = 'en-US';
+        wordUtterance.rate = speechRate;
 
         if (exampleSentence) {
             wordUtterance.onend = () => {
                 setTimeout(() => {
                     const sentenceUtterance = new SpeechSynthesisUtterance(exampleSentence);
                     sentenceUtterance.lang = 'en-US';
+                    sentenceUtterance.rate = speechRate; // Apply rate to sentence too
                     globalThis.speechSynthesis.speak(sentenceUtterance);
-                }, 500);
+                }, 300);
             };
         }
 
         globalThis.speechSynthesis.speak(wordUtterance);
+    };
+
+    const toggleSpeechRate = (e: React.MouseEvent) => {
+        e.stopPropagation();
+        // Cycle: 1.0 -> 0.8 -> 0.6 -> 1.0
+        setSpeechRate(prev => {
+            if (prev === 1) return 0.8;
+            if (prev === 0.8) return 0.6;
+            return 1;
+        });
     };
 
     const handleGenerateClick = (e: React.MouseEvent) => {
@@ -70,8 +98,52 @@ export const Flashcard: React.FC<FlashcardProps> = ({
         }
     };
 
+    // --- Touch / Swipe Handlers ---
+
+    const handleTouchStart = (e: React.TouchEvent | React.MouseEvent) => {
+        // Don't trigger swipe on button clicks
+        if ((e.target as HTMLElement).closest('button')) return;
+
+        const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
+        const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
+        setDragStart({ x: clientX, y: clientY });
+        setIsDragging(true);
+    };
+
+    const handleTouchMove = (e: React.TouchEvent | React.MouseEvent) => {
+        if (!isDragging || !dragStart) return;
+
+        const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
+        const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
+
+        const deltaX = clientX - dragStart.x;
+        const deltaY = clientY - dragStart.y;
+
+        // Only move if it looks like a horizontal swipe
+        if (Math.abs(deltaX) > 10) {
+            setDragOffset({ x: deltaX, y: deltaY * 0.3 }); // Dampen Y movement
+        }
+    };
+
+    const handleTouchEnd = () => {
+        if (!isDragging) return;
+
+        const threshold = 100; // px to trigger action
+        if (dragOffset.x > threshold && onSwipeRight) {
+            onSwipeRight(); // Swipe Right -> Know
+        } else if (dragOffset.x < -threshold && onSwipeLeft) {
+            onSwipeLeft(); // Swipe Left -> Don't Know
+        }
+
+        // Reset
+        setIsDragging(false);
+        setDragStart(null);
+        setDragOffset({ x: 0, y: 0 });
+    };
+
+    // Prevent clicking to flip if we were dragging
     const handleFlipDuringChange = () => {
-        if (isChanging) {
+        if (isChanging || Math.abs(dragOffset.x) > 5) {
             return;
         }
         onFlip();
@@ -83,21 +155,43 @@ export const Flashcard: React.FC<FlashcardProps> = ({
 
     const getFontSizeClass = (text: string) => {
         const len = text.length;
-        if (len > 25) {
-            return 'text-2xl sm:text-3xl';
-        }
-        if (len > 15) {
-            return 'text-3xl sm:text-4xl';
-        }
+        if (len > 25) return 'text-2xl sm:text-3xl';
+        if (len > 15) return 'text-3xl sm:text-4xl';
         return 'text-4xl sm:text-5xl';
     };
 
+    // Dynamic style for dragging
+    const cardStyle = {
+        perspective: '1000px',
+        transform: `translateX(${dragOffset.x}px) translateY(${dragOffset.y}px) rotate(${dragOffset.x * 0.05}deg)`,
+        transition: isDragging ? 'none' : 'transform 0.3s ease-out, opacity 0.3s',
+        opacity: isChanging ? 0 : 1 - Math.abs(dragOffset.x) / 500 // Fade out slightly on far drags
+    };
+
+    // Overlay for swipe feedback
+    const swipeOverlay = (
+        <>
+            <div
+                className="absolute inset-0 bg-emerald-500 z-20 rounded-2xl flex items-center justify-center transition-opacity pointer-events-none"
+                style={{ opacity: dragOffset.x > 50 ? Math.min(dragOffset.x / 200, 0.4) : 0 }}
+            >
+                <Check className="text-white w-24 h-24" />
+            </div>
+            <div
+                className="absolute inset-0 bg-rose-500 z-20 rounded-2xl flex items-center justify-center transition-opacity pointer-events-none"
+                style={{ opacity: dragOffset.x < -50 ? Math.min(Math.abs(dragOffset.x) / 200, 0.4) : 0 }}
+            >
+                <div className="text-white font-bold text-4xl">Don't Know</div>
+            </div>
+        </>
+    );
 
     const frontContent = (
         <div
-            className={`absolute w-full h-full ${isStandardMode ? 'bg-white dark:bg-slate-800' : 'bg-indigo-500 dark:bg-indigo-700'} rounded-2xl shadow-xl flex flex-col justify-center items-center p-6 text-center`}
+            className={`absolute w-full h-full ${isStandardMode ? 'bg-white dark:bg-slate-800' : 'bg-indigo-500 dark:bg-indigo-700'} rounded-2xl shadow-xl flex flex-col justify-center items-center p-6 text-center overflow-hidden`}
             style={{ backfaceVisibility: 'hidden', WebkitBackfaceVisibility: 'hidden' }}
         >
+            {swipeOverlay}
             {totalAttempts > 0 && (
                 <div className={`absolute top-4 left-4 flex items-center gap-1 text-xs font-mono px-2 py-1 rounded-full ${isStandardMode ? 'bg-emerald-100 dark:bg-emerald-900/50 text-emerald-600 dark:text-emerald-400' : 'bg-emerald-400/50 text-white'}`}>
                     <Check size={14} />
@@ -110,11 +204,23 @@ export const Flashcard: React.FC<FlashcardProps> = ({
 
     const backContent = (
         <div
-            className={`absolute w-full h-full ${isStandardMode ? 'bg-indigo-500 dark:bg-indigo-700' : 'bg-white dark:bg-slate-800'} rounded-2xl shadow-xl flex flex-col justify-center items-center p-6 text-center`}
+            className={`absolute w-full h-full ${isStandardMode ? 'bg-indigo-500 dark:bg-indigo-700' : 'bg-white dark:bg-slate-800'} rounded-2xl shadow-xl flex flex-col justify-center items-center p-6 text-center overflow-hidden`}
             style={{ backfaceVisibility: 'hidden', WebkitBackfaceVisibility: 'hidden', transform: 'rotateY(180deg)' }}
         >
-            <div className="absolute top-4 right-4 flex items-center gap-2">
-                <Tooltip content="Listen to pronunciation" position="left">
+            {swipeOverlay}
+            <div className="absolute top-4 right-4 flex items-center gap-1">
+                {/* Speech Rate Toggle */}
+                <Tooltip content={`Speed: ${speechRate}x`} position="left">
+                    <button
+                        type="button"
+                        onClick={toggleSpeechRate}
+                        className={`p-1.5 text-xs font-mono font-bold rounded-full transition-colors ${isStandardMode ? 'text-indigo-200 hover:text-white hover:bg-indigo-600' : 'text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300'}`}
+                    >
+                        {speechRate}x
+                    </button>
+                </Tooltip>
+
+                <Tooltip content="Listen to pronunciation" position="bottom">
                     <button
                         type="button"
                         onClick={handlePlayAudioSequence}
@@ -125,12 +231,14 @@ export const Flashcard: React.FC<FlashcardProps> = ({
                     </button>
                 </Tooltip>
             </div>
+
             {totalAttempts > 0 && (
                 <div className={`absolute top-4 left-4 flex items-center gap-1 text-xs font-mono px-2 py-1 rounded-full ${isStandardMode ? 'bg-emerald-400/50 text-white' : 'bg-emerald-100 dark:bg-emerald-900/50 text-emerald-600 dark:text-emerald-400'}`}>
                     <Check size={14} />
                     <span>{knowAttempts}/{totalAttempts}</span>
                 </div>
             )}
+
             <div className="flex flex-col items-center w-full">
                 <span className={`${getFontSizeClass(backWord)} font-bold ${isStandardMode ? 'text-white' : 'text-slate-900 dark:text-white'}`}>{backWord}</span>
 
@@ -195,13 +303,20 @@ export const Flashcard: React.FC<FlashcardProps> = ({
 
     return (
         <div
-            className="w-full aspect-[3/2] cursor-pointer group"
-            style={{ perspective: '1000px' }}
+            ref={cardRef}
+            className="w-full aspect-[3/2] cursor-pointer group touch-none select-none"
+            style={cardStyle}
             onClick={handleFlipDuringChange}
+            onMouseDown={handleTouchStart}
+            onMouseMove={handleTouchMove}
+            onMouseUp={handleTouchEnd}
+            onMouseLeave={handleTouchEnd}
+            onTouchStart={handleTouchStart}
+            onTouchMove={handleTouchMove}
+            onTouchEnd={handleTouchEnd}
             role="button"
             tabIndex={0}
-            aria-label={`Flashcard for ${lang1} word ${word.lang1}. Click to flip.`}
-            onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && handleFlipDuringChange()}
+            aria-label={`Flashcard for ${lang1} word ${word.lang1}. Drag right for Know, Left for Don't Know.`}
         >
             <div
                 className={`relative w-full h-full ${!isInstantChange ? 'transition-transform duration-500' : ''}`}
