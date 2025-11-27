@@ -15,7 +15,7 @@ import { Auth } from './components/Auth';
 import { Tooltip } from './components/Tooltip';
 import { Word, LoadedDictionary, WordProgress, TranslationMode, Theme, WordStats } from './types';
 import { parseDictionaryFile, shuffleArray, getWordId } from './utils/dictionaryUtils';
-import { Shuffle, ChevronsUpDown, Info, BookUser, Trash2, Repeat, Library, Loader2, User as UserIcon, RefreshCw, Flame, Maximize2, Minimize2 } from 'lucide-react';
+import { Shuffle, ChevronsUpDown, Info, BookUser, Trash2, Repeat, Library, Loader2, User as UserIcon, RefreshCw, Flame, Maximize2, Minimize2, Volume2, VolumeX } from 'lucide-react';
 import { TrainingModeInput, AnswerState } from './components/TrainingModeInput';
 import { TrainingModeGuess } from './components/TrainingModeGuess';
 import { TrainingModeToggle } from './components/TrainingModeToggle';
@@ -26,6 +26,7 @@ import { getDictionary } from './lib/indexedDB';
 import { StudyStatsToast } from './components/StudyStatsToast';
 import { loadSentences as loadLocalSentences, saveSentences as saveLocalSentences } from './lib/sentenceDB';
 import { generateExampleSentence, validateAnswerWithAI } from './lib/gemini';
+import { sounds } from './lib/soundEffects';
 
 
 // --- Constants ---
@@ -176,6 +177,8 @@ const App: React.FC = () => {
 
     // State for UX Improvements
     const [isZenMode, setIsZenMode] = useState(false);
+    // Sound state
+    const [isMuted, setIsMuted] = useState(sounds.getMuted());
 
     // State to manage sync on login
     const [isSyncing, setIsSyncing] = useState(false);
@@ -737,6 +740,7 @@ const App: React.FC = () => {
             }
         } else {
             setReviewWords([]);
+            sounds.play('success'); // Play sound on session completion
             setSessionActive(false); // End session
             setIsPracticeMode(false); // Exit practice mode
         }
@@ -844,6 +848,7 @@ const App: React.FC = () => {
     };
 
     const handleKnow = () => {
+        sounds.play('correct');
         if (isPracticeMode) {
             advanceToNextWord(() => true, isFlipped);
             return;
@@ -889,6 +894,7 @@ const App: React.FC = () => {
     };
 
     const handleDontKnow = () => {
+        sounds.play('incorrect');
         if (isPracticeMode) {
             advanceToNextWord(() => true, isFlipped);
             return;
@@ -932,6 +938,8 @@ const App: React.FC = () => {
     const handleFlip = useCallback(() => {
         if (isDontKnowMode && answerState !== 'idle' && trainingMode === 'write') return;
         if (isDontKnowMode && trainingMode === 'guess' && isFlipped) return;
+        
+        sounds.play('flip');
         setIsFlipped(prev => !prev);
     }, [isDontKnowMode, answerState, trainingMode, isFlipped]);
 
@@ -944,6 +952,7 @@ const App: React.FC = () => {
     };
 
     const handleShuffle = () => {
+        sounds.play('click');
         setReviewWords(shuffleArray(reviewWords));
         setIsShuffled(true);
     };
@@ -986,6 +995,11 @@ const App: React.FC = () => {
             setSessionActive(true);
             setIsShuffled(true);
         }
+    };
+
+    const handleMuteToggle = () => {
+        const newVal = sounds.toggleMute();
+        setIsMuted(newVal);
     };
 
     // --- Keyboard Shortcuts ---
@@ -1041,6 +1055,7 @@ const App: React.FC = () => {
 
         if (finalIsCorrect) {
             setAnswerState('correct');
+            sounds.play('correct');
             handleKnow();
 
             setTimeout(() => {
@@ -1051,11 +1066,13 @@ const App: React.FC = () => {
             }, 1000 + (finalFeedback ? 2000 : 0)); // Extra time to read AI feedback
         } else {
             setAnswerState('incorrect');
+            sounds.play('incorrect');
             setIsFlipped(true);
         }
     };
 
     const handleTrainingNext = () => {
+        sounds.play('click');
         advanceToNextWord(() => {
             setAnswerState('idle');
             setUserAnswer('');
@@ -1079,6 +1096,7 @@ const App: React.FC = () => {
         });
 
         if (isCorrect) {
+            sounds.play('correct');
             const progress = learnedWords.get(wordId);
             const currentStage = progress ? progress.srsStage : -1;
             const nextStage = Math.min(currentStage + 1, SRS_INTERVALS.length - 1);
@@ -1101,6 +1119,7 @@ const App: React.FC = () => {
                 });
             }
         } else {
+            sounds.play('incorrect');
             setIsFlipped(true);
         }
     };
@@ -1114,6 +1133,7 @@ const App: React.FC = () => {
             const sentence = await generateExampleSentence(currentWord.lang2);
             if (sentence) {
                 setSentences(prev => new Map(prev).set(currentWord.lang2.toLowerCase(), sentence));
+                sounds.play('success');
             } else {
                 // If the sentence is empty, it means generation returned empty string (handled in catch usually, but safe check)
                 setGenerationError("The AI returned an empty response.");
@@ -1256,10 +1276,10 @@ const App: React.FC = () => {
                         )
                     ) : (
                         <>
-                            <Tooltip content="Mark as hard (Shortcut: 1)" className="w-full">
+                            <Tooltip content="Mark as hard (Shortcut: 1)" className="flex-1">
                                 <button onClick={handleDontKnow} disabled={isProgressLoading || isChangingWord} className="w-full py-3 text-lg font-semibold text-white bg-rose-600 hover:bg-rose-700 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-wait">Don't know</button>
                             </Tooltip>
-                            <Tooltip content="Mark as learned (Shortcut: 2)" className="w-full">
+                            <Tooltip content="Mark as learned (Shortcut: 2)" className="flex-1">
                                 <button onClick={handleKnow} disabled={isProgressLoading || isChangingWord} className="w-full py-3 text-lg font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-wait">Know</button>
                             </Tooltip>
                         </>
@@ -1313,6 +1333,16 @@ const App: React.FC = () => {
             {!isZenMode && (
                 <header className="w-full max-w-5xl flex justify-between items-center mb-6 animate-fade-in">
                     <div className="flex items-center gap-2 sm:gap-4">
+                        {/* MUTE BUTTON */}
+                        <Tooltip content={isMuted ? "Unmute sounds" : "Mute sounds"}>
+                            <button
+                                onClick={handleMuteToggle}
+                                className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors p-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-800"
+                            >
+                                {isMuted ? <VolumeX size={18} /> : <Volume2 size={18} />}
+                            </button>
+                        </Tooltip>
+
                         <Tooltip content="Switch to a different dictionary">
                             <button onClick={handleChangeDictionary} className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors">
                                 <Library size={18} />
