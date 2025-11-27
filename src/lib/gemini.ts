@@ -150,3 +150,63 @@ export const validateAnswerWithAI = async (
         return { isCorrect: false, feedback: "" };
     }
 };
+
+// --- Conversation / Chat Feature ---
+
+export interface ChatMessage {
+    role: 'user' | 'model';
+    text: string;
+}
+
+export const chatWithAI = async (
+    history: ChatMessage[],
+    scenario: string,
+    mode: 'free' | 'roleplay'
+): Promise<string> => {
+    if (!ai) {
+        throw new Error("API Key is missing.");
+    }
+
+    const roleInstruction = mode === 'roleplay' 
+        ? `Scenario: ${scenario}. Stay strictly in character.` 
+        : `Topic: ${scenario}. Be a friendly conversational partner.`;
+
+    const systemPrompt = `
+    You are a helpful English language tutor helping a student practice speaking.
+    
+    ${roleInstruction}
+    
+    IMPORTANT RULES:
+    1. **Conciseness**: Keep your responses short (1-3 sentences max) to simulate natural spoken dialogue.
+    2. **Corrections**: If the user makes a grammar or vocabulary mistake, reply naturally first, and then add a correction at the very end in parentheses. Example: "I agree with you. (Correction: You said 'I goed', but it should be 'I went')".
+    3. **Engagement**: Always end with a relevant question to keep the conversation going.
+    `;
+
+    try {
+        const contents = [
+            {
+                role: 'user',
+                parts: [{ text: systemPrompt }]
+            },
+            ...history.map(msg => ({
+                role: msg.role,
+                parts: [{ text: msg.text }]
+            }))
+        ];
+
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: contents,
+        });
+
+        return response.text ? response.text.trim() : "I'm listening...";
+    } catch (error: any) {
+        console.error("Gemini chat error:", error);
+        const errString = error.toString();
+        
+        if (getProjectError(errString)) throw new Error(getProjectError(errString)!);
+        if (error.status === 403 || errString.includes('403')) throw new Error("Access Denied (403). Check API Key.");
+        
+        throw new Error("Failed to connect to AI.");
+    }
+};

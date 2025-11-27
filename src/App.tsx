@@ -9,13 +9,14 @@ import { FileSourceModal } from './components/FileSourceModal';
 import { InstructionsModal } from './components/InstructionsModal';
 import { LearnedWordsModal } from './components/LearnedWordsModal';
 import { ProfileModal } from './components/ProfileModal';
+import { ChatModal } from './components/ChatModal';
 import { WordList } from './components/WordList';
 import { SentenceUpload } from './components/SentenceUpload';
 import { Auth } from './components/Auth';
 import { Tooltip } from './components/Tooltip';
 import { Word, LoadedDictionary, WordProgress, TranslationMode, Theme, WordStats } from './types';
 import { parseDictionaryFile, shuffleArray, getWordId } from './utils/dictionaryUtils';
-import { Shuffle, ChevronsUpDown, Info, BookUser, Trash2, Repeat, Library, Loader2, User as UserIcon, RefreshCw, Flame, Maximize2, Minimize2, Volume2, VolumeX } from 'lucide-react';
+import { Shuffle, ChevronsUpDown, Info, BookUser, Trash2, Repeat, Library, Loader2, User as UserIcon, RefreshCw, Flame, Maximize2, Minimize2, Volume2, VolumeX, MessageCircle } from 'lucide-react';
 import { TrainingModeInput, AnswerState } from './components/TrainingModeInput';
 import { TrainingModeGuess } from './components/TrainingModeGuess';
 import { TrainingModeToggle } from './components/TrainingModeToggle';
@@ -167,6 +168,7 @@ const App: React.FC = () => {
     const [isInstructionsModalOpen, setInstructionsModalOpen] = useState(false);
     const [isLearnedWordsModalOpen, setLearnedWordsModalOpen] = useState(false);
     const [isProfileModalOpen, setProfileModalOpen] = useState(false);
+    const [isChatModalOpen, setIsChatModalOpen] = useState(false);
     const [theme, setTheme] = useState<Theme>('dark');
     const [allTimeStats, setAllTimeStats] = useState<ProfileStats | null>(null);
 
@@ -1381,6 +1383,14 @@ const App: React.FC = () => {
                                 <UserIcon size={20} />
                             </button>
                         </Tooltip>
+                        
+                        {/* CHAT BUTTON */}
+                        <Tooltip content="Conversation Practice" position="bottom">
+                            <button onClick={() => setIsChatModalOpen(true)} className="text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-white transition-colors">
+                                <MessageCircle size={20} />
+                            </button>
+                        </Tooltip>
+
                         <Tooltip content="Toggle Dark Mode" position="bottom">
                             <ThemeToggle theme={theme} setTheme={setTheme} />
                         </Tooltip>
@@ -1492,6 +1502,10 @@ const App: React.FC = () => {
                 allTimeStats={allTimeStats}
                 dictionaryName={loadedDictionary.name}
                 onResetAllStats={handleResetAllStats}
+            />
+            <ChatModal 
+                isOpen={isChatModalOpen} 
+                onClose={() => setIsChatModalOpen(false)} 
             />
         </main>
     );
