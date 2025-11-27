@@ -940,7 +940,7 @@ const App: React.FC = () => {
     const handleFlip = useCallback(() => {
         if (isDontKnowMode && answerState !== 'idle' && trainingMode === 'write') return;
         if (isDontKnowMode && trainingMode === 'guess' && isFlipped) return;
-        
+
         sounds.play('flip');
         setIsFlipped(prev => !prev);
     }, [isDontKnowMode, answerState, trainingMode, isFlipped]);
@@ -1383,13 +1383,6 @@ const App: React.FC = () => {
                                 <UserIcon size={20} />
                             </button>
                         </Tooltip>
-                        
-                        {/* CHAT BUTTON */}
-                        <Tooltip content="Conversation Practice" position="bottom">
-                            <button onClick={() => setIsChatModalOpen(true)} className="text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-white transition-colors">
-                                <MessageCircle size={20} />
-                            </button>
-                        </Tooltip>
 
                         <Tooltip content="Toggle Dark Mode" position="bottom">
                             <ThemeToggle theme={theme} setTheme={setTheme} />
@@ -1408,6 +1401,14 @@ const App: React.FC = () => {
                                 <BookUser size={16} /> Learned: {totalLearnedCount}
                             </button>
                         </Tooltip>
+
+                        {/* CHAT BUTTON MOVED HERE */}
+                        <Tooltip content="Conversation Practice">
+                            <button onClick={() => setIsChatModalOpen(true)} className="flex items-center gap-2 py-1 px-3 bg-white dark:bg-slate-800 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors shadow-sm dark:shadow-none border border-slate-200 dark:border-slate-700 text-indigo-600 dark:text-indigo-400 font-medium">
+                                <MessageCircle size={16} /> Chat
+                            </button>
+                        </Tooltip>
+
                         <Tooltip content="Reset progress for this dictionary">
                             <button onClick={handleResetProgress} className="flex items-center gap-2 py-1 px-3 bg-white dark:bg-slate-800 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors shadow-sm dark:shadow-none border border-slate-200 dark:border-slate-700">
                                 <Trash2 size={16} /> Reset
@@ -1503,9 +1504,9 @@ const App: React.FC = () => {
                 dictionaryName={loadedDictionary.name}
                 onResetAllStats={handleResetAllStats}
             />
-            <ChatModal 
-                isOpen={isChatModalOpen} 
-                onClose={() => setIsChatModalOpen(false)} 
+            <ChatModal
+                isOpen={isChatModalOpen}
+                onClose={() => setIsChatModalOpen(false)}
             />
         </main>
     );
