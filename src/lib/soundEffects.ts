@@ -62,11 +62,11 @@ class SoundManager {
         break;
 
       case 'flip':
-        // Soft swoosh/pop
+        // Louder swoosh/pop (Increased volume)
         osc.type = 'triangle';
-        osc.frequency.setValueAtTime(150, t);
-        osc.frequency.linearRampToValueAtTime(300, t + 0.1);
-        gain.gain.setValueAtTime(0.05, t);
+        osc.frequency.setValueAtTime(200, t);
+        osc.frequency.linearRampToValueAtTime(400, t + 0.1);
+        gain.gain.setValueAtTime(0.25, t); // Increased from 0.05 to 0.25
         gain.gain.linearRampToValueAtTime(0.001, t + 0.15);
         osc.start(t);
         osc.stop(t + 0.15);
