@@ -88,7 +88,7 @@ export const Tooltip: React.FC<TooltipProps> = ({
     >
       {children}
       {isVisible && (
-        <div className={`absolute z-50 px-2 py-1 text-xs font-medium text-white bg-slate-800 dark:bg-slate-700 rounded shadow-lg whitespace-nowrap pointer-events-none transition-opacity duration-200 opacity-100 ${positionClasses[position]}`}>
+        <div className={`absolute z-[1000] px-2 py-1 text-xs font-medium text-white bg-slate-800 dark:bg-slate-700 rounded shadow-lg whitespace-nowrap pointer-events-none transition-opacity duration-200 opacity-100 ${positionClasses[position]}`}>
           {content}
           <div className={`absolute border-4 border-transparent ${arrowClasses[position]}`}></div>
         </div>
