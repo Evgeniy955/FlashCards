@@ -1243,10 +1243,10 @@ const App: React.FC = () => {
                         )
                     ) : (
                         <>
-                            <Tooltip content="Mark as hard (Shortcut: 1)">
+                            <Tooltip content="Mark as hard (Shortcut: 1)" className="w-full">
                                 <button onClick={handleDontKnow} disabled={isProgressLoading || isChangingWord} className="w-full py-3 text-lg font-semibold text-white bg-rose-600 hover:bg-rose-700 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-wait">Don't know</button>
                             </Tooltip>
-                            <Tooltip content="Mark as learned (Shortcut: 2)">
+                            <Tooltip content="Mark as learned (Shortcut: 2)" className="w-full">
                                 <button onClick={handleKnow} disabled={isProgressLoading || isChangingWord} className="w-full py-3 text-lg font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-wait">Know</button>
                             </Tooltip>
                         </>
