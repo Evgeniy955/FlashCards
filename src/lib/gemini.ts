@@ -16,6 +16,7 @@ const getApiKey = (): string => {
     }
 
     // 2. Try standard Vite env vars (if user used VITE_ prefix in .env)
+    // We check these as fallback, but Vite config usually injects them into process.env.API_KEY
     if (!key && import.meta.env.VITE_GEMINI_API_KEY) {
         key = import.meta.env.VITE_GEMINI_API_KEY;
     }
@@ -166,8 +167,8 @@ export const chatWithAI = async (
         throw new Error("API Key is missing.");
     }
 
-    const roleInstruction = mode === 'roleplay'
-        ? `Scenario: ${scenario}. Stay strictly in character.`
+    const roleInstruction = mode === 'roleplay' 
+        ? `Scenario: ${scenario}. Stay strictly in character.` 
         : `Topic: ${scenario}. Be a friendly conversational partner.`;
 
     const systemPrompt = `
@@ -202,10 +203,10 @@ export const chatWithAI = async (
     } catch (error: any) {
         console.error("Gemini chat error:", error);
         const errString = error.toString();
-
+        
         if (getProjectError(errString)) throw new Error(getProjectError(errString)!);
         if (error.status === 403 || errString.includes('403')) throw new Error("Access Denied (403). Check API Key.");
-
+        
         throw new Error("Failed to connect to AI.");
     }
 };

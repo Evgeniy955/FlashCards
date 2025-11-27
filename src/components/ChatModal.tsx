@@ -4,346 +4,342 @@ import { Send, Mic, MicOff, Volume2, User as UserIcon, Bot, RefreshCcw, MessageS
 import { chatWithAI, type ChatMessage } from '../lib/gemini';
 
 interface ChatModalProps {
-    isOpen: boolean;
-    onClose: () => void;
+  isOpen: boolean;
+  onClose: () => void;
 }
 
 const PRESET_SCENARIOS = [
-    {
-        id: 'coffee',
-        icon: <Coffee size={20} />,
-        title: 'At a Cafe',
-        prompt: 'You are a barista at a trendy coffee shop. I am a customer ordering a drink and a snack.'
+    { 
+        id: 'coffee', 
+        icon: <Coffee size={20} />, 
+        title: 'At a Cafe', 
+        prompt: 'You are a barista at a trendy coffee shop. I am a customer ordering a drink and a snack.' 
     },
-    {
-        id: 'job',
-        icon: <Briefcase size={20} />,
-        title: 'Job Interview',
-        prompt: 'You are a hiring manager interviewing me for a job. Ask me about my experience and strengths.'
+    { 
+        id: 'job', 
+        icon: <Briefcase size={20} />, 
+        title: 'Job Interview', 
+        prompt: 'You are a hiring manager interviewing me for a job. Ask me about my experience and strengths.' 
     },
-    {
-        id: 'travel',
-        icon: <Plane size={20} />,
-        title: 'Airport Customs',
-        prompt: 'You are an immigration officer at an airport in London. Ask me about my travel plans.'
+    { 
+        id: 'travel', 
+        icon: <Plane size={20} />, 
+        title: 'Airport Customs', 
+        prompt: 'You are an immigration officer at an airport in London. Ask me about my travel plans.' 
     },
-    {
-        id: 'doctor',
-        icon: <Stethoscope size={20} />,
-        title: 'At the Doctor',
-        prompt: 'You are a doctor. I am a patient coming in because I do not feel well. Ask me about my symptoms.'
+    { 
+        id: 'doctor', 
+        icon: <Stethoscope size={20} />, 
+        title: 'At the Doctor', 
+        prompt: 'You are a doctor. I am a patient coming in because I do not feel well. Ask me about my symptoms.' 
     },
 ];
 
 export const ChatModal: React.FC<ChatModalProps> = ({ isOpen, onClose }) => {
-    const [mode, setMode] = useState<'free' | 'roleplay'>('free');
-    const [topic, setTopic] = useState('');
-    const [isChatActive, setIsChatActive] = useState(false);
-    const [messages, setMessages] = useState<ChatMessage[]>([]);
-    const [input, setInput] = useState('');
-    const [isLoading, setIsLoading] = useState(false);
-    const [isRecording, setIsRecording] = useState(false);
-    const [error, setError] = useState<string | null>(null);
+  const [mode, setMode] = useState<'free' | 'roleplay'>('free');
+  const [topic, setTopic] = useState('');
+  const [isChatActive, setIsChatActive] = useState(false);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [input, setInput] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const recognitionRef = useRef<any>(null);
 
-    const messagesEndRef = useRef<HTMLDivElement>(null);
-    const recognitionRef = useRef<any>(null);
+  // Scroll to bottom on new message
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
 
-    // Scroll to bottom on new message
-    useEffect(() => {
-        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }, [messages]);
+  // Initial greeting when chat starts
+  useEffect(() => {
+    if (isChatActive && messages.length === 0) {
+      handleSendMessage(true);
+    }
+  }, [isChatActive]);
 
-    // Initial greeting when chat starts
-    useEffect(() => {
-        if (isChatActive && messages.length === 0) {
-            handleSendMessage(true);
-        }
-    }, [isChatActive]);
+  const startRecognition = () => {
+    if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+      const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+      
+      if (recognitionRef.current) {
+          recognitionRef.current.abort();
+      }
 
-    const startRecognition = () => {
-        if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
-            const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+      recognitionRef.current = new SpeechRecognition();
+      recognitionRef.current.continuous = false; // Stop after one sentence for turn-taking
+      recognitionRef.current.interimResults = false;
+      recognitionRef.current.lang = 'en-US';
 
-            if (recognitionRef.current) {
-                recognitionRef.current.abort();
-            }
+      recognitionRef.current.onstart = () => setIsRecording(true);
+      
+      recognitionRef.current.onend = () => {
+          setIsRecording(false);
+      };
+      
+      recognitionRef.current.onerror = (event: any) => {
+          console.error("Speech recognition error", event.error);
+          setIsRecording(false);
+          if (event.error === 'not-allowed') {
+              setError("Microphone access denied.");
+          }
+      };
 
-            recognitionRef.current = new SpeechRecognition();
-            recognitionRef.current.continuous = false; // Stop after one sentence for turn-taking
-            recognitionRef.current.interimResults = false;
-            recognitionRef.current.lang = 'en-US';
+      recognitionRef.current.onresult = (event: any) => {
+        const transcript = event.results[0][0].transcript;
+        setInput(transcript);
+        // We auto-process voice input to simulate a conversation
+        handleVoiceInput(transcript);
+      };
+      
+      recognitionRef.current.start();
+    } else {
+      alert("Speech recognition is not supported in this browser (Try Chrome).");
+    }
+  };
 
-            recognitionRef.current.onstart = () => setIsRecording(true);
+  const stopRecognition = () => {
+    if (recognitionRef.current) {
+      recognitionRef.current.stop();
+    }
+  };
 
-            recognitionRef.current.onend = () => {
-                setIsRecording(false);
-            };
+  const toggleRecording = () => {
+      if (isRecording) {
+          stopRecognition();
+      } else {
+          startRecognition();
+      }
+  };
 
-            recognitionRef.current.onerror = (event: any) => {
-                console.error("Speech recognition error", event.error);
-                setIsRecording(false);
-                if (event.error === 'not-allowed') {
-                    setError("Microphone access denied.");
-                }
-            };
+  const speakText = (text: string) => {
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = 'en-US';
+      // Find a good voice if possible
+      const voices = window.speechSynthesis.getVoices();
+      const preferred = voices.find(v => v.lang.startsWith('en-US') && !v.name.includes('Google')) || voices.find(v => v.lang.startsWith('en'));
+      if(preferred) utterance.voice = preferred;
+      
+      window.speechSynthesis.speak(utterance);
+    }
+  };
 
-            recognitionRef.current.onresult = (event: any) => {
-                const transcript = event.results[0][0].transcript;
-                setInput(transcript);
-                // Auto-send after a short pause if desired, or let user click send.
-                // For better UX, let's auto-fill input and let user confirm or just click send manually.
-                // Or better: auto-send for "Live" feel? Let's auto-fill for now.
-                // Actually, if they are using voice, they probably want it to feel like a call.
-                // Let's create a separate "Voice Send" flow.
-                handleVoiceInput(transcript);
-            };
+  const handleVoiceInput = (transcript: string) => {
+      const newMessages = [...messages, { role: 'user' as const, text: transcript }];
+      setMessages(newMessages);
+      setInput('');
+      processAIResponse(newMessages);
+  };
 
-            recognitionRef.current.start();
-        } else {
-            alert("Speech recognition is not supported in this browser (Try Chrome).");
-        }
-    };
+  const handleSendMessage = async (isInitial = false) => {
+    if ((!input.trim() && !isInitial) || isLoading) return;
 
-    const stopRecognition = () => {
-        if (recognitionRef.current) {
-            recognitionRef.current.stop();
-        }
-    };
+    const newMessages = [...messages];
+    if (!isInitial) {
+      newMessages.push({ role: 'user', text: input });
+      setMessages(newMessages);
+      setInput('');
+    }
 
-    const toggleRecording = () => {
-        if (isRecording) {
-            stopRecognition();
-        } else {
-            startRecognition();
-        }
-    };
+    processAIResponse(newMessages, isInitial);
+  };
 
-    const speakText = (text: string) => {
-        if ('speechSynthesis' in window) {
-            window.speechSynthesis.cancel();
-            const utterance = new SpeechSynthesisUtterance(text);
-            utterance.lang = 'en-US';
-            // Find a good voice if possible
-            const voices = window.speechSynthesis.getVoices();
-            const preferred = voices.find(v => v.lang.startsWith('en-US') && !v.name.includes('Google')) || voices.find(v => v.lang.startsWith('en'));
-            if(preferred) utterance.voice = preferred;
+  const processAIResponse = async (currentMessages: ChatMessage[], isInitial = false) => {
+    setIsLoading(true);
+    setError(null);
 
-            window.speechSynthesis.speak(utterance);
-        }
-    };
+    try {
+      // Determine the prompt based on mode
+      const activeScenario = mode === 'roleplay' ? topic : topic; 
+      
+      // If initial, we pass empty history, but system prompt setup in gemini.ts uses the topic/scenario
+      const historyToSend = isInitial ? [] : currentMessages;
+      
+      const aiResponse = await chatWithAI(historyToSend, activeScenario, mode);
+      
+      const updatedMessages: ChatMessage[] = [...currentMessages, { role: 'model', text: aiResponse }];
+      setMessages(updatedMessages);
+      speakText(aiResponse);
+    } catch (err: any) {
+      setError(err.message || "Failed to get response");
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
-    const handleVoiceInput = (transcript: string) => {
-        const newMessages = [...messages, { role: 'user' as const, text: transcript }];
-        setMessages(newMessages);
-        setInput('');
-        processAIResponse(newMessages);
-    };
+  const handleReset = () => {
+    setTopic('');
+    setIsChatActive(false);
+    setMessages([]);
+    setError(null);
+    setInput('');
+  };
 
-    const handleSendMessage = async (isInitial = false) => {
-        if ((!input.trim() && !isInitial) || isLoading) return;
+  const startScenario = (prompt: string, title: string) => {
+      setMode('roleplay');
+      setTopic(prompt); // We send the prompt as the topic/scenario
+      setIsChatActive(true);
+  };
 
-        const newMessages = [...messages];
-        if (!isInitial) {
-            newMessages.push({ role: 'user', text: input });
-            setMessages(newMessages);
-            setInput('');
-        }
+  const startFreeTalk = (e: React.FormEvent) => {
+      e.preventDefault();
+      if(topic.trim()) {
+          setMode('free');
+          setIsChatActive(true);
+      }
+  };
 
-        processAIResponse(newMessages, isInitial);
-    };
+  return (
+    <Modal isOpen={isOpen} onClose={onClose} title="AI Conversation Practice">
+      <div className="h-[70vh] flex flex-col">
+        {!isChatActive ? (
+          <div className="flex flex-col h-full overflow-y-auto pr-2">
+            
+            {/* Free Talk Section */}
+            <div className="mb-8">
+                <div className="flex items-center gap-2 mb-3">
+                    <MessageSquare className="text-indigo-600 dark:text-indigo-400" />
+                    <h3 className="text-lg font-bold text-slate-800 dark:text-white">Free Talk</h3>
+                </div>
+                <form onSubmit={startFreeTalk} className="flex gap-2">
+                    <input
+                        type="text"
+                        value={topic}
+                        onChange={(e) => setTopic(e.target.value)}
+                        placeholder="Enter any topic (e.g. Hobbies, Food)..."
+                        className="flex-1 p-3 rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
+                    />
+                    <button
+                        type="submit"
+                        disabled={!topic.trim()}
+                        className="px-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-semibold transition-colors disabled:opacity-50"
+                    >
+                        Start
+                    </button>
+                </form>
+            </div>
 
-    const processAIResponse = async (currentMessages: ChatMessage[], isInitial = false) => {
-        setIsLoading(true);
-        setError(null);
-
-        try {
-            // Determine the prompt based on mode
-            const activeScenario = mode === 'roleplay' ? topic : topic;
-
-            // If initial, we might want to say "Start" to the AI
-            const historyToSend = isInitial ? [] : currentMessages;
-
-            const aiResponse = await chatWithAI(historyToSend, activeScenario, mode);
-
-            const updatedMessages: ChatMessage[] = [...currentMessages, { role: 'model', text: aiResponse }];
-            setMessages(updatedMessages);
-            speakText(aiResponse);
-        } catch (err: any) {
-            setError(err.message || "Failed to get response");
-        } finally {
-            setIsLoading(false);
-        }
-    };
-
-    const handleReset = () => {
-        setTopic('');
-        setIsChatActive(false);
-        setMessages([]);
-        setError(null);
-        setInput('');
-    };
-
-    const startScenario = (prompt: string, title: string) => {
-        setMode('roleplay');
-        setTopic(prompt); // We send the prompt as the topic/scenario
-        setIsChatActive(true);
-    };
-
-    const startFreeTalk = (e: React.FormEvent) => {
-        e.preventDefault();
-        if(topic.trim()) {
-            setMode('free');
-            setIsChatActive(true);
-        }
-    };
-
-    return (
-        <Modal isOpen={isOpen} onClose={onClose} title="AI Conversation Practice">
-            <div className="h-[70vh] flex flex-col">
-                {!isChatActive ? (
-                    <div className="flex flex-col h-full overflow-y-auto pr-2">
-
-                        {/* Free Talk Section */}
-                        <div className="mb-8">
-                            <div className="flex items-center gap-2 mb-3">
-                                <MessageSquare className="text-indigo-600 dark:text-indigo-400" />
-                                <h3 className="text-lg font-bold text-slate-800 dark:text-white">Free Talk</h3>
+            {/* Roleplay Section */}
+            <div>
+                <div className="flex items-center gap-2 mb-3">
+                    <UserIcon className="text-emerald-600 dark:text-emerald-400" />
+                    <h3 className="text-lg font-bold text-slate-800 dark:text-white">Roleplay Scenarios</h3>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {PRESET_SCENARIOS.map((scenario) => (
+                        <button
+                            key={scenario.id}
+                            onClick={() => startScenario(scenario.prompt, scenario.title)}
+                            className="flex flex-col items-start p-4 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl hover:shadow-md hover:border-indigo-400 dark:hover:border-indigo-500 transition-all text-left group"
+                        >
+                            <div className="mb-2 p-2 bg-slate-100 dark:bg-slate-600 rounded-lg text-slate-600 dark:text-slate-300 group-hover:bg-indigo-100 dark:group-hover:bg-indigo-900/30 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
+                                {scenario.icon}
                             </div>
-                            <form onSubmit={startFreeTalk} className="flex gap-2">
-                                <input
-                                    type="text"
-                                    value={topic}
-                                    onChange={(e) => setTopic(e.target.value)}
-                                    placeholder="Enter any topic (e.g. Hobbies, Food)..."
-                                    className="flex-1 p-3 rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
-                                />
-                                <button
-                                    type="submit"
-                                    disabled={!topic.trim()}
-                                    className="px-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-semibold transition-colors disabled:opacity-50"
-                                >
-                                    Start
-                                </button>
-                            </form>
-                        </div>
-
-                        {/* Roleplay Section */}
-                        <div>
-                            <div className="flex items-center gap-2 mb-3">
-                                <UserIcon className="text-emerald-600 dark:text-emerald-400" />
-                                <h3 className="text-lg font-bold text-slate-800 dark:text-white">Roleplay Scenarios</h3>
-                            </div>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                {PRESET_SCENARIOS.map((scenario) => (
-                                    <button
-                                        key={scenario.id}
-                                        onClick={() => startScenario(scenario.prompt, scenario.title)}
-                                        className="flex flex-col items-start p-4 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl hover:shadow-md hover:border-indigo-400 dark:hover:border-indigo-500 transition-all text-left group"
-                                    >
-                                        <div className="mb-2 p-2 bg-slate-100 dark:bg-slate-600 rounded-lg text-slate-600 dark:text-slate-300 group-hover:bg-indigo-100 dark:group-hover:bg-indigo-900/30 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
-                                            {scenario.icon}
-                                        </div>
-                                        <span className="font-semibold text-slate-800 dark:text-white">{scenario.title}</span>
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
-                    </div>
-                ) : (
-                    <>
-                        {/* Active Chat Header */}
-                        <div className="flex justify-between items-center pb-2 border-b border-slate-200 dark:border-slate-700 mb-2">
-                            <div className="flex items-center gap-2">
+                            <span className="font-semibold text-slate-800 dark:text-white">{scenario.title}</span>
+                        </button>
+                    ))}
+                </div>
+            </div>
+          </div>
+        ) : (
+          <>
+            {/* Active Chat Header */}
+            <div className="flex justify-between items-center pb-2 border-b border-slate-200 dark:border-slate-700 mb-2">
+                <div className="flex items-center gap-2">
                     <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
                         {mode === 'roleplay' ? 'Scenario' : 'Topic'}:
                     </span>
-                                <span className="font-medium text-indigo-600 dark:text-indigo-400 truncate max-w-[150px]">
+                    <span className="font-medium text-indigo-600 dark:text-indigo-400 truncate max-w-[150px]">
                         {mode === 'roleplay' ? PRESET_SCENARIOS.find(s => s.prompt === topic)?.title || 'Roleplay' : topic}
                     </span>
-                            </div>
-                            <button onClick={handleReset} className="text-xs flex items-center gap-1 text-slate-500 hover:text-rose-500 transition-colors">
-                                <RefreshCcw size={14} /> End Chat
-                            </button>
-                        </div>
-
-                        {/* Messages Area */}
-                        <div className="flex-grow overflow-y-auto space-y-4 pr-2 mb-4 scrollbar-thin">
-                            {messages.map((msg, idx) => (
-                                <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                                    <div className={`flex gap-2 max-w-[90%] ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
-                                        <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${msg.role === 'user' ? 'bg-indigo-100 text-indigo-600' : 'bg-emerald-100 text-emerald-600'}`}>
-                                            {msg.role === 'user' ? <UserIcon size={16} /> : <Bot size={16} />}
-                                        </div>
-                                        <div className={`p-3 rounded-2xl text-sm leading-relaxed ${
-                                            msg.role === 'user'
-                                                ? 'bg-indigo-600 text-white rounded-tr-none'
-                                                : 'bg-slate-100 dark:bg-slate-700 text-slate-800 dark:text-slate-200 rounded-tl-none'
-                                        }`}>
-                                            {msg.text}
-                                            {msg.role === 'model' && (
-                                                <button onClick={() => speakText(msg.text)} className="ml-2 inline-block align-bottom opacity-50 hover:opacity-100 transition-opacity">
-                                                    <Volume2 size={14} />
-                                                </button>
-                                            )}
-                                        </div>
-                                    </div>
-                                </div>
-                            ))}
-                            {isLoading && (
-                                <div className="flex justify-start">
-                                    <div className="bg-slate-50 dark:bg-slate-800 p-3 rounded-2xl rounded-tl-none flex items-center gap-2">
-                                        <Bot size={16} className="text-emerald-600" />
-                                        <div className="flex gap-1">
-                                            <span className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></span>
-                                            <span className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></span>
-                                            <span className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></span>
-                                        </div>
-                                    </div>
-                                </div>
-                            )}
-                            <div ref={messagesEndRef} />
-                        </div>
-
-                        {error && (
-                            <div className="mb-2 text-center p-2 text-xs text-rose-500 bg-rose-50 dark:bg-rose-900/20 rounded-lg">
-                                {error}
-                            </div>
-                        )}
-
-                        {/* Input Area */}
-                        <div className="flex items-center gap-2 mt-auto">
-                            <button
-                                onClick={toggleRecording}
-                                className={`p-3 rounded-full transition-all duration-300 ${
-                                    isRecording
-                                        ? 'bg-rose-500 text-white shadow-lg shadow-rose-500/30 scale-110 animate-pulse'
-                                        : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-600'
-                                }`}
-                                title={isRecording ? "Stop Listening" : "Speak"}
-                            >
-                                {isRecording ? <MicOff size={24} /> : <Mic size={24} />}
-                            </button>
-
-                            <form onSubmit={(e) => { e.preventDefault(); handleSendMessage(); }} className="flex-1 flex gap-2">
-                                <input
-                                    type="text"
-                                    value={input}
-                                    onChange={(e) => setInput(e.target.value)}
-                                    placeholder={isRecording ? "Listening..." : "Type a message..."}
-                                    className="flex-1 p-3 rounded-full border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 focus:outline-none focus:border-indigo-500 dark:focus:border-indigo-400 transition-colors"
-                                />
-                                <button
-                                    type="submit"
-                                    disabled={!input.trim() || isLoading}
-                                    className="p-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                                >
-                                    <Send size={20} />
-                                </button>
-                            </form>
-                        </div>
-                    </>
-                )}
+                </div>
+                <button onClick={handleReset} className="text-xs flex items-center gap-1 text-slate-500 hover:text-rose-500 transition-colors">
+                    <RefreshCcw size={14} /> End Chat
+                </button>
             </div>
-        </Modal>
-    );
+
+            {/* Messages Area */}
+            <div className="flex-grow overflow-y-auto space-y-4 pr-2 mb-4 scrollbar-thin">
+                {messages.map((msg, idx) => (
+                    <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                        <div className={`flex gap-2 max-w-[90%] ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
+                            <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${msg.role === 'user' ? 'bg-indigo-100 text-indigo-600' : 'bg-emerald-100 text-emerald-600'}`}>
+                                {msg.role === 'user' ? <UserIcon size={16} /> : <Bot size={16} />}
+                            </div>
+                            <div className={`p-3 rounded-2xl text-sm leading-relaxed ${
+                                msg.role === 'user' 
+                                    ? 'bg-indigo-600 text-white rounded-tr-none' 
+                                    : 'bg-slate-100 dark:bg-slate-700 text-slate-800 dark:text-slate-200 rounded-tl-none'
+                            }`}>
+                                {msg.text}
+                                {msg.role === 'model' && (
+                                    <button onClick={() => speakText(msg.text)} className="ml-2 inline-block align-bottom opacity-50 hover:opacity-100 transition-opacity">
+                                        <Volume2 size={14} />
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                ))}
+                {isLoading && (
+                    <div className="flex justify-start">
+                        <div className="bg-slate-50 dark:bg-slate-800 p-3 rounded-2xl rounded-tl-none flex items-center gap-2">
+                            <Bot size={16} className="text-emerald-600" />
+                            <div className="flex gap-1">
+                                <span className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></span>
+                                <span className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></span>
+                                <span className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></span>
+                            </div>
+                        </div>
+                    </div>
+                )}
+                <div ref={messagesEndRef} />
+            </div>
+
+            {error && (
+                <div className="mb-2 text-center p-2 text-xs text-rose-500 bg-rose-50 dark:bg-rose-900/20 rounded-lg">
+                    {error}
+                </div>
+            )}
+
+            {/* Input Area */}
+            <div className="flex items-center gap-2 mt-auto">
+                <button
+                    onClick={toggleRecording}
+                    className={`p-3 rounded-full transition-all duration-300 ${
+                        isRecording 
+                            ? 'bg-rose-500 text-white shadow-lg shadow-rose-500/30 scale-110 animate-pulse' 
+                            : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-600'
+                    }`}
+                    title={isRecording ? "Stop Listening" : "Speak"}
+                >
+                    {isRecording ? <MicOff size={24} /> : <Mic size={24} />}
+                </button>
+
+                <form onSubmit={(e) => { e.preventDefault(); handleSendMessage(); }} className="flex-1 flex gap-2">
+                    <input
+                        type="text"
+                        value={input}
+                        onChange={(e) => setInput(e.target.value)}
+                        placeholder={isRecording ? "Listening..." : "Type a message..."}
+                        className="flex-1 p-3 rounded-full border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 focus:outline-none focus:border-indigo-500 dark:focus:border-indigo-400 transition-colors"
+                    />
+                    <button
+                        type="submit"
+                        disabled={!input.trim() || isLoading}
+                        className="p-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                        <Send size={20} />
+                    </button>
+                </form>
+            </div>
+          </>
+        )}
+      </div>
+    </Modal>
+  );
 };

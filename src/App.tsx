@@ -940,7 +940,7 @@ const App: React.FC = () => {
     const handleFlip = useCallback(() => {
         if (isDontKnowMode && answerState !== 'idle' && trainingMode === 'write') return;
         if (isDontKnowMode && trainingMode === 'guess' && isFlipped) return;
-
+        
         sounds.play('flip');
         setIsFlipped(prev => !prev);
     }, [isDontKnowMode, answerState, trainingMode, isFlipped]);
@@ -1383,7 +1383,7 @@ const App: React.FC = () => {
                                 <UserIcon size={20} />
                             </button>
                         </Tooltip>
-
+                        
                         {/* CHAT BUTTON */}
                         <Tooltip content="Conversation Practice" position="bottom">
                             <button onClick={() => setIsChatModalOpen(true)} className="text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-white transition-colors">
@@ -1503,14 +1503,12 @@ const App: React.FC = () => {
                 dictionaryName={loadedDictionary.name}
                 onResetAllStats={handleResetAllStats}
             />
-            <ChatModal
-                isOpen={isChatModalOpen}
-                onClose={() => setIsChatModalOpen(false)}
+            <ChatModal 
+                isOpen={isChatModalOpen} 
+                onClose={() => setIsChatModalOpen(false)} 
             />
         </main>
     );
 };
 
-export default App;--- START OF FILE .env.local ---
-
-// The user provided an empty file, so I am restoring it as such.
+export default App;
