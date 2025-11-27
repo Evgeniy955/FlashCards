@@ -1395,25 +1395,30 @@ const App: React.FC = () => {
             <div className="w-full max-w-md flex flex-col items-center">
                 {/* Controls - Hidden in Zen Mode */}
                 {!isZenMode && (
-                    <div className="w-full flex items-center justify-center gap-4 text-sm mb-4 animate-fade-in">
-                        <Tooltip content="View learned words">
-                            <button onClick={() => setLearnedWordsModalOpen(true)} className="flex items-center gap-2 py-1 px-3 bg-white dark:bg-slate-800 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors shadow-sm dark:shadow-none border border-slate-200 dark:border-slate-700">
-                                <BookUser size={16} /> Learned: {totalLearnedCount}
-                            </button>
-                        </Tooltip>
+                    <div className="w-full relative flex items-center justify-center mb-4 animate-fade-in h-8">
+                        {/* Center Group: Stats & Reset */}
+                        <div className="flex items-center gap-4 text-sm">
+                            <Tooltip content="View learned words">
+                                <button onClick={() => setLearnedWordsModalOpen(true)} className="flex items-center gap-2 py-1 px-3 bg-white dark:bg-slate-800 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors shadow-sm dark:shadow-none border border-slate-200 dark:border-slate-700">
+                                    <BookUser size={16} /> Learned: {totalLearnedCount}
+                                </button>
+                            </Tooltip>
+                            <Tooltip content="Reset progress for this dictionary">
+                                <button onClick={handleResetProgress} className="flex items-center gap-2 py-1 px-3 bg-white dark:bg-slate-800 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors shadow-sm dark:shadow-none border border-slate-200 dark:border-slate-700">
+                                    <Trash2 size={16} /> Reset
+                                </button>
+                            </Tooltip>
+                        </div>
 
-                        {/* CHAT BUTTON MOVED HERE */}
-                        <Tooltip content="Conversation Practice">
-                            <button onClick={() => setIsChatModalOpen(true)} className="flex items-center gap-2 py-1 px-3 bg-white dark:bg-slate-800 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors shadow-sm dark:shadow-none border border-slate-200 dark:border-slate-700 text-indigo-600 dark:text-indigo-400 font-medium">
-                                <MessageCircle size={16} /> Chat
-                            </button>
-                        </Tooltip>
-
-                        <Tooltip content="Reset progress for this dictionary">
-                            <button onClick={handleResetProgress} className="flex items-center gap-2 py-1 px-3 bg-white dark:bg-slate-800 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors shadow-sm dark:shadow-none border border-slate-200 dark:border-slate-700">
-                                <Trash2 size={16} /> Reset
-                            </button>
-                        </Tooltip>
+                        {/* Right: Chat Button */}
+                        <div className="absolute right-0 top-1/2 -translate-y-1/2">
+                            <Tooltip content="Conversation Practice" position="left">
+                                <button onClick={() => setIsChatModalOpen(true)} className="flex items-center gap-2 py-1 px-3 bg-white dark:bg-slate-800 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors shadow-sm dark:shadow-none border border-slate-200 dark:border-slate-700 text-indigo-600 dark:text-indigo-400 font-medium">
+                                    <MessageCircle size={18} />
+                                    <span className="hidden sm:inline">Chat</span>
+                                </button>
+                            </Tooltip>
+                        </div>
                     </div>
                 )}
 
