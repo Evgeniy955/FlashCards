@@ -15,7 +15,7 @@ import { Auth } from './components/Auth';
 import { Tooltip } from './components/Tooltip';
 import { Word, LoadedDictionary, WordProgress, TranslationMode, Theme, WordStats } from './types';
 import { parseDictionaryFile, shuffleArray, getWordId } from './utils/dictionaryUtils';
-import { Shuffle, ChevronsUpDown, Info, BookUser, Trash2, Repeat, Library, Loader2, User as UserIcon, RefreshCw, Flame } from 'lucide-react';
+import { Shuffle, ChevronsUpDown, Info, BookUser, Trash2, Repeat, Library, Loader2, User as UserIcon, RefreshCw, Flame, Maximize2, Minimize2 } from 'lucide-react';
 import { TrainingModeInput, AnswerState } from './components/TrainingModeInput';
 import { TrainingModeGuess } from './components/TrainingModeGuess';
 import { TrainingModeToggle } from './components/TrainingModeToggle';
@@ -173,6 +173,9 @@ const App: React.FC = () => {
     const [currentStreak, setCurrentStreak] = useState(0);
     const [welcomeStats, setWelcomeStats] = useState<{ streak: number; lastSessionCount: number } | null>(null);
     const [showWelcomeToast, setShowWelcomeToast] = useState(false);
+
+    // State for UX Improvements
+    const [isZenMode, setIsZenMode] = useState(false);
 
     // State to manage sync on login
     const [isSyncing, setIsSyncing] = useState(false);
@@ -1194,14 +1197,24 @@ const App: React.FC = () => {
                                     </span>
                                 )}
                             </div>
-                            <div />
+                            <div className="flex justify-center">
+                                {/* Zen Mode Toggle */}
+                                <Tooltip content={isZenMode ? "Exit Zen Mode" : "Enter Zen Mode"}>
+                                    <button
+                                        onClick={() => setIsZenMode(!isZenMode)}
+                                        className={`p-1.5 rounded-md transition-colors ${isZenMode ? 'text-indigo-600 bg-indigo-100 dark:text-indigo-400 dark:bg-indigo-900/30' : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'}`}
+                                    >
+                                        {isZenMode ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
+                                    </button>
+                                </Tooltip>
+                            </div>
                             <div />
                         </>
                     )}
                 </div>
                 <div className="w-full text-center text-sm text-slate-500 dark:text-slate-400 mb-1">{counterText}</div>
                 <ProgressBar current={sessionProgress} total={sessionTotal} />
-                <div className={`w-full transition-opacity duration-200 ${isChangingWord ? 'opacity-0' : 'opacity-100'}`}>
+                <div className={`w-full transition-all duration-300 ease-in-out transform ${isChangingWord ? 'opacity-0 -translate-x-12 scale-95 rotate-[-2deg]' : 'opacity-100 translate-x-0 scale-100 rotate-0'}`}>
                     <Flashcard
                         word={currentWord}
                         isFlipped={isFlipped}
@@ -1295,74 +1308,83 @@ const App: React.FC = () => {
         : 'text-slate-500 dark:text-slate-400';
 
     return (
-        <main className="min-h-screen flex flex-col items-center p-4 sm:p-6">
-            <header className="w-full max-w-5xl flex justify-between items-center mb-6">
-                <div className="flex items-center gap-2 sm:gap-4">
-                    <Tooltip content="Switch to a different dictionary">
-                        <button onClick={handleChangeDictionary} className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors">
-                            <Library size={18} />
-                            <span className="hidden sm:inline">Change</span>
-                        </button>
-                    </Tooltip>
-                    <Tooltip content="View Instructions">
-                        <button onClick={() => setInstructionsModalOpen(true)} className="text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors">
-                            <Info size={20} />
-                        </button>
-                    </Tooltip>
-                </div>
-                <div className="text-center">
-                    <h1 className="text-lg sm:text-xl font-bold truncate max-w-[200px] sm:max-w-xs" title={loadedDictionary.name}>{loadedDictionary.name}</h1>
-                </div>
-                <div className="flex items-center gap-3">
-                    {/* Gamification: Daily Streak */}
-                    <Tooltip content="Your daily study streak" position="left">
-                        <div
-                            className={`hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full font-semibold text-sm transition-colors ${
-                                currentStreak > 0
-                                    ? "bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400"
-                                    : "bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500"
-                            }`}
-                        >
-                            <Flame
-                                size={18}
-                                className={currentStreak > 0 ? "fill-orange-500 text-orange-600" : "text-slate-400 dark:text-slate-500"}
-                            />
-                            <span>{currentStreak}</span>
-                        </div>
-                    </Tooltip>
+        <main className="min-h-screen flex flex-col items-center p-4 sm:p-6 transition-colors">
+            {/* HEADER - Hidden in Zen Mode */}
+            {!isZenMode && (
+                <header className="w-full max-w-5xl flex justify-between items-center mb-6 animate-fade-in">
+                    <div className="flex items-center gap-2 sm:gap-4">
+                        <Tooltip content="Switch to a different dictionary">
+                            <button onClick={handleChangeDictionary} className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors">
+                                <Library size={18} />
+                                <span className="hidden sm:inline">Change</span>
+                            </button>
+                        </Tooltip>
+                        <Tooltip content="View Instructions">
+                            <button onClick={() => setInstructionsModalOpen(true)} className="text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors">
+                                <Info size={20} />
+                            </button>
+                        </Tooltip>
+                    </div>
+                    <div className="text-center">
+                        <h1 className="text-lg sm:text-xl font-bold truncate max-w-[200px] sm:max-w-xs" title={loadedDictionary.name}>{loadedDictionary.name}</h1>
+                    </div>
+                    <div className="flex items-center gap-3">
+                        {/* Gamification: Daily Streak */}
+                        <Tooltip content="Your daily study streak" position="left">
+                            <div
+                                className={`hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full font-semibold text-sm transition-colors ${
+                                    currentStreak > 0
+                                        ? "bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400"
+                                        : "bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500"
+                                }`}
+                            >
+                                <Flame
+                                    size={18}
+                                    className={currentStreak > 0 ? "fill-orange-500 text-orange-600" : "text-slate-400 dark:text-slate-500"}
+                                />
+                                <span>{currentStreak}</span>
+                            </div>
+                        </Tooltip>
 
-                    <Tooltip content="Profile & Statistics" position="bottom">
-                        <button onClick={() => setProfileModalOpen(true)} className="text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors">
-                            <UserIcon size={20} />
-                        </button>
-                    </Tooltip>
-                    <Tooltip content="Toggle Dark Mode" position="bottom">
-                        <ThemeToggle theme={theme} setTheme={setTheme} />
-                    </Tooltip>
-                    <Auth user={user} />
-                </div>
-            </header>
+                        <Tooltip content="Profile & Statistics" position="bottom">
+                            <button onClick={() => setProfileModalOpen(true)} className="text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors">
+                                <UserIcon size={20} />
+                            </button>
+                        </Tooltip>
+                        <Tooltip content="Toggle Dark Mode" position="bottom">
+                            <ThemeToggle theme={theme} setTheme={setTheme} />
+                        </Tooltip>
+                        <Auth user={user} />
+                    </div>
+                </header>
+            )}
 
             <div className="w-full max-w-md flex flex-col items-center">
-                <div className="w-full flex items-center justify-center gap-4 text-sm mb-4">
-                    <Tooltip content="View learned words">
-                        <button onClick={() => setLearnedWordsModalOpen(true)} className="flex items-center gap-2 py-1 px-3 bg-white dark:bg-slate-800 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors shadow-sm dark:shadow-none border border-slate-200 dark:border-slate-700">
-                            <BookUser size={16} /> Learned: {totalLearnedCount}
-                        </button>
-                    </Tooltip>
-                    <Tooltip content="Reset progress for this dictionary">
-                        <button onClick={handleResetProgress} className="flex items-center gap-2 py-1 px-3 bg-white dark:bg-slate-800 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors shadow-sm dark:shadow-none border border-slate-200 dark:border-slate-700">
-                            <Trash2 size={16} /> Reset
-                        </button>
-                    </Tooltip>
-                </div>
+                {/* Controls - Hidden in Zen Mode */}
+                {!isZenMode && (
+                    <div className="w-full flex items-center justify-center gap-4 text-sm mb-4 animate-fade-in">
+                        <Tooltip content="View learned words">
+                            <button onClick={() => setLearnedWordsModalOpen(true)} className="flex items-center gap-2 py-1 px-3 bg-white dark:bg-slate-800 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors shadow-sm dark:shadow-none border border-slate-200 dark:border-slate-700">
+                                <BookUser size={16} /> Learned: {totalLearnedCount}
+                            </button>
+                        </Tooltip>
+                        <Tooltip content="Reset progress for this dictionary">
+                            <button onClick={handleResetProgress} className="flex items-center gap-2 py-1 px-3 bg-white dark:bg-slate-800 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors shadow-sm dark:shadow-none border border-slate-200 dark:border-slate-700">
+                                <Trash2 size={16} /> Reset
+                            </button>
+                        </Tooltip>
+                    </div>
+                )}
 
-                <SetSelector
-                    sets={loadedDictionary.sets}
-                    selectedSetIndex={selectedSetIndex}
-                    onSelectSet={handleSelectSet}
-                    learnedWords={learnedWords}
-                />
+                {/* Set Selector - Hidden in Zen Mode */}
+                {!isZenMode && (
+                    <SetSelector
+                        sets={loadedDictionary.sets}
+                        selectedSetIndex={selectedSetIndex}
+                        onSelectSet={handleSelectSet}
+                        learnedWords={learnedWords}
+                    />
+                )}
 
                 {isProgressLoading ? (
                     <div className="w-full aspect-[3/2] flex justify-center items-center text-slate-500 dark:text-slate-400">
@@ -1392,12 +1414,16 @@ const App: React.FC = () => {
                     </div>
                 )}
 
-                <div className="w-full mt-8 p-3 bg-white/50 dark:bg-slate-800/50 rounded-lg shadow-sm dark:shadow-none border border-slate-200 dark:border-slate-700">
-                    <SentenceUpload onSentencesLoaded={(newMap) => setSentences(prev => new Map([...prev, ...newMap]))} onClearSentences={() => setSentences(new Map())} hasSentences={sentences.size > 0}/>
-                </div>
+                {/* Sentence Upload - Hidden in Zen Mode */}
+                {!isZenMode && (
+                    <div className="w-full mt-8 p-3 bg-white/50 dark:bg-slate-800/50 rounded-lg shadow-sm dark:shadow-none border border-slate-200 dark:border-slate-700 animate-fade-in">
+                        <SentenceUpload onSentencesLoaded={(newMap) => setSentences(prev => new Map([...prev, ...newMap]))} onClearSentences={() => setSentences(new Map())} hasSentences={sentences.size > 0}/>
+                    </div>
+                )}
 
-                {currentSet && (
-                    <div className="flex items-center justify-center gap-6 mt-6">
+                {/* Bottom Controls - Hidden in Zen Mode */}
+                {currentSet && !isZenMode && (
+                    <div className="flex items-center justify-center gap-6 mt-6 animate-fade-in">
                         <Tooltip content="Randomize card order">
                             <button onClick={handleShuffle} disabled={reviewWords.length <= 1} className={`flex items-center gap-2 hover:text-slate-900 dark:hover:text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${shuffleButtonClasses}`}>
                                 <Shuffle size={18} /> Shuffle
@@ -1414,7 +1440,8 @@ const App: React.FC = () => {
                     </div>
                 )}
 
-                {currentSet && <WordList words={currentSet.words} isVisible={isWordListVisible} lang1={currentSet.lang1} lang2={currentSet.lang2} />}
+                {/* Word List - Hidden in Zen Mode */}
+                {currentSet && !isZenMode && <WordList words={currentSet.words} isVisible={isWordListVisible} lang1={currentSet.lang1} lang2={currentSet.lang2} />}
             </div>
 
             {user && showWelcomeToast && welcomeStats && (
