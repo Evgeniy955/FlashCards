@@ -1,57 +1,13 @@
 import { GoogleGenAI, Type } from "@google/genai";
 
-// Safely access API Key from various possible sources
-const getApiKey = (): string => {
-    let key = '';
-
-    // 1. Try process.env.API_KEY (injected by Vite config override)
-    try {
-        // @ts-ignore
-        if (typeof process !== 'undefined' && process.env.API_KEY) {
-            // @ts-ignore
-            key = process.env.API_KEY;
-        }
-    } catch (e) {
-        // ignore
-    }
-
-    // 2. Try standard Vite env vars (if user used VITE_ prefix in .env)
-    if (!key && import.meta.env.VITE_GEMINI_API_KEY) {
-        key = import.meta.env.VITE_GEMINI_API_KEY;
-    }
-    if (!key && import.meta.env.VITE_API_KEY) {
-        key = import.meta.env.VITE_API_KEY;
-    }
-
-    // Clean the key: remove quotes if the user accidentally included them in .env
-    return key ? key.replace(/['"]/g, '').trim() : '';
-};
-
-const apiKey = getApiKey();
-
-// --- DEBUGGING ---
-if (apiKey) {
-    const masked = apiKey.length > 8 ? `${apiKey.substring(0, 4)}...${apiKey.substring(apiKey.length - 4)}` : '***';
-    console.log(`[Gemini] Using API Key: ${masked}`);
-} else {
-    console.warn('[Gemini] No API Key found.');
-}
-// -----------------
-
-// Initialize the client lazily or safely
-let ai: GoogleGenAI | null = null;
-
-if (apiKey) {
-    try {
-        ai = new GoogleGenAI({ apiKey });
-    } catch (error) {
-        console.error("Failed to initialize GoogleGenAI client:", error);
-    }
-}
+// Initialize the client using the environment variable injected by Vite.
+// We cast to string to satisfy TypeScript, as the build process guarantees replacement.
+const ai = new GoogleGenAI({ apiKey: (process.env.API_KEY as string) || '' });
 
 // Helper to extract project ID from error message
 const getProjectError = (errorString: string): string | null => {
-    const projectMatch = errorString.match(/project\s+(\d+)/i);
+    // Use RegExp.exec for better performance/safety as suggested by linters
+    const projectMatch = /project\s+(\d+)/i.exec(errorString);
     if (projectMatch && projectMatch[1]) {
         return `The active API Key belongs to Google Cloud Project ID: ${projectMatch[1]}. This project does not have the Gemini API enabled. Please update your .env file with a key from a different project.`;
     }
@@ -59,20 +15,16 @@ const getProjectError = (errorString: string): string | null => {
 };
 
 export const generateExampleSentence = async (word: string): Promise<string> => {
-    if (!ai) {
-        throw new Error("API Key is missing. Check your .env file or Vercel settings.");
-    }
     try {
         const response = await ai.models.generateContent({
             model: 'gemini-2.5-flash',
             contents: `Generate a short, simple, and memorable example sentence in English containing the word "${word}". Return ONLY the sentence text. Do not include the translation or any explanations.`,
         });
-        return response.text ? response.text.trim() : '';
+        return response.text?.trim() || '';
     } catch (error: any) {
         console.error("Gemini generation error:", error);
         const errString = error.toString();
 
-        // Check for specific Project ID error
         const projectError = getProjectError(errString);
         if (projectError) {
             throw new Error(projectError);
@@ -90,9 +42,6 @@ export const validateAnswerWithAI = async (
     userAnswer: string,
     correctAnswer: string
 ): Promise<{ isCorrect: boolean; feedback: string }> => {
-    if (!ai) {
-        return { isCorrect: false, feedback: "AI unavailable" };
-    }
 
     const schema = {
         type: Type.OBJECT,
@@ -163,9 +112,6 @@ export const chatWithAI = async (
     mode: 'free' | 'roleplay',
     userName?: string
 ): Promise<string> => {
-    if (!ai) {
-        throw new Error("API Key is missing.");
-    }
 
     const nameInstruction = userName ? `The student's name is ${userName}. Use their name naturally in the conversation, especially when greeting.` : '';
 
@@ -201,12 +147,13 @@ export const chatWithAI = async (
             contents: contents,
         });
 
-        return response.text ? response.text.trim() : "I'm listening...";
+        return response.text?.trim() || "I'm listening...";
     } catch (error: any) {
         console.error("Gemini chat error:", error);
         const errString = error.toString();
 
-        if (getProjectError(errString)) throw new Error(getProjectError(errString)!);
+        const projectError = getProjectError(errString);
+        if (projectError) throw new Error(projectError);
         if (error.status === 403 || errString.includes('403')) throw new Error("Access Denied (403). Check API Key.");
 
         throw new Error("Failed to connect to AI.");
