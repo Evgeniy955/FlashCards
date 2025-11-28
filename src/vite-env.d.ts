@@ -1,4 +1,4 @@
-/// <reference types="vite/client" />
+// Removed vite/client reference to fix resolution error
 
 interface ImportMetaEnv {
   readonly VITE_FIREBASE_API_KEY: string;
@@ -16,7 +16,8 @@ interface ImportMeta {
 }
 
 // Add global process declaration for API_KEY
-declare const process: {
+// Changed to var to avoid "Cannot redeclare block-scoped variable" error
+declare var process: {
   env: {
     API_KEY: string;
     [key: string]: string | undefined;
