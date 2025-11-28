@@ -122,7 +122,7 @@ const aggregateProgress = (
 
 // --- Main App Component ---
 const App: React.FC = () => {
-    const [user, authLoading] = useAuthState(auth);
+    const [user, authLoading] = useAuthState(auth as any); // Cast to any to avoid type mismatch errors
     const [loadedDictionary, setLoadedDictionary] = useState<LoadedDictionary | null>(null);
     const [selectedSetIndex, setSelectedSetIndex] = useState<number | null>(null);
     const [currentWordIndex, setCurrentWordIndex] = useState(0);
@@ -1512,6 +1512,7 @@ const App: React.FC = () => {
             <ChatModal
                 isOpen={isChatModalOpen}
                 onClose={() => setIsChatModalOpen(false)}
+                userName={user?.displayName || 'Student'}
             />
         </main>
     );
