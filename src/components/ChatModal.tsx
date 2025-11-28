@@ -50,10 +50,14 @@ export const ChatModal: React.FC<ChatModalProps> = ({ isOpen, onClose, userName 
     const [conversationMode, setConversationMode] = useState<'ptt' | 'continuous'>('ptt');
 
     const messagesEndRef = useRef<HTMLDivElement>(null);
+
+    // Speech Recognition Refs
     const recognitionRef = useRef<any>(null);
+    const isListeningRef = useRef(false); // Tracks intent to listen (vs browser actual state)
     const inputRef = useRef(''); // Ref to keep track of input inside closures
+    const finalTranscriptRef = useRef(''); // Accumulator for text across restarts
     const silenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-    const isSendingRef = useRef(false); // To prevent duplicate sends
+    const isSendingRef = useRef(false);
 
     // Sync input ref
     useEffect(() => {
@@ -76,7 +80,11 @@ export const ChatModal: React.FC<ChatModalProps> = ({ isOpen, onClose, userName 
     useEffect(() => {
         if (!isOpen) {
             stopRecognition();
-            if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
+            setTopic('');
+            setIsChatActive(false);
+            setMessages([]);
+            setError(null);
+            setInput('');
             window.speechSynthesis.cancel();
         }
     }, [isOpen]);
@@ -85,7 +93,6 @@ export const ChatModal: React.FC<ChatModalProps> = ({ isOpen, onClose, userName 
         if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
             const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
 
-            // Cleanup previous instance
             if (recognitionRef.current) {
                 recognitionRef.current.abort();
             }
@@ -93,14 +100,12 @@ export const ChatModal: React.FC<ChatModalProps> = ({ isOpen, onClose, userName 
             const recognition = new SpeechRecognition();
             recognitionRef.current = recognition;
 
-            // Configuration based on mode
             recognition.lang = 'en-US';
-            recognition.interimResults = true; // Always true to see what we are saying
+            recognition.interimResults = true;
+            recognition.continuous = true; // Always true to allow holding button or long sentences
 
-            // IMPORTANT: Set continuous to true for BOTH modes.
-            // In PTT: this prevents the browser from stopping automatically if you pause to think while holding the button.
-            // In Continuous: this allows us to listen until our custom silence timer triggers.
-            recognition.continuous = true;
+            // Mark intent to listen
+            isListeningRef.current = true;
 
             recognition.onstart = () => {
                 setIsRecording(true);
@@ -108,43 +113,54 @@ export const ChatModal: React.FC<ChatModalProps> = ({ isOpen, onClose, userName 
             };
 
             recognition.onend = () => {
-                // If PTT, simply mark as stopped.
-                // If continuous, it might have stopped due to error or browser timeout, we handle restart manually if needed.
                 setIsRecording(false);
+
+                // If we still intend to listen (e.g. holding button or continuous mode active),
+                // but browser stopped (timeout/error), RESTART immediately.
+                if (isListeningRef.current) {
+                    // Preserve what was already typed/spoken so we don't lose it on restart
+                    if (inputRef.current) {
+                        finalTranscriptRef.current = inputRef.current + ' ';
+                    }
+                    try {
+                        recognition.start();
+                    } catch (e) {
+                        console.error("Restart failed", e);
+                        isListeningRef.current = false;
+                    }
+                }
             };
 
             recognition.onerror = (event: any) => {
-                if (event.error !== 'no-speech') {
-                    console.error("Speech recognition error", event.error);
-                }
                 if (event.error === 'not-allowed') {
                     setError("Microphone access denied.");
+                    isListeningRef.current = false;
                     setIsRecording(false);
+                } else if (event.error !== 'no-speech') {
+                    console.error("Speech recognition error", event.error);
                 }
             };
 
             recognition.onresult = (event: any) => {
-                // Build the transcript from all results (since continuous=true accumulates them)
-                let transcript = '';
+                let currentSessionTranscript = '';
                 for (let i = 0; i < event.results.length; ++i) {
-                    transcript += event.results[i][0].transcript;
+                    currentSessionTranscript += event.results[i][0].transcript;
                 }
 
-                // Update input UI
-                setInput(transcript);
+                // Combine accumulated text (from previous restarts) with current session text
+                const fullText = finalTranscriptRef.current + currentSessionTranscript;
+                setInput(fullText);
 
                 // Continuous Mode Logic: Auto-send after 3 seconds of silence
                 if (conversationMode === 'continuous') {
-                    // Reset silence timer on every new result (meaning user is still speaking)
                     if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
 
-                    // Set new timer (3 seconds silence -> send)
                     silenceTimerRef.current = setTimeout(() => {
-                        if (transcript.trim()) {
-                            recognition.stop(); // Stop listening
+                        if (fullText.trim()) {
+                            stopRecognition(); // Stop listening intent
                             handleSendMessage(); // Send the text
                         }
-                    }, 3000);
+                    }, 3000); // Wait 3 seconds
                 }
             };
 
@@ -155,6 +171,8 @@ export const ChatModal: React.FC<ChatModalProps> = ({ isOpen, onClose, userName 
     };
 
     const stopRecognition = () => {
+        isListeningRef.current = false; // Clear intent
+        finalTranscriptRef.current = ''; // Clear accumulator
         if (recognitionRef.current) {
             recognitionRef.current.stop();
         }
@@ -164,17 +182,18 @@ export const ChatModal: React.FC<ChatModalProps> = ({ isOpen, onClose, userName 
     // PTT Handlers
     const handlePTTStart = () => {
         if (conversationMode !== 'ptt') return;
-        setInput(''); // Clear previous input
+        setInput('');
+        finalTranscriptRef.current = ''; // Reset accumulator
         startRecognition();
     };
 
     const handlePTTEnd = () => {
         if (conversationMode !== 'ptt') return;
 
-        // Stop recognition immediately when button is released
+        // Stop intent immediately
         stopRecognition();
 
-        // Allow a tiny delay for the final recognition result to populate inputRef
+        // Send what we have
         setTimeout(() => {
             if (inputRef.current.trim()) {
                 handleSendMessage();
@@ -184,10 +203,11 @@ export const ChatModal: React.FC<ChatModalProps> = ({ isOpen, onClose, userName 
 
     // Continuous Toggle
     const toggleContinuousSession = () => {
-        if (isRecording) {
+        if (isListeningRef.current) {
             stopRecognition();
         } else {
             setInput('');
+            finalTranscriptRef.current = '';
             startRecognition();
         }
     };
@@ -202,12 +222,12 @@ export const ChatModal: React.FC<ChatModalProps> = ({ isOpen, onClose, userName 
             const preferred = voices.find(v => v.lang.startsWith('en-US') && !v.name.includes('Google')) || voices.find(v => v.lang.startsWith('en'));
             if(preferred) utterance.voice = preferred;
 
-            // When AI finishes speaking, resume listening if in Continuous mode
+            // Resume listening only if we are still in continuous mode and the chat is open
             utterance.onend = () => {
                 if (conversationMode === 'continuous' && isChatActive && isOpen) {
-                    // Small pause before listening again
                     setTimeout(() => {
                         setInput('');
+                        finalTranscriptRef.current = '';
                         startRecognition();
                     }, 500);
                 }
@@ -218,7 +238,6 @@ export const ChatModal: React.FC<ChatModalProps> = ({ isOpen, onClose, userName 
     };
 
     const handleSendMessage = async (isInitial = false) => {
-        // Use ref for input to ensure fresh value inside closures/async
         const textToSend = isInitial ? '' : inputRef.current;
 
         if ((!textToSend.trim() && !isInitial) || isLoading || isSendingRef.current) return;
@@ -229,7 +248,7 @@ export const ChatModal: React.FC<ChatModalProps> = ({ isOpen, onClose, userName 
         if (!isInitial) {
             newMessages.push({ role: 'user', text: textToSend });
             setMessages(newMessages);
-            setInput(''); // Clear input UI
+            setInput('');
         }
 
         setIsLoading(true);
