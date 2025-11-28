@@ -16,7 +16,6 @@ const getApiKey = (): string => {
     }
 
     // 2. Try standard Vite env vars (if user used VITE_ prefix in .env)
-    // We check these as fallback, but Vite config usually injects them into process.env.API_KEY
     if (!key && import.meta.env.VITE_GEMINI_API_KEY) {
         key = import.meta.env.VITE_GEMINI_API_KEY;
     }
@@ -161,19 +160,22 @@ export interface ChatMessage {
 export const chatWithAI = async (
     history: ChatMessage[],
     scenario: string,
-    mode: 'free' | 'roleplay'
+    mode: 'free' | 'roleplay',
+    userName?: string
 ): Promise<string> => {
     if (!ai) {
         throw new Error("API Key is missing.");
     }
 
-    const roleInstruction = mode === 'roleplay' 
-        ? `Scenario: ${scenario}. Stay strictly in character.` 
+    const nameInstruction = userName ? `The student's name is ${userName}. Use their name naturally in the conversation, especially when greeting.` : '';
+
+    const roleInstruction = mode === 'roleplay'
+        ? `Scenario: ${scenario}. Stay strictly in character.`
         : `Topic: ${scenario}. Be a friendly conversational partner.`;
 
     const systemPrompt = `
     You are a helpful English language tutor helping a student practice speaking.
-    
+    ${nameInstruction}
     ${roleInstruction}
     
     IMPORTANT RULES:
@@ -203,10 +205,10 @@ export const chatWithAI = async (
     } catch (error: any) {
         console.error("Gemini chat error:", error);
         const errString = error.toString();
-        
+
         if (getProjectError(errString)) throw new Error(getProjectError(errString)!);
         if (error.status === 403 || errString.includes('403')) throw new Error("Access Denied (403). Check API Key.");
-        
+
         throw new Error("Failed to connect to AI.");
     }
 };

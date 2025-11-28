@@ -5,18 +5,18 @@ import { BuiltInDictionaries } from './BuiltInDictionaries';
 import { LocalDictionaries } from './LocalDictionaries';
 import { saveDictionary } from '../lib/indexedDB';
 import { Library, Upload, Database } from 'lucide-react';
-// FIX: Replaced compat User type with v9+ modular User type.
-import { type User } from 'firebase/auth';
-import { db } from '../lib/firebase-client';
+// FIX: Using compat user type and instance from firebase-client
+import { firebase, db } from '../lib/firebase-client';
 import { fileToBase64 } from '../utils/fileUtils';
 
 
 interface FileSourceModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-  onFilesSelect: (name: string, wordsFile: File, sentencesFile?: File) => void;
-  isLoading: boolean;
-  user: User | null | undefined;
+    isOpen: boolean;
+    onClose: () => void;
+    onFilesSelect: (name: string, wordsFile: File, sentencesFile?: File) => void;
+    isLoading: boolean;
+    // Using 'any' to bypass compat vs modular type conflicts
+    user: any;
 }
 
 type Tab = 'built-in' | 'local' | 'computer';
@@ -25,102 +25,102 @@ const FIRESTORE_DOC_SIZE_LIMIT = 950 * 1024; // 950 KB to be safe from 1 MiB lim
 
 // Moved TabButton outside the component to prevent re-creation on each render.
 const TabButton = ({ activeTab, tab, onClick, children }: React.PropsWithChildren<{ activeTab: Tab, tab: Tab, onClick: (tab: Tab) => void }>) => (
-  <button
-    onClick={() => onClick(tab)}
-    className={`flex-1 flex items-center justify-center gap-2 p-3 text-sm font-medium border-b-2 transition-colors ${
-      activeTab === tab
-        ? 'border-indigo-500 text-indigo-600 dark:text-white'
-        : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:border-slate-300 dark:hover:border-slate-500'
-    }`}
-  >
-    {children}
-  </button>
+    <button
+        onClick={() => onClick(tab)}
+        className={`flex-1 flex items-center justify-center gap-2 p-3 text-sm font-medium border-b-2 transition-colors ${
+            activeTab === tab
+                ? 'border-indigo-500 text-indigo-600 dark:text-white'
+                : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:border-slate-300 dark:hover:border-slate-500'
+        }`}
+    >
+        {children}
+    </button>
 );
 
 
 export const FileSourceModal: React.FC<FileSourceModalProps> = ({ isOpen, onClose, onFilesSelect, isLoading, user }) => {
-  const [activeTab, setActiveTab] = useState<Tab>('built-in');
-  const [isUploading, setIsUploading] = useState(false);
-  const [uploadCounter, setUploadCounter] = useState(0);
+    const [activeTab, setActiveTab] = useState<Tab>('built-in');
+    const [isUploading, setIsUploading] = useState(false);
+    const [uploadCounter, setUploadCounter] = useState(0);
 
-  const handleFileUpload = async (file: File) => {
-    const dictionaryName = file.name.replace(/\.xlsx$/i, '');
-    setIsUploading(true);
-    
-    try {
-      await saveDictionary(dictionaryName, file, user?.uid);
+    const handleFileUpload = async (file: File) => {
+        const dictionaryName = file.name.replace(/\.xlsx$/i, '');
+        setIsUploading(true);
 
-      // Sync to Firestore if user is logged in and file is within size limits
-      if (user) {
-        if (file.size > FIRESTORE_DOC_SIZE_LIMIT) {
-          alert(`Dictionary "${file.name}" has been saved locally, but it's too large to sync to the cloud (over 950KB). It won't be available on other devices.`);
-          console.warn(`File ${file.name} is too large (${file.size} bytes) to sync to Firestore. It's saved locally.`);
-        } else {
-          try {
-            const base64Content = await fileToBase64(file);
-            // FIX: Use compat API for Firestore
-            const dictionaryDocRef = db.collection('users').doc(user.uid).collection('dictionaries').doc(file.name);
-            await dictionaryDocRef.set({
-              name: file.name,
-              content: base64Content,
-              mimeType: file.type,
-              lastModified: new Date(),
-            });
-          } catch (error) {
-            console.error("Firestore dictionary sync failed:", error);
-            alert(`Dictionary saved locally, but failed to sync to the cloud. Please check your internet connection and Firestore permissions. Error: ${(error as Error).message}`);
-          }
+        try {
+            await saveDictionary(dictionaryName, file, user?.uid);
+
+            // Sync to Firestore if user is logged in and file is within size limits
+            if (user) {
+                if (file.size > FIRESTORE_DOC_SIZE_LIMIT) {
+                    alert(`Dictionary "${file.name}" has been saved locally, but it's too large to sync to the cloud (over 950KB). It won't be available on other devices.`);
+                    console.warn(`File ${file.name} is too large (${file.size} bytes) to sync to Firestore. It's saved locally.`);
+                } else {
+                    try {
+                        const base64Content = await fileToBase64(file);
+                        // FIX: Use compat API for Firestore
+                        const dictionaryDocRef = db.collection('users').doc(user.uid).collection('dictionaries').doc(file.name);
+                        await dictionaryDocRef.set({
+                            name: file.name,
+                            content: base64Content,
+                            mimeType: file.type,
+                            lastModified: new Date(),
+                        });
+                    } catch (error) {
+                        console.error("Firestore dictionary sync failed:", error);
+                        alert(`Dictionary saved locally, but failed to sync to the cloud. Please check your internet connection and Firestore permissions. Error: ${(error as Error).message}`);
+                    }
+                }
+            }
+
+            setIsUploading(false);
+            // Switch to the 'My Dictionaries' tab to show the newly added file
+            setActiveTab('local');
+            // Increment a counter to force the LocalDictionaries component to re-mount and fetch the new list
+            setUploadCounter(c => c + 1);
+        } catch (error) {
+            console.error("Failed to save dictionary to IndexedDB:", error);
+            alert(`Failed to save dictionary locally: ${(error as Error).message}. Please try again.`);
+            setIsUploading(false);
         }
-      }
+    };
 
-      setIsUploading(false);
-      // Switch to the 'My Dictionaries' tab to show the newly added file
-      setActiveTab('local');
-      // Increment a counter to force the LocalDictionaries component to re-mount and fetch the new list
-      setUploadCounter(c => c + 1);
-    } catch (error) {
-        console.error("Failed to save dictionary to IndexedDB:", error);
-        alert(`Failed to save dictionary locally: ${(error as Error).message}. Please try again.`);
-        setIsUploading(false);
-    }
-  };
+    const handleBuiltInSelect = async (name: string, wordsFile: File, sentencesFile?: File) => {
+        try {
+            // Save the fetched dictionary to IndexedDB for persistence across sessions,
+            // marking it as a built-in dictionary so it doesn't show in "My Dictionaries".
+            await saveDictionary(name, wordsFile, null, true);
+        } catch (error) {
+            console.error("Failed to save built-in dictionary to IndexedDB:", error);
+            // This is a non-critical error for the current session.
+            // The dictionary will still load, but progress won't be saved for the next session.
+            alert("Warning: Could not save the dictionary for offline use. Your progress for this dictionary may not be saved if you close the app.");
+        }
+        onFilesSelect(name, wordsFile, sentencesFile);
+    };
 
-  const handleBuiltInSelect = async (name: string, wordsFile: File, sentencesFile?: File) => {
-    try {
-        // Save the fetched dictionary to IndexedDB for persistence across sessions,
-        // marking it as a built-in dictionary so it doesn't show in "My Dictionaries".
-        await saveDictionary(name, wordsFile, null, true);
-    } catch (error) {
-        console.error("Failed to save built-in dictionary to IndexedDB:", error);
-        // This is a non-critical error for the current session.
-        // The dictionary will still load, but progress won't be saved for the next session.
-        alert("Warning: Could not save the dictionary for offline use. Your progress for this dictionary may not be saved if you close the app.");
-    }
-    onFilesSelect(name, wordsFile, sentencesFile);
-  };
-  
-  const handleLocalDictionarySelect = (name: string, wordsFile: File) => {
-    onFilesSelect(name, wordsFile);
-  };
+    const handleLocalDictionarySelect = (name: string, wordsFile: File) => {
+        onFilesSelect(name, wordsFile);
+    };
 
-  return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Select File Source">
-      <div className="flex border-b border-slate-200 dark:border-slate-700">
-        <TabButton activeTab={activeTab} tab="built-in" onClick={setActiveTab}><Library size={16} /> Built-in</TabButton>
-        <TabButton activeTab={activeTab} tab="local" onClick={setActiveTab}><Database size={16} /> My Dictionaries</TabButton>
-        <TabButton activeTab={activeTab} tab="computer" onClick={setActiveTab}><Upload size={16} /> From Computer</TabButton>
-      </div>
-      <div className="pt-6">
-        {activeTab === 'built-in' && (
-          <BuiltInDictionaries onSelect={handleBuiltInSelect} />
-        )}
-        {activeTab === 'local' && (
-          <LocalDictionaries key={uploadCounter} onSelect={handleLocalDictionarySelect} />
-        )}
-        {activeTab === 'computer' && (
-          <FileUpload onFileUpload={handleFileUpload} isLoading={isUploading} />
-        )}
-      </div>
-    </Modal>
-  );
+    return (
+        <Modal isOpen={isOpen} onClose={onClose} title="Select File Source">
+            <div className="flex border-b border-slate-200 dark:border-slate-700">
+                <TabButton activeTab={activeTab} tab="built-in" onClick={setActiveTab}><Library size={16} /> Built-in</TabButton>
+                <TabButton activeTab={activeTab} tab="local" onClick={setActiveTab}><Database size={16} /> My Dictionaries</TabButton>
+                <TabButton activeTab={activeTab} tab="computer" onClick={setActiveTab}><Upload size={16} /> From Computer</TabButton>
+            </div>
+            <div className="pt-6">
+                {activeTab === 'built-in' && (
+                    <BuiltInDictionaries onSelect={handleBuiltInSelect} />
+                )}
+                {activeTab === 'local' && (
+                    <LocalDictionaries key={uploadCounter} onSelect={handleLocalDictionarySelect} />
+                )}
+                {activeTab === 'computer' && (
+                    <FileUpload onFileUpload={handleFileUpload} isLoading={isUploading} />
+                )}
+            </div>
+        </Modal>
+    );
 };

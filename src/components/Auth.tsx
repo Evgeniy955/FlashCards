@@ -1,7 +1,5 @@
 import React from 'react';
-// FIX: Switched to Firebase v9+ modular API to match the rest of the app.
-import { GoogleAuthProvider, signInWithPopup, signOut, type User } from 'firebase/auth';
-import { auth } from '../lib/firebase-client';
+import { auth, firebase } from '../lib/firebase-client';
 
 const GoogleIcon = () => (
     <svg className="w-5 h-5" viewBox="0 0 48 48">
@@ -14,15 +12,16 @@ const GoogleIcon = () => (
 );
 
 interface AuthProps {
-    user: User | null | undefined;
+    // Using 'any' to bypass compat vs modular type conflicts
+    user: any;
 }
 
 export const Auth: React.FC<AuthProps> = ({ user }) => {
-    
+
     const handleSignIn = async () => {
-        const provider = new GoogleAuthProvider();
+        const provider = new firebase.auth.GoogleAuthProvider();
         try {
-            await signInWithPopup(auth, provider);
+            await auth.signInWithPopup(provider);
         } catch (error) {
             console.error("Authentication failed:", error);
         }
@@ -30,7 +29,7 @@ export const Auth: React.FC<AuthProps> = ({ user }) => {
 
     const handleSignOut = async () => {
         try {
-            await signOut(auth);
+            await auth.signOut();
         } catch (error) {
             console.error("Sign out failed:", error);
         }
