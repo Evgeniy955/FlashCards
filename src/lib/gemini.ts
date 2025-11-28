@@ -169,8 +169,8 @@ export const chatWithAI = async (
 
     const nameInstruction = userName ? `The student's name is ${userName}. Use their name naturally in the conversation, especially when greeting.` : '';
 
-    const roleInstruction = mode === 'roleplay' 
-        ? `Scenario: ${scenario}. Stay strictly in character.` 
+    const roleInstruction = mode === 'roleplay'
+        ? `Scenario: ${scenario}. Stay strictly in character.`
         : `Topic: ${scenario}. Be a friendly conversational partner.`;
 
     const systemPrompt = `
@@ -205,10 +205,10 @@ export const chatWithAI = async (
     } catch (error: any) {
         console.error("Gemini chat error:", error);
         const errString = error.toString();
-        
+
         if (getProjectError(errString)) throw new Error(getProjectError(errString)!);
         if (error.status === 403 || errString.includes('403')) throw new Error("Access Denied (403). Check API Key.");
-        
+
         throw new Error("Failed to connect to AI.");
     }
 };
