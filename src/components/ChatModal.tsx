@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Modal } from './Modal';
-import { Send, Mic, MicOff, Volume2, User as UserIcon, Bot, RefreshCcw, MessageSquare, Briefcase, Coffee, Plane, Stethoscope } from 'lucide-react';
+import { Send, Mic, MicOff, Volume2, User as UserIcon, Bot, RefreshCcw, MessageSquare, Briefcase, Coffee, Plane, Stethoscope, Radio } from 'lucide-react';
 import { chatWithAI, type ChatMessage } from '../lib/gemini';
 
 interface ChatModalProps {
@@ -46,8 +46,19 @@ export const ChatModal: React.FC<ChatModalProps> = ({ isOpen, onClose, userName 
     const [isRecording, setIsRecording] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
+    // Conversation Modes: 'ptt' (Push to Talk) or 'continuous' (Hands-free with delay)
+    const [conversationMode, setConversationMode] = useState<'ptt' | 'continuous'>('ptt');
+
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const recognitionRef = useRef<any>(null);
+    const inputRef = useRef(''); // Ref to keep track of input inside closures
+    const silenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const isSendingRef = useRef(false); // To prevent duplicate sends
+
+    // Sync input ref
+    useEffect(() => {
+        inputRef.current = input;
+    }, [input]);
 
     // Scroll to bottom on new message
     useEffect(() => {
@@ -61,41 +72,90 @@ export const ChatModal: React.FC<ChatModalProps> = ({ isOpen, onClose, userName 
         }
     }, [isChatActive]);
 
+    // Cleanup on close
+    useEffect(() => {
+        if (!isOpen) {
+            stopRecognition();
+            if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
+            window.speechSynthesis.cancel();
+        }
+    }, [isOpen]);
+
     const startRecognition = () => {
         if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
             const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
 
+            // Cleanup previous instance
             if (recognitionRef.current) {
                 recognitionRef.current.abort();
             }
 
-            recognitionRef.current = new SpeechRecognition();
-            recognitionRef.current.continuous = false; // Stop after one sentence for turn-taking
-            recognitionRef.current.interimResults = false;
-            recognitionRef.current.lang = 'en-US';
+            const recognition = new SpeechRecognition();
+            recognitionRef.current = recognition;
 
-            recognitionRef.current.onstart = () => setIsRecording(true);
+            // Configuration based on mode
+            recognition.lang = 'en-US';
+            recognition.interimResults = true; // Always true to see what we are saying
 
-            recognitionRef.current.onend = () => {
-                setIsRecording(false);
+            // In Continuous mode, we handle the "continuous" flow manually via restarts
+            // to have better control over the silence detection.
+            recognition.continuous = conversationMode === 'continuous';
+
+            recognition.onstart = () => {
+                setIsRecording(true);
+                setError(null);
             };
 
-            recognitionRef.current.onerror = (event: any) => {
-                console.error("Speech recognition error", event.error);
+            recognition.onend = () => {
                 setIsRecording(false);
+
+                // PTT Mode: Send when recording stops (button released)
+                if (conversationMode === 'ptt') {
+                    // We handle sending in handleTouchEnd/MouseUp usually,
+                    // but if it stopped by itself (e.g. silence), we shouldn't auto-send unless logic demands.
+                    // PTT implies explicit control.
+                }
+
+                // Continuous Mode: If it stopped unexpectedly (not by silence timer), restart?
+                // Not necessarily. We usually stop it via the silence timer.
+            };
+
+            recognition.onerror = (event: any) => {
+                if (event.error !== 'no-speech') {
+                    console.error("Speech recognition error", event.error);
+                }
+                // Don't show error for 'no-speech' in continuous mode, just retry or ignore
                 if (event.error === 'not-allowed') {
                     setError("Microphone access denied.");
+                    setIsRecording(false);
                 }
             };
 
-            recognitionRef.current.onresult = (event: any) => {
-                const transcript = event.results[0][0].transcript;
+            recognition.onresult = (event: any) => {
+                let transcript = '';
+                for (let i = event.resultIndex; i < event.results.length; ++i) {
+                    transcript += event.results[i][0].transcript;
+                }
+
+                // Update input UI
                 setInput(transcript);
-                // We auto-process voice input to simulate a conversation
-                handleVoiceInput(transcript);
+
+                // Continuous Mode Logic
+                if (conversationMode === 'continuous') {
+                    // Reset silence timer on every result
+                    if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
+
+                    // Set new timer (3 seconds silence -> send)
+                    silenceTimerRef.current = setTimeout(() => {
+                        recognition.stop();
+                        if (transcript.trim()) {
+                            handleSendMessage(); // Send the text
+                        }
+                    }, 3000);
+                }
             };
 
-            recognitionRef.current.start();
+            recognition.start();
         } else {
             alert("Speech recognition is not supported in this browser (Try Chrome).");
         }
@@ -105,12 +165,33 @@ export const ChatModal: React.FC<ChatModalProps> = ({ isOpen, onClose, userName 
         if (recognitionRef.current) {
             recognitionRef.current.stop();
         }
+        if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
     };
 
-    const toggleRecording = () => {
+    // PTT Handlers
+    const handlePTTStart = () => {
+        if (conversationMode !== 'ptt') return;
+        setInput('');
+        startRecognition();
+    };
+
+    const handlePTTEnd = () => {
+        if (conversationMode !== 'ptt') return;
+        // Give a tiny delay to ensure last bit of speech is processed
+        setTimeout(() => {
+            stopRecognition();
+            if (inputRef.current.trim()) {
+                handleSendMessage();
+            }
+        }, 200);
+    };
+
+    // Continuous Toggle
+    const toggleContinuousSession = () => {
         if (isRecording) {
             stopRecognition();
         } else {
+            setInput('');
             startRecognition();
         }
     };
@@ -120,59 +201,64 @@ export const ChatModal: React.FC<ChatModalProps> = ({ isOpen, onClose, userName 
             window.speechSynthesis.cancel();
             const utterance = new SpeechSynthesisUtterance(text);
             utterance.lang = 'en-US';
-            // Find a good voice if possible
+
             const voices = window.speechSynthesis.getVoices();
             const preferred = voices.find(v => v.lang.startsWith('en-US') && !v.name.includes('Google')) || voices.find(v => v.lang.startsWith('en'));
             if(preferred) utterance.voice = preferred;
+
+            // When AI finishes speaking, resume listening if in Continuous mode
+            utterance.onend = () => {
+                if (conversationMode === 'continuous' && isChatActive) {
+                    // Small pause before listening again to not catch echo
+                    setTimeout(() => {
+                        setInput('');
+                        startRecognition();
+                    }, 500);
+                }
+            };
 
             window.speechSynthesis.speak(utterance);
         }
     };
 
-    const handleVoiceInput = (transcript: string) => {
-        const newMessages = [...messages, { role: 'user' as const, text: transcript }];
-        setMessages(newMessages);
-        setInput('');
-        processAIResponse(newMessages);
-    };
-
     const handleSendMessage = async (isInitial = false) => {
-        if ((!input.trim() && !isInitial) || isLoading) return;
+        // Use ref for input to ensure fresh value inside closures/async
+        const textToSend = isInitial ? '' : inputRef.current;
+
+        if ((!textToSend.trim() && !isInitial) || isLoading || isSendingRef.current) return;
+
+        isSendingRef.current = true;
 
         const newMessages = [...messages];
         if (!isInitial) {
-            newMessages.push({ role: 'user', text: input });
+            newMessages.push({ role: 'user', text: textToSend });
             setMessages(newMessages);
-            setInput('');
+            setInput(''); // Clear input
         }
 
-        processAIResponse(newMessages, isInitial);
-    };
-
-    const processAIResponse = async (currentMessages: ChatMessage[], isInitial = false) => {
         setIsLoading(true);
         setError(null);
 
         try {
-            // Determine the prompt based on mode
             const activeScenario = mode === 'roleplay' ? topic : topic;
-
-            // If initial, we pass empty history, but system prompt setup in gemini.ts uses the topic/scenario
-            const historyToSend = isInitial ? [] : currentMessages;
+            const historyToSend = isInitial ? [] : newMessages; // For initial, send empty history so prompt initializes
 
             const aiResponse = await chatWithAI(historyToSend, activeScenario, mode, userName);
 
-            const updatedMessages: ChatMessage[] = [...currentMessages, { role: 'model', text: aiResponse }];
+            const updatedMessages: ChatMessage[] = [...newMessages, { role: 'model', text: aiResponse }];
             setMessages(updatedMessages);
             speakText(aiResponse);
         } catch (err: any) {
             setError(err.message || "Failed to get response");
         } finally {
             setIsLoading(false);
+            isSendingRef.current = false;
         }
     };
 
     const handleReset = () => {
+        stopRecognition();
+        window.speechSynthesis.cancel();
         setTopic('');
         setIsChatActive(false);
         setMessages([]);
@@ -182,7 +268,7 @@ export const ChatModal: React.FC<ChatModalProps> = ({ isOpen, onClose, userName 
 
     const startScenario = (prompt: string, title: string) => {
         setMode('roleplay');
-        setTopic(prompt); // We send the prompt as the topic/scenario
+        setTopic(prompt);
         setIsChatActive(true);
     };
 
@@ -250,16 +336,38 @@ export const ChatModal: React.FC<ChatModalProps> = ({ isOpen, onClose, userName 
                     <>
                         {/* Active Chat Header */}
                         <div className="flex justify-between items-center pb-2 border-b border-slate-200 dark:border-slate-700 mb-2">
-                            <div className="flex items-center gap-2">
-                    <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                        {mode === 'roleplay' ? 'Scenario' : 'Topic'}:
-                    </span>
-                                <span className="font-medium text-indigo-600 dark:text-indigo-400 truncate max-w-[150px]">
-                        {mode === 'roleplay' ? PRESET_SCENARIOS.find(s => s.prompt === topic)?.title || 'Roleplay' : topic}
-                    </span>
+                            <div className="flex flex-col items-start">
+                                <div className="flex items-center gap-2">
+                        <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                            {mode === 'roleplay' ? 'Scenario' : 'Topic'}:
+                        </span>
+                                    <span className="font-medium text-indigo-600 dark:text-indigo-400 truncate max-w-[150px]">
+                            {mode === 'roleplay' ? PRESET_SCENARIOS.find(s => s.prompt === topic)?.title || 'Roleplay' : topic}
+                        </span>
+                                </div>
+                                <div className="flex items-center gap-4 mt-1">
+                                    <label className="flex items-center gap-1.5 cursor-pointer text-xs">
+                                        <input
+                                            type="radio"
+                                            checked={conversationMode === 'ptt'}
+                                            onChange={() => { setConversationMode('ptt'); stopRecognition(); }}
+                                            className="accent-indigo-600"
+                                        />
+                                        <span className="text-slate-600 dark:text-slate-300">Hold to Talk</span>
+                                    </label>
+                                    <label className="flex items-center gap-1.5 cursor-pointer text-xs">
+                                        <input
+                                            type="radio"
+                                            checked={conversationMode === 'continuous'}
+                                            onChange={() => { setConversationMode('continuous'); stopRecognition(); }}
+                                            className="accent-indigo-600"
+                                        />
+                                        <span className="text-slate-600 dark:text-slate-300">Continuous</span>
+                                    </label>
+                                </div>
                             </div>
                             <button onClick={handleReset} className="text-xs flex items-center gap-1 text-slate-500 hover:text-rose-500 transition-colors">
-                                <RefreshCcw size={14} /> End Chat
+                                <RefreshCcw size={14} /> End
                             </button>
                         </div>
 
@@ -309,24 +417,50 @@ export const ChatModal: React.FC<ChatModalProps> = ({ isOpen, onClose, userName 
 
                         {/* Input Area */}
                         <div className="flex items-center gap-2 mt-auto">
-                            <button
-                                onClick={toggleRecording}
-                                className={`p-3 rounded-full transition-all duration-300 ${
-                                    isRecording
-                                        ? 'bg-rose-500 text-white shadow-lg shadow-rose-500/30 scale-110 animate-pulse'
-                                        : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-600'
-                                }`}
-                                title={isRecording ? "Stop Listening" : "Speak"}
-                            >
-                                {isRecording ? <MicOff size={24} /> : <Mic size={24} />}
-                            </button>
+                            {conversationMode === 'ptt' ? (
+                                // Push to Talk Button
+                                <button
+                                    onMouseDown={handlePTTStart}
+                                    onMouseUp={handlePTTEnd}
+                                    onMouseLeave={handlePTTEnd}
+                                    onTouchStart={(e) => { e.preventDefault(); handlePTTStart(); }}
+                                    onTouchEnd={(e) => { e.preventDefault(); handlePTTEnd(); }}
+                                    disabled={isLoading}
+                                    className={`p-4 rounded-full transition-all duration-200 shadow-md flex-shrink-0 ${
+                                        isRecording
+                                            ? 'bg-rose-500 text-white scale-110 shadow-rose-500/40'
+                                            : 'bg-indigo-600 text-white hover:bg-indigo-700'
+                                    } disabled:opacity-50 disabled:cursor-not-allowed`}
+                                    title="Hold to Speak"
+                                >
+                                    {isRecording ? <Mic size={24} /> : <MicOff size={24} />}
+                                </button>
+                            ) : (
+                                // Continuous Mode Toggle
+                                <button
+                                    onClick={toggleContinuousSession}
+                                    disabled={isLoading}
+                                    className={`p-4 rounded-full transition-all duration-300 shadow-md flex-shrink-0 ${
+                                        isRecording
+                                            ? 'bg-rose-500 text-white animate-pulse shadow-rose-500/40'
+                                            : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-600'
+                                    } disabled:opacity-50`}
+                                    title={isRecording ? "Stop Conversation" : "Start Continuous Conversation"}
+                                >
+                                    {isRecording ? <Mic size={24} /> : <MicOff size={24} />}
+                                </button>
+                            )}
 
                             <form onSubmit={(e) => { e.preventDefault(); handleSendMessage(); }} className="flex-1 flex gap-2">
                                 <input
                                     type="text"
                                     value={input}
                                     onChange={(e) => setInput(e.target.value)}
-                                    placeholder={isRecording ? "Listening..." : "Type a message..."}
+                                    placeholder={
+                                        isRecording
+                                            ? (conversationMode === 'continuous' ? "Listening (pauses auto-send)..." : "Listening...")
+                                            : (conversationMode === 'ptt' ? "Hold mic to speak" : "Press mic to start")
+                                    }
                                     className="flex-1 p-3 rounded-full border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 focus:outline-none focus:border-indigo-500 dark:focus:border-indigo-400 transition-colors"
                                 />
                                 <button
