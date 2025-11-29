@@ -841,20 +841,33 @@ const App: React.FC = () => {
             });
         } else {
             setIsChangingWord(true);
-            // FIX: Increased timeout from 250ms to 350ms to ensure CSS transition (duration-300) completes
-            // before swapping data, preventing the next card's back side from flashing.
-            setTimeout(() => {
-                updateWordIndex();
-                setIsFlipped(false);
-                setIsChangingWord(false);
-            }, 350);
+
+            // Conditional Delay Logic
+            if (isFlipped) {
+                // SLOW / SAFE: Hide back side before swap
+                // Wait for CSS duration (300ms) + buffer
+                setTimeout(() => {
+                    updateWordIndex();
+                    setIsFlipped(false);
+                    // Buffer to ensure render update
+                    setTimeout(() => {
+                        setIsChangingWord(false);
+                    }, 100);
+                }, 350);
+            } else {
+                // FAST: Standard animation (300ms match CSS)
+                setTimeout(() => {
+                    updateWordIndex();
+                    setIsChangingWord(false);
+                }, 300);
+            }
         }
     };
 
     const handleKnow = () => {
         sounds.play('correct');
         if (isPracticeMode) {
-            advanceToNextWord(() => true, isFlipped);
+            advanceToNextWord(() => true, false); // Use standard animation for safety in practice
             return;
         }
         const isNewlyLearned = !learnedWords.has(getWordId(currentWord));
@@ -865,7 +878,7 @@ const App: React.FC = () => {
             setWordStats(prev => {
                 const newMap = new Map<string, WordStats>(prev);
                 const stats = newMap.get(wordId) || { knowCount: 0, totalAttempts: 0 };
-                newMap.set(wordId, { 
+                newMap.set(wordId, {
                     knowCount: stats.knowCount + 1,
                     totalAttempts: stats.totalAttempts + 1,
                 });
@@ -878,7 +891,7 @@ const App: React.FC = () => {
             const nextReviewDate = new Date();
             nextReviewDate.setDate(nextReviewDate.getDate() + SRS_INTERVALS[nextStage]);
             setLearnedWords(prev => new Map(prev).set(wordId, { srsStage: nextStage, nextReviewDate: nextReviewDate.toISOString() }));
-    
+
             if (isDontKnowMode && selectedSetIndex !== null) {
                 setDontKnowWords((prev: Map<number, Word[]>) => {
                     const newMap = new Map(prev);
@@ -894,13 +907,13 @@ const App: React.FC = () => {
                 });
             }
             return true;
-        }, isFlipped);
+        }, false); // Do not force instant, use animation
     };
 
     const handleDontKnow = () => {
         sounds.play('incorrect');
         if (isPracticeMode) {
-            advanceToNextWord(() => true, isFlipped);
+            advanceToNextWord(() => true, false);
             return;
         }
         recordStudyActivity(false);
@@ -911,7 +924,7 @@ const App: React.FC = () => {
             setWordStats(prev => {
                 const newMap = new Map<string, WordStats>(prev);
                 const stats = newMap.get(wordId) || { knowCount: 0, totalAttempts: 0 };
-                newMap.set(wordId, { 
+                newMap.set(wordId, {
                     knowCount: stats.knowCount,
                     totalAttempts: stats.totalAttempts + 1,
                 });
@@ -936,13 +949,13 @@ const App: React.FC = () => {
                 });
             }
             return true;
-        }, isFlipped);
+        }, false); // Do not force instant
     };
 
     const handleFlip = useCallback(() => {
         if (isDontKnowMode && answerState !== 'idle' && trainingMode === 'write') return;
         if (isDontKnowMode && trainingMode === 'guess' && isFlipped) return;
-        
+
         sounds.play('flip');
         setIsFlipped(prev => !prev);
     }, [isDontKnowMode, answerState, trainingMode, isFlipped]);
@@ -1035,7 +1048,7 @@ const App: React.FC = () => {
 
         const correctAnswer = translationMode === 'standard' ? currentWord.lang2 : currentWord.lang1;
         const simpleIsCorrect = userAnswer.trim().toLowerCase() === correctAnswer.toLowerCase();
-        
+
         let finalIsCorrect = simpleIsCorrect;
         let finalFeedback = '';
 
@@ -1053,7 +1066,7 @@ const App: React.FC = () => {
                 setIsValidatingAnswer(false);
             }
         }
-        
+
         recordStudyActivity(finalIsCorrect && !learnedWords.has(getWordId(currentWord)));
         setAiFeedback(finalFeedback);
 
@@ -1082,7 +1095,7 @@ const App: React.FC = () => {
             setUserAnswer('');
             setAiFeedback('');
             return true;
-        }, isFlipped);
+        }, false); // Pass false for animation
     };
 
     const handleGuess = (isCorrect: boolean) => {
@@ -1127,7 +1140,7 @@ const App: React.FC = () => {
             setIsFlipped(true);
         }
     };
-    
+
     const handleGenerateSentence = async () => {
         if (!currentWord) return;
         setIsGeneratingSentence(true);
@@ -1164,7 +1177,7 @@ const App: React.FC = () => {
             setLearnedWords(new Map());
             setDontKnowWords(new Map());
             setWordStats(new Map());
-            setSessionActive(false); 
+            setSessionActive(false);
         }
     };
 
@@ -1187,7 +1200,7 @@ const App: React.FC = () => {
 
     const renderFlashcardSection = () => {
         if (reviewWords.length === 0 || !currentWord || !currentSet) {
-             return null;
+            return null;
         }
 
         const counterText = getCounterText();
@@ -1239,16 +1252,16 @@ const App: React.FC = () => {
                 <div className="w-full text-center text-sm text-slate-500 dark:text-slate-400 mb-1">{counterText}</div>
                 <ProgressBar current={sessionProgress} total={sessionTotal} />
                 <div className={`w-full transition-all duration-300 ease-in-out transform ${isChangingWord ? 'opacity-0 -translate-x-12 scale-95 rotate-[-2deg]' : 'opacity-100 translate-x-0 scale-100 rotate-0'}`}>
-                    <Flashcard 
-                        word={currentWord} 
-                        isFlipped={isFlipped} 
-                        onFlip={handleFlip} 
-                        exampleSentence={exampleSentence} 
-                        isChanging={isChangingWord} 
-                        isInstantChange={isInstantChange} 
-                        translationMode={translationMode} 
-                        lang1={currentSet.lang1} 
-                        knowAttempts={knowAttempts} 
+                    <Flashcard
+                        word={currentWord}
+                        isFlipped={isFlipped}
+                        onFlip={handleFlip}
+                        exampleSentence={exampleSentence}
+                        isChanging={isChangingWord}
+                        isInstantChange={isInstantChange}
+                        translationMode={translationMode}
+                        lang1={currentSet.lang1}
+                        knowAttempts={knowAttempts}
                         totalAttempts={totalAttempts}
                         onGenerateContext={handleGenerateSentence}
                         isGeneratingContext={isGeneratingSentence}
@@ -1305,7 +1318,7 @@ const App: React.FC = () => {
     if (!loadedDictionary) {
         return (
             <div className="min-h-screen flex flex-col">
-                 <header className="relative z-10 w-full p-4 sm:p-6 flex justify-end">
+                <header className="relative z-10 w-full p-4 sm:p-6 flex justify-end">
                     <div className="flex items-center gap-2">
                         <Tooltip content="Toggle Dark Mode">
                             <ThemeToggle theme={theme} setTheme={setTheme} />
@@ -1365,16 +1378,16 @@ const App: React.FC = () => {
                     <div className="flex items-center gap-3">
                         {/* Gamification: Daily Streak */}
                         <Tooltip content="Your daily study streak" position="left">
-                            <div 
+                            <div
                                 className={`hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full font-semibold text-sm transition-colors ${
-                                    currentStreak > 0 
-                                    ? "bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400" 
-                                    : "bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500"
-                                }`} 
+                                    currentStreak > 0
+                                        ? "bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400"
+                                        : "bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500"
+                                }`}
                             >
-                                <Flame 
-                                    size={18} 
-                                    className={currentStreak > 0 ? "fill-orange-500 text-orange-600" : "text-slate-400 dark:text-slate-500"} 
+                                <Flame
+                                    size={18}
+                                    className={currentStreak > 0 ? "fill-orange-500 text-orange-600" : "text-slate-400 dark:text-slate-500"}
                                 />
                                 <span>{currentStreak}</span>
                             </div>
@@ -1411,24 +1424,14 @@ const App: React.FC = () => {
                                 </button>
                             </Tooltip>
                         </div>
-
-                        {/* Right: Chat Button - REMOVED for this prompt iteration but likely desired */}
-                        {/* <div className="absolute right-0 top-1/2 -translate-y-1/2">
-                            <Tooltip content="Conversation Practice" position="left">
-                                <button onClick={() => setIsChatModalOpen(true)} className="flex items-center gap-2 py-1 px-3 bg-white dark:bg-slate-800 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors shadow-sm dark:shadow-none border border-slate-200 dark:border-slate-700 text-indigo-600 dark:text-indigo-400 font-medium">
-                                    <MessageCircle size={18} />
-                                    <span className="hidden sm:inline">Chat</span>
-                                </button>
-                            </Tooltip>
-                        </div> */}
                     </div>
                 )}
 
                 {/* Set Selector - Hidden in Zen Mode */}
                 {!isZenMode && (
-                    <SetSelector 
-                        sets={loadedDictionary.sets} 
-                        selectedSetIndex={selectedSetIndex} 
+                    <SetSelector
+                        sets={loadedDictionary.sets}
+                        selectedSetIndex={selectedSetIndex}
                         onSelectSet={handleSelectSet}
                         learnedWords={learnedWords}
                     />
