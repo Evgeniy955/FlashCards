@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 import { Volume2, Check, Sparkles, Loader2, RefreshCw, AlertCircle, Settings, X } from 'lucide-react';
 import type { Word, TranslationMode } from '../types';
@@ -50,26 +49,48 @@ export const Flashcard: React.FC<FlashcardProps> = ({
   const [isDragging, setIsDragging] = useState(false);
   const cardRef = useRef<HTMLDivElement>(null);
 
-  // Load voices on mount
+  // Load saved settings on mount
+  useEffect(() => {
+      const savedVoice = localStorage.getItem('fwt_voice_uri');
+      const savedRate = localStorage.getItem('fwt_speech_rate');
+      if (savedVoice) setSelectedVoiceURI(savedVoice);
+      if (savedRate) setSpeechRate(parseFloat(savedRate));
+  }, []);
+
+  // Load voices
   useEffect(() => {
     const loadVoices = () => {
         if (!('speechSynthesis' in globalThis)) return;
         
-        const allVoices = globalThis.speechSynthesis.getVoices();
-        // Filter primarily for English voices, but keep others just in case
+        let allVoices = globalThis.speechSynthesis.getVoices();
+        
+        // Retry if voices are empty (common Chrome/Android bug)
+        if (allVoices.length === 0) {
+            setTimeout(loadVoices, 100);
+            return;
+        }
+
+        // Filter primarily for English voices, but keep others just in case user wants mixed
         const sortedVoices = allVoices.sort((a, b) => {
             // Prioritize English
-            if (a.lang.startsWith('en') && !b.lang.startsWith('en')) return -1;
-            if (!a.lang.startsWith('en') && b.lang.startsWith('en')) return 1;
+            const aEn = a.lang.startsWith('en');
+            const bEn = b.lang.startsWith('en');
+            if (aEn && !bEn) return -1;
+            if (!aEn && bEn) return 1;
+            // Prioritize Google/Microsoft high quality voices
+            const aHQ = a.name.includes('Google') || a.name.includes('Microsoft') || a.name.includes('Premium');
+            const bHQ = b.name.includes('Google') || b.name.includes('Microsoft') || b.name.includes('Premium');
+            if (aHQ && !bHQ) return -1;
+            if (!aHQ && bHQ) return 1;
             return a.name.localeCompare(b.name);
         });
         
         setVoices(sortedVoices);
 
-        // Auto-select a default English voice if none selected
+        // If we have no selection yet, or the saved selection is invalid/missing, pick a default
         if (!selectedVoiceURI && sortedVoices.length > 0) {
-            // Try to find a high quality voice first
-            const preferred = sortedVoices.find(v => v.lang.startsWith('en-US') && !v.name.includes('Google')) 
+            const preferred = sortedVoices.find(v => v.lang === 'en-US' && !v.name.includes('Google')) // System US
+                           || sortedVoices.find(v => v.lang.startsWith('en-US')) 
                            || sortedVoices.find(v => v.lang.startsWith('en')) 
                            || sortedVoices[0];
             if (preferred) {
@@ -80,7 +101,6 @@ export const Flashcard: React.FC<FlashcardProps> = ({
 
     loadVoices();
     
-    // Some browsers load voices asynchronously
     if ('speechSynthesis' in globalThis) {
         globalThis.speechSynthesis.onvoiceschanged = loadVoices;
     }
@@ -90,13 +110,23 @@ export const Flashcard: React.FC<FlashcardProps> = ({
             globalThis.speechSynthesis.onvoiceschanged = null;
         }
     };
-  }, []); // Run once on mount, but onvoiceschanged handles updates
+  }, [selectedVoiceURI]); // Dependency ensures we re-check if selectedURI is valid
+
+  const handleVoiceChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+      const uri = e.target.value;
+      setSelectedVoiceURI(uri);
+      localStorage.setItem('fwt_voice_uri', uri);
+  };
+
+  const handleRateChange = (rate: number) => {
+      setSpeechRate(rate);
+      localStorage.setItem('fwt_speech_rate', rate.toString());
+  }
 
   // Reset drag state when word changes
   useEffect(() => {
     setDragOffset({ x: 0, y: 0 });
     setIsDragging(false);
-    // Close settings when card changes
     setShowSettings(false);
   }, [word]);
 
@@ -110,29 +140,29 @@ export const Flashcard: React.FC<FlashcardProps> = ({
 
     globalThis.speechSynthesis.cancel();
 
-    // Get the latest voices directly from the API to ensure we have valid objects (Mobile fix)
+    // Get fresh voices list
     const currentVoices = globalThis.speechSynthesis.getVoices();
-    const voice = currentVoices.find(v => v.voiceURI === selectedVoiceURI) || currentVoices.find(v => v.lang.startsWith('en'));
+    // Find the selected voice object
+    const voice = currentVoices.find(v => v.voiceURI === selectedVoiceURI) 
+               || currentVoices.find(v => v.lang.startsWith('en-US')) 
+               || currentVoices.find(v => v.lang.startsWith('en'));
 
     const wordToSpeak = word.lang2;
     const wordUtterance = new SpeechSynthesisUtterance(wordToSpeak);
     
-    // CRITICAL FIX FOR MOBILE: Sync the language with the voice
+    // Apply voice settings
     if (voice) {
         wordUtterance.voice = voice;
-        wordUtterance.lang = voice.lang; 
+        wordUtterance.lang = voice.lang; // Important for accent!
     } else {
         wordUtterance.lang = 'en-US';
     }
-    
     wordUtterance.rate = speechRate;
 
     if (exampleSentence) {
       wordUtterance.onend = () => {
         setTimeout(() => {
-          // Strip out markdown/emoji for cleaner speech
           const cleanText = exampleSentence.replace(/[*📖🔗✍️]/g, '');
-          
           const sentenceUtterance = new SpeechSynthesisUtterance(cleanText);
           
           if (voice) {
@@ -141,7 +171,6 @@ export const Flashcard: React.FC<FlashcardProps> = ({
           } else {
               sentenceUtterance.lang = 'en-US';
           }
-          
           sentenceUtterance.rate = speechRate;
           globalThis.speechSynthesis.speak(sentenceUtterance);
         }, 300);
@@ -164,11 +193,8 @@ export const Flashcard: React.FC<FlashcardProps> = ({
   }
 
   // --- Touch / Swipe Handlers ---
-
   const handleTouchStart = (e: React.TouchEvent | React.MouseEvent) => {
-    // Don't trigger swipe on button clicks or inputs
     if ((e.target as HTMLElement).closest('button') || (e.target as HTMLElement).closest('select')) return;
-
     const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
     const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
     setDragStart({ x: clientX, y: clientY });
@@ -177,40 +203,30 @@ export const Flashcard: React.FC<FlashcardProps> = ({
 
   const handleTouchMove = (e: React.TouchEvent | React.MouseEvent) => {
     if (!isDragging || !dragStart) return;
-
     const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
     const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
-
     const deltaX = clientX - dragStart.x;
     const deltaY = clientY - dragStart.y;
-
-    // Only move if it looks like a horizontal swipe
     if (Math.abs(deltaX) > 10) {
-        setDragOffset({ x: deltaX, y: deltaY * 0.3 }); // Dampen Y movement
+        setDragOffset({ x: deltaX, y: deltaY * 0.3 });
     }
   };
 
   const handleTouchEnd = () => {
     if (!isDragging) return;
-
-    const threshold = 100; // px to trigger action
+    const threshold = 100;
     if (dragOffset.x > threshold && onSwipeRight) {
-        onSwipeRight(); // Swipe Right -> Know
+        onSwipeRight();
     } else if (dragOffset.x < -threshold && onSwipeLeft) {
-        onSwipeLeft(); // Swipe Left -> Don't Know
+        onSwipeLeft();
     }
-
-    // Reset
     setIsDragging(false);
     setDragStart(null);
     setDragOffset({ x: 0, y: 0 });
   };
 
-  // Prevent clicking to flip if we were dragging or in settings mode
   const handleFlipDuringChange = (e: React.MouseEvent) => {
-    // If interacting with settings, don't flip
     if (showSettings) return;
-    
     if (isChanging || Math.abs(dragOffset.x) > 5) {
       return;
     }
@@ -228,15 +244,13 @@ export const Flashcard: React.FC<FlashcardProps> = ({
     return 'text-4xl sm:text-5xl';
   };
 
-  // Dynamic style for dragging
   const cardStyle = {
     perspective: '1000px',
     transform: `translateX(${dragOffset.x}px) translateY(${dragOffset.y}px) rotate(${dragOffset.x * 0.05}deg)`,
     transition: isDragging ? 'none' : 'transform 0.3s ease-out, opacity 0.3s',
-    opacity: isChanging ? 0 : 1 - Math.abs(dragOffset.x) / 500 // Fade out slightly on far drags
+    opacity: isChanging ? 0 : 1 - Math.abs(dragOffset.x) / 500
   };
 
-  // Overlay for swipe feedback
   const swipeOverlay = (
       <>
         <div 
@@ -277,16 +291,16 @@ export const Flashcard: React.FC<FlashcardProps> = ({
           
           <div className="w-full max-w-xs space-y-4">
               <div>
-                  <label className={`block text-xs mb-1 ${isStandardMode ? 'text-indigo-100' : 'text-slate-500 dark:text-slate-400'}`}>Voice</label>
+                  <label className={`block text-xs mb-1 ${isStandardMode ? 'text-indigo-100' : 'text-slate-500 dark:text-slate-400'}`}>Voice Accent</label>
                   <select 
                     value={selectedVoiceURI}
-                    onChange={(e) => setSelectedVoiceURI(e.target.value)}
+                    onChange={handleVoiceChange}
                     className="w-full p-2 text-sm rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:outline-none"
                     onClick={(e) => e.stopPropagation()}
                   >
                       {voices.map(v => (
                           <option key={v.voiceURI} value={v.voiceURI}>
-                              {v.name.length > 30 ? v.name.substring(0, 30) + '...' : v.name} ({v.lang})
+                              {v.name.replace(/Microsoft |Google |English /g, '')} ({v.lang})
                           </option>
                       ))}
                   </select>
@@ -298,7 +312,7 @@ export const Flashcard: React.FC<FlashcardProps> = ({
                       {[0.6, 0.8, 1, 1.2].map(rate => (
                           <button
                             key={rate}
-                            onClick={(e) => { e.stopPropagation(); setSpeechRate(rate); }}
+                            onClick={(e) => { e.stopPropagation(); handleRateChange(rate); }}
                             className={`px-3 py-1 rounded-full text-xs font-bold transition-colors ${speechRate === rate ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 dark:text-slate-300 hover:text-white'}`}
                           >
                               {rate}x
@@ -422,27 +436,32 @@ export const Flashcard: React.FC<FlashcardProps> = ({
 
   return (
     <div 
-        ref={cardRef}
-        className="w-full aspect-[3/2] cursor-pointer group touch-none select-none" 
+      className="relative w-full aspect-[4/3] sm:aspect-[3/2] cursor-pointer select-none"
+      style={{ perspective: '1000px' }}
+    >
+      <div 
+        className="w-full h-full relative"
         style={cardStyle}
         onClick={handleFlipDuringChange}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
         onMouseDown={handleTouchStart}
         onMouseMove={handleTouchMove}
         onMouseUp={handleTouchEnd}
         onMouseLeave={handleTouchEnd}
-        onTouchStart={handleTouchStart}
-        onTouchMove={handleTouchMove}
-        onTouchEnd={handleTouchEnd}
-        role="button"
-        tabIndex={0}
-        aria-label={`Flashcard for ${lang1} word ${word.lang1}. Drag right for Know, Left for Don't Know.`}
-    >
-      <div 
-        className={`relative w-full h-full ${!isInstantChange ? 'transition-transform duration-500' : ''}`}
-        style={{ transformStyle: 'preserve-3d', transform: isFlipped ? 'rotateY(180deg)' : 'rotateY(0deg)' }}
+        ref={cardRef}
       >
-        {frontContent}
-        {backContent}
+        <div 
+            className="w-full h-full relative transition-transform duration-500"
+            style={{ 
+                transformStyle: 'preserve-3d', 
+                transform: isFlipped ? 'rotateY(180deg)' : 'rotateY(0deg)' 
+            }}
+        >
+            {frontContent}
+            {backContent}
+        </div>
       </div>
     </div>
   );
