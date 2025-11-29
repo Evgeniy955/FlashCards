@@ -18,7 +18,17 @@ export const generateExampleSentence = async (word: string): Promise<string> => 
     try {
         const response = await ai.models.generateContent({
             model: 'gemini-2.5-flash',
-            contents: `Generate a short, simple, and memorable example sentence in English containing the word "${word}". Return ONLY the sentence text. Do not include the translation or any explanations.`,
+            contents: `
+            Analyze the English word "${word}". 
+            Create a concise "Flashcard Content" for an English learner.
+            
+            Output format must be exactly like this (keep the emojis):
+            📖 **Meaning:** [A very simple definition in English]
+            🔗 **Link:** [A common collocation or 2-3 word phrase with this word]
+            ✍️ **Example:** [A vivid, memorable sentence using the word]
+            
+            Do not include the translation to Russian/Ukrainian. Keep it simple (A2-B1 level).
+            `,
         });
         return response.text?.trim() || '';
     } catch (error: any) {
@@ -115,8 +125,8 @@ export const chatWithAI = async (
 
     const nameInstruction = userName ? `The student's name is ${userName}. Use their name naturally in the conversation, especially when greeting.` : '';
 
-    const roleInstruction = mode === 'roleplay' 
-        ? `Scenario: ${scenario}. Stay strictly in character.` 
+    const roleInstruction = mode === 'roleplay'
+        ? `Scenario: ${scenario}. Stay strictly in character.`
         : `Topic: ${scenario}. Be a friendly conversational partner.`;
 
     const systemPrompt = `
@@ -151,11 +161,11 @@ export const chatWithAI = async (
     } catch (error: any) {
         console.error("Gemini chat error:", error);
         const errString = error.toString();
-        
+
         const projectError = getProjectError(errString);
         if (projectError) throw new Error(projectError);
         if (error.status === 403 || errString.includes('403')) throw new Error("Access Denied (403). Check API Key.");
-        
+
         throw new Error("Failed to connect to AI.");
     }
 };
