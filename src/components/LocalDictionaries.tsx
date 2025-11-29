@@ -1,5 +1,6 @@
+
 import React, { useState, useEffect, useCallback } from 'react';
-import { Database, Loader2, Trash2, Cloud } from 'lucide-react';
+import { Database, Loader2, Trash2, Cloud, RefreshCw } from 'lucide-react';
 import { getDictionary, deleteDictionary, saveDictionary, getAllDictionaryDetails } from '../lib/indexedDB';
 import { useAuthState } from 'react-firebase-hooks/auth';
 import { auth, db } from '../lib/firebase-client';
@@ -14,6 +15,7 @@ interface DictionaryStatus {
     fileName: string; // full file name, e.g., "List1.xlsx"
     isLocal: boolean;
     isRemote: boolean;
+    isNewerRemote?: boolean;
 }
 
 const FIRESTORE_DOC_SIZE_LIMIT = 950 * 1024; // 950 KB to be safe from 1 MiB limit
@@ -22,7 +24,7 @@ export const LocalDictionaries: React.FC<LocalDictionariesProps> = ({ onSelect }
   const [savedDicts, setSavedDicts] = useState<DictionaryStatus[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [actionInProgress, setActionInProgress] = useState<{ name: string, type: 'select' | 'delete' } | null>(null);
+  const [actionInProgress, setActionInProgress] = useState<{ name: string, type: 'select' | 'delete' | 'sync' } | null>(null);
   const [user] = useAuthState(auth);
 
   const syncAndFetchDictionaries = useCallback(async () => {
@@ -57,32 +59,61 @@ export const LocalDictionaries: React.FC<LocalDictionariesProps> = ({ onSelect }
         allLocalDicts = await getAllDictionaryDetails(user?.uid); // Re-fetch after cleanup
       }
 
-      // Step 3: Two-way sync for active dictionaries if user is logged in
+      // Step 3: Two-way sync (Check for missing OR newer files)
       if (user) {
         const allLocalDictsMap = new Map(allLocalDicts.map(dict => [dict.fileName, dict]));
         const userUploadedLocalDictsMap = new Map(allLocalDicts.filter(d => !d.isBuiltIn).map(d => [d.fileName, d]));
 
-        // 3a. Upload local-only dictionaries
+        // 3a. Upload local-only dictionaries or update if local is newer
         for (const [fileName, localData] of userUploadedLocalDictsMap.entries()) {
-            if (!remoteDictMap.has(fileName)) {
-                const file = base64ToFile(localData.content, localData.fileName, localData.mimeType);
+            const remoteData = remoteDictMap.get(fileName);
+            let shouldUpload = false;
+
+            if (!remoteData) {
+                shouldUpload = true;
+            } else {
+                // Compare timestamps. 
+                // Firestore Timestamp conversion:
+                const remoteTime = remoteData.lastModified?.toDate ? remoteData.lastModified.toDate().getTime() : new Date(remoteData.lastModified).getTime();
+                // If local is significantly newer (> 2 seconds difference to account for clock drift/processing)
+                if (localData.lastModified > remoteTime + 2000) {
+                    shouldUpload = true;
+                }
+            }
+
+            if (shouldUpload) {
+                const file = base64ToFile(localData.content, localData.fileName, localData.mimeType, localData.lastModified);
                 if (file.size > FIRESTORE_DOC_SIZE_LIMIT) continue;
-                // FIX: Use compat API for Firestore
+                
                 const dictionaryDocRef = db.collection('users').doc(user.uid).collection('dictionaries').doc(fileName);
                 await dictionaryDocRef.set({
                     name: fileName,
                     content: localData.content,
                     mimeType: localData.mimeType,
-                    lastModified: new Date(localData.lastModified),
+                    lastModified: new Date(localData.lastModified), // Store upload time matches local file mod time
                 });
             }
         }
 
-        // 3b. Download remote-only dictionaries
+        // 3b. Download remote-only dictionaries or update if remote is newer
         for (const [fileName, remoteData] of remoteDictMap.entries()) {
-            if (!allLocalDictsMap.has(fileName)) {
+            const localData = allLocalDictsMap.get(fileName);
+            let shouldDownload = false;
+
+            const remoteTime = remoteData.lastModified?.toDate ? remoteData.lastModified.toDate().getTime() : new Date(remoteData.lastModified).getTime();
+
+            if (!localData) {
+                shouldDownload = true;
+            } else {
+                 // If remote is significantly newer (> 2 seconds)
+                 if (remoteTime > localData.lastModified + 2000) {
+                     shouldDownload = true;
+                 }
+            }
+
+            if (shouldDownload) {
                 const dictBaseName = remoteData.name.replace(/\.xlsx$/i, '');
-                const file = base64ToFile(remoteData.content, remoteData.name, remoteData.mimeType);
+                const file = base64ToFile(remoteData.content, remoteData.name, remoteData.mimeType, remoteTime);
                 await saveDictionary(dictBaseName, file, user.uid);
             }
         }
@@ -94,7 +125,6 @@ export const LocalDictionaries: React.FC<LocalDictionariesProps> = ({ onSelect }
 
       const finalRemoteDicts = new Map<string, any>();
       if (user) {
-          // FIX: Use compat API for Firestore
           const finalQuerySnapshot = await db.collection('users').doc(user.uid).collection('dictionaries').get();
           finalQuerySnapshot.forEach(docSnap => {
               if (!docSnap.data().deleted) {
@@ -114,7 +144,7 @@ export const LocalDictionaries: React.FC<LocalDictionariesProps> = ({ onSelect }
       setSavedDicts(statusList);
 
     } catch (err) {
-      setError('Could not load or sync dictionaries. Please check your connection and security rules.');
+      setError('Could not load or sync dictionaries. Please check your connection.');
       console.error(err);
     } finally {
       setIsLoading(false);
@@ -147,23 +177,13 @@ export const LocalDictionaries: React.FC<LocalDictionariesProps> = ({ onSelect }
       setActionInProgress({ name: dict.name, type: 'delete' });
       setError(null);
       try {
-        // If the user is logged in and the dictionary is on the server,
-        // the authoritative action is to mark it as deleted on the server.
-        // The sync process will then handle removing it from all local instances.
         if (user && dict.isRemote) {
-          // FIX: Use compat API for Firestore
           const dictionaryDocRef = db.collection('users').doc(user.uid).collection('dictionaries').doc(dict.fileName);
           await dictionaryDocRef.update({ deleted: true, deletedAt: new Date() });
-        }
-        // If it's only a local dictionary (e.g., user is offline or not logged in),
-        // just delete it from the local device.
-        else if (dict.isLocal) {
+        } else if (dict.isLocal) {
           await deleteDictionary(dict.name, user?.uid);
         }
-        
-        // Trigger a fresh sync to update the UI everywhere consistently.
         await syncAndFetchDictionaries();
-
       } catch (err) {
         setError(`Failed to delete "${dict.name}". Please check your connection and try again.`);
         console.error(err);
@@ -182,7 +202,14 @@ export const LocalDictionaries: React.FC<LocalDictionariesProps> = ({ onSelect }
   }
   
   if (error) {
-     return <p className="text-center text-rose-500 dark:text-rose-400">{error}</p>;
+     return (
+       <div className="text-center space-y-2">
+         <p className="text-rose-500 dark:text-rose-400">{error}</p>
+         <button onClick={syncAndFetchDictionaries} className="text-indigo-600 dark:text-indigo-400 hover:underline flex items-center justify-center gap-2 w-full">
+           <RefreshCw size={16} /> Retry
+         </button>
+       </div>
+     );
   }
 
   return (

@@ -1,3 +1,4 @@
+
 // Converts a File object to a base64 string
 export const fileToBase64 = (file: File): Promise<string> => {
     return new Promise((resolve, reject) => {
@@ -14,7 +15,7 @@ export const fileToBase64 = (file: File): Promise<string> => {
 };
 
 // Converts a base64 string back to a File object
-export const base64ToFile = (base64: string, filename: string, mimeType: string): File => {
+export const base64ToFile = (base64: string, filename: string, mimeType: string, lastModified?: number): File => {
     const byteCharacters = atob(base64);
     const byteNumbers = new Array(byteCharacters.length);
     for (let i = 0; i < byteCharacters.length; i++) {
@@ -22,5 +23,5 @@ export const base64ToFile = (base64: string, filename: string, mimeType: string)
     }
     const byteArray = new Uint8Array(byteNumbers);
     const blob = new Blob([byteArray], { type: mimeType });
-    return new File([blob], filename, { type: mimeType });
+    return new File([blob], filename, { type: mimeType, lastModified: lastModified || Date.now() });
 };
