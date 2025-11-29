@@ -331,6 +331,31 @@ export const Flashcard: React.FC<FlashcardProps> = ({
             {swipeOverlay}
 
             <div className="absolute top-4 right-4 flex items-center gap-1 z-10">
+
+                {/* AI Generation Button (Moved here) */}
+                {onGenerateContext && (
+                    <Tooltip content={exampleSentence ? "Regenerate with AI" : "Magic Example (AI)"} position="bottom">
+                        <button
+                            type="button"
+                            onClick={handleGenerateClick}
+                            disabled={isGeneratingContext}
+                            className={`p-2 transition-colors rounded-full ${
+                                isStandardMode
+                                    ? 'text-indigo-200 hover:text-white hover:bg-indigo-600'
+                                    : 'text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300'
+                            }`}
+                        >
+                            {isGeneratingContext ? (
+                                <Loader2 size={20} className="animate-spin" />
+                            ) : exampleSentence ? (
+                                <RefreshCw size={20} />
+                            ) : (
+                                <Sparkles size={20} />
+                            )}
+                        </button>
+                    </Tooltip>
+                )}
+
                 <Tooltip content="Voice Settings" position="left">
                     <button
                         type="button"
@@ -366,58 +391,17 @@ export const Flashcard: React.FC<FlashcardProps> = ({
                 <div className="flex flex-col items-center w-full h-full justify-center">
                     <span className={`${getFontSizeClass(backWord)} font-bold ${isStandardMode ? 'text-white' : 'text-slate-900 dark:text-white'}`}>{backWord}</span>
 
-                    <div className="mt-4 flex flex-col items-center w-full px-4 flex-grow overflow-hidden">
-                        {exampleSentence ? (
-                            <div className="flex flex-col items-center gap-2 w-full h-full">
-                                <div className={`text-left w-full overflow-y-auto scrollbar-thin ${isStandardMode ? 'text-indigo-100 dark:text-indigo-200' : 'text-slate-600 dark:text-slate-300'} text-sm whitespace-pre-line flex-grow`}>
+                    <div className="mt-4 flex flex-col items-center w-full px-4 flex-grow overflow-hidden justify-center">
+                        {exampleSentence && (
+                            <div className="flex flex-col items-center gap-2 w-full max-h-full">
+                                <div className={`text-left w-full overflow-y-auto scrollbar-thin ${isStandardMode ? 'text-indigo-100 dark:text-indigo-200' : 'text-slate-600 dark:text-slate-300'} text-sm whitespace-pre-line`}>
                                     {exampleSentence}
                                 </div>
-                                {onGenerateContext && (
-                                    <div className="flex-shrink-0 pt-2">
-                                        <Tooltip content="Regenerate with AI" position="bottom">
-                                            <button
-                                                onClick={handleGenerateClick}
-                                                disabled={isGeneratingContext}
-                                                className={`p-1.5 rounded-full transition-all duration-300 opacity-60 hover:opacity-100 ${
-                                                    isStandardMode
-                                                        ? 'text-indigo-200 hover:bg-indigo-600 hover:text-white'
-                                                        : 'text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 dark:text-slate-500 dark:hover:text-white'
-                                                }`}
-                                            >
-                                                {isGeneratingContext ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
-                                            </button>
-                                        </Tooltip>
-                                    </div>
-                                )}
                             </div>
-                        ) : (
-                            onGenerateContext && (
-                                <Tooltip content="Generate example sentence using AI" position="bottom">
-                                    <button
-                                        onClick={handleGenerateClick}
-                                        disabled={isGeneratingContext}
-                                        className={`mt-4 flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-300 ${
-                                            isStandardMode
-                                                ? 'bg-indigo-600/50 text-indigo-100 hover:bg-indigo-600 hover:text-white'
-                                                : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600'
-                                        } hover:scale-105 active:scale-95`}
-                                    >
-                                        {isGeneratingContext ? (
-                                            <>
-                                                <Loader2 size={12} className="animate-spin" /> Generating...
-                                            </>
-                                        ) : (
-                                            <>
-                                                <Sparkles size={12} /> Magic Example
-                                            </>
-                                        )}
-                                    </button>
-                                </Tooltip>
-                            )
                         )}
 
                         {generationError && (
-                            <div className="mt-4 flex items-start justify-center gap-2 text-xs text-rose-500 dark:text-rose-400 bg-rose-100 dark:bg-rose-900/30 px-3 py-2 rounded-lg w-full text-center leading-normal whitespace-normal flex-shrink-0">
+                            <div className="mt-2 flex items-start justify-center gap-2 text-xs text-rose-500 dark:text-rose-400 bg-rose-100 dark:bg-rose-900/30 px-3 py-2 rounded-lg w-full text-center leading-normal whitespace-normal flex-shrink-0">
                                 <AlertCircle size={16} className="flex-shrink-0 mt-0.5" />
                                 <span>{generationError}</span>
                             </div>
