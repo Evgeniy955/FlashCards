@@ -841,24 +841,33 @@ const App: React.FC = () => {
             });
         } else {
             setIsChangingWord(true);
-            // FIX: Increased timeout from 300ms to 350ms to ensure CSS transition completes
-            setTimeout(() => {
-                updateWordIndex();
-                setIsFlipped(false);
 
-                // Wait an additional 100ms before revealing the new card content
-                // This ensures the card data is swapped while the container is still "invisible/blurred"
+            // Conditional Delay Logic
+            if (isFlipped) {
+                // SLOW / SAFE: Hide back side before swap
+                // Wait for CSS duration (300ms) + buffer
                 setTimeout(() => {
+                    updateWordIndex();
+                    setIsFlipped(false);
+                    // Buffer to ensure render update
+                    setTimeout(() => {
+                        setIsChangingWord(false);
+                    }, 100);
+                }, 350);
+            } else {
+                // FAST: Standard animation (300ms match CSS)
+                setTimeout(() => {
+                    updateWordIndex();
                     setIsChangingWord(false);
-                }, 100);
-            }, 350);
+                }, 300);
+            }
         }
     };
 
     const handleKnow = () => {
         sounds.play('correct');
         if (isPracticeMode) {
-            advanceToNextWord(() => true, isFlipped);
+            advanceToNextWord(() => true, false); // Use standard animation for safety in practice
             return;
         }
         const isNewlyLearned = !learnedWords.has(getWordId(currentWord));
@@ -898,13 +907,13 @@ const App: React.FC = () => {
                 });
             }
             return true;
-        }, isFlipped);
+        }, false); // Do not force instant, use animation
     };
 
     const handleDontKnow = () => {
         sounds.play('incorrect');
         if (isPracticeMode) {
-            advanceToNextWord(() => true, isFlipped);
+            advanceToNextWord(() => true, false);
             return;
         }
         recordStudyActivity(false);
@@ -940,7 +949,7 @@ const App: React.FC = () => {
                 });
             }
             return true;
-        }, isFlipped);
+        }, false); // Do not force instant
     };
 
     const handleFlip = useCallback(() => {
@@ -1086,7 +1095,7 @@ const App: React.FC = () => {
             setUserAnswer('');
             setAiFeedback('');
             return true;
-        }, isFlipped);
+        }, false); // Pass false for animation
     };
 
     const handleGuess = (isCorrect: boolean) => {
@@ -1415,16 +1424,6 @@ const App: React.FC = () => {
                                 </button>
                             </Tooltip>
                         </div>
-
-                        {/* Right: Chat Button - REMOVED for this prompt iteration but likely desired */}
-                        {/* <div className="absolute right-0 top-1/2 -translate-y-1/2">
-                            <Tooltip content="Conversation Practice" position="left">
-                                <button onClick={() => setIsChatModalOpen(true)} className="flex items-center gap-2 py-1 px-3 bg-white dark:bg-slate-800 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors shadow-sm dark:shadow-none border border-slate-200 dark:border-slate-700 text-indigo-600 dark:text-indigo-400 font-medium">
-                                    <MessageCircle size={18} />
-                                    <span className="hidden sm:inline">Chat</span>
-                                </button>
-                            </Tooltip>
-                        </div> */}
                     </div>
                 )}
 
