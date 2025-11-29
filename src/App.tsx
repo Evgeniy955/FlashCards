@@ -841,11 +841,13 @@ const App: React.FC = () => {
             });
         } else {
             setIsChangingWord(true);
+            // FIX: Increased timeout from 250ms to 350ms to ensure CSS transition (duration-300) completes
+            // before swapping data, preventing the next card's back side from flashing.
             setTimeout(() => {
                 updateWordIndex();
                 setIsFlipped(false);
                 setIsChangingWord(false);
-            }, 250);
+            }, 350);
         }
     };
 
