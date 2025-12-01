@@ -1068,6 +1068,13 @@ const App: React.FC = () => {
         }
 
         recordStudyActivity(finalIsCorrect && !learnedWords.has(getWordId(currentWord)));
+
+        // ENHANCEMENT: If corrected by AI (was typo/synonym), show correct spelling explicitly
+        if (finalIsCorrect && !simpleIsCorrect) {
+            const correctionText = `Correct answer: "${correctAnswer}"`;
+            finalFeedback = finalFeedback ? `${finalFeedback} (${correctionText})` : correctionText;
+        }
+
         setAiFeedback(finalFeedback);
 
         if (finalIsCorrect) {
@@ -1075,12 +1082,15 @@ const App: React.FC = () => {
             sounds.play('correct');
             handleKnow();
 
+            // Delay logic: 1s standard, +2s if there was feedback/correction (total 3s)
+            const delay = 1000 + ((finalFeedback || !simpleIsCorrect) ? 2000 : 0);
+
             setTimeout(() => {
                 setIsFlipped(false);
                 setAnswerState('idle');
                 setUserAnswer('');
                 setAiFeedback('');
-            }, 1000 + (finalFeedback ? 2000 : 0)); // Extra time to read AI feedback
+            }, delay);
         } else {
             setAnswerState('incorrect');
             sounds.play('incorrect');
