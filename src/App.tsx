@@ -1056,7 +1056,9 @@ const App: React.FC = () => {
         if (!simpleIsCorrect && trainingMode === 'write') {
             setIsValidatingAnswer(true);
             try {
-                const aiResult = await validateAnswerWithAI(userAnswer, correctAnswer);
+                // Pass target language to AI validation
+                const targetLang = translationMode === 'standard' ? (currentSet?.lang2 || 'English') : (currentSet?.lang1 || 'English');
+                const aiResult = await validateAnswerWithAI(userAnswer, correctAnswer, targetLang);
                 finalIsCorrect = aiResult.isCorrect;
                 finalFeedback = aiResult.feedback;
             } catch (e) {
@@ -1152,17 +1154,19 @@ const App: React.FC = () => {
     };
 
     const handleGenerateSentence = async () => {
-        if (!currentWord) return;
+        if (!currentWord || !currentSet) return;
         setIsGeneratingSentence(true);
         setGenerationError(null);
         try {
-            // Assume lang2 is the target language for examples (typically English)
-            const sentence = await generateExampleSentence(currentWord.lang2);
+            // Pass language context to AI
+            const targetLang = currentSet.lang2;
+            const nativeLang = currentSet.lang1;
+
+            const sentence = await generateExampleSentence(currentWord.lang2, targetLang, nativeLang);
             if (sentence) {
                 setSentences(prev => new Map(prev).set(currentWord.lang2.toLowerCase(), sentence));
                 sounds.play('success');
             } else {
-                // If the sentence is empty, it means generation returned empty string (handled in catch usually, but safe check)
                 setGenerationError("The AI returned an empty response.");
             }
         } catch (e: any) {
