@@ -118,6 +118,8 @@ const App: React.FC = () => {
     const [isSyncing, setIsSyncing] = useState(false);
     const prevUser = usePrevious(user);
 
+    const lastInitializedSetRef = useRef<string | null>(null);
+
     useEffect(() => {
         const savedTheme = localStorage.getItem('theme') as Theme | null;
         if (savedTheme) setTheme(savedTheme);
@@ -137,6 +139,25 @@ const App: React.FC = () => {
         if (user) await db.collection('users').doc(user.uid).set({ lastUsedDictionary: name }, { merge: true });
     }, [user]);
 
+    const startReviewSession = useCallback((idx: number) => {
+        if (!loadedDictionary) return;
+        const set = loadedDictionary.sets[idx];
+        const words = set.words.filter(w => !learnedWords.has(getWordId(w)));
+
+        if (words.length > 0) {
+            setReviewWords(shuffleArray(words));
+            setSessionTotal(words.length);
+            setSessionProgress(1);
+            setCurrentWordIndex(0);
+            setSessionActive(true);
+            setIsDontKnowMode(false);
+            setIsFlipped(false);
+        } else {
+            setReviewWords([]);
+            setSessionActive(false);
+        }
+    }, [loadedDictionary, learnedWords]);
+
     const loadAndSetDictionary = useCallback(async (name: string, wordsFile: File, sentencesFile?: File) => {
         setIsLoading(true);
         setIsProgressLoading(true);
@@ -155,7 +176,11 @@ const App: React.FC = () => {
             const dictionary = await parseDictionaryFile(wordsFile);
             dictionary.name = name;
             setLoadedDictionary(dictionary);
+
+            // Clear current session to force restart with new dictionary
+            lastInitializedSetRef.current = null;
             setSelectedSetIndex(0);
+
             setFileSourceModalOpen(false);
             setSessionActive(false);
             await saveLastUsedDictionary(name);
@@ -214,6 +239,17 @@ const App: React.FC = () => {
 
         bootData();
     }, [user, authLoading, loadAndSetDictionary]);
+
+    // Track Set Changes
+    useEffect(() => {
+        if (selectedSetIndex !== null && loadedDictionary && !isProgressLoading) {
+            const setKey = `${loadedDictionary.name}-${selectedSetIndex}`;
+            if (lastInitializedSetRef.current !== setKey) {
+                startReviewSession(selectedSetIndex);
+                lastInitializedSetRef.current = setKey;
+            }
+        }
+    }, [selectedSetIndex, loadedDictionary, isProgressLoading, startReviewSession]);
 
     // Debounced Save phrases
     useEffect(() => {
@@ -393,24 +429,6 @@ const App: React.FC = () => {
             }
         }
     };
-
-    const startReviewSession = useCallback((idx: number) => {
-        if (!loadedDictionary) return;
-        const set = loadedDictionary.sets[idx];
-        const words = set.words.filter(w => !learnedWords.has(getWordId(w)));
-        if (words.length > 0) {
-            setReviewWords(shuffleArray(words));
-            setSessionTotal(words.length);
-            setSessionProgress(1);
-            setCurrentWordIndex(0);
-            setSessionActive(true);
-            setIsDontKnowMode(false);
-        }
-    }, [loadedDictionary, learnedWords]);
-
-    useEffect(() => {
-        if (selectedSetIndex !== null && !isProgressLoading && !sessionActive) startReviewSession(selectedSetIndex);
-    }, [selectedSetIndex, isProgressLoading, sessionActive, startReviewSession]);
 
     if (isInitialLoading) {
         return (
