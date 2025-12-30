@@ -1,8 +1,8 @@
 import { GoogleGenAI, Type } from "@google/genai";
 
 // Initialize the client using the environment variable injected by Vite.
-// We cast to string to satisfy TypeScript, as the build process guarantees replacement.
-const ai = new GoogleGenAI({ apiKey: (process.env.API_KEY as string) || '' });
+// Always use process.env.API_KEY directly as per guidelines.
+const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
 
 // Helper to extract project ID from error message
 const getProjectError = (errorString: string): string | null => {
@@ -17,7 +17,8 @@ const getProjectError = (errorString: string): string | null => {
 export const generateExampleSentence = async (word: string, targetLanguage: string = "English", nativeLanguage: string = "your native language"): Promise<string> => {
     try {
         const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
+            // Using gemini-3-flash-preview for general text tasks
+            model: 'gemini-3-flash-preview',
             contents: `
             Analyze the ${targetLanguage} word "${word}". 
             Create a concise "Flashcard Content" for a ${targetLanguage} learner.
@@ -30,6 +31,7 @@ export const generateExampleSentence = async (word: string, targetLanguage: stri
             Do not include the translation to ${nativeLanguage}. Keep it simple (A2-B1 level).
             `,
         });
+        // Accessing .text property directly as per Guidelines
         return response.text?.trim() || '';
     } catch (error: any) {
         console.error("Gemini generation error:", error);
@@ -71,7 +73,8 @@ export const validateAnswerWithAI = async (
 
     try {
         const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
+            // Using gemini-3-flash-preview for general text tasks
+            model: 'gemini-3-flash-preview',
             contents: `
         Task: Validate a vocabulary flashcard answer.
         Target Language: ${targetLanguage}
@@ -92,6 +95,7 @@ export const validateAnswerWithAI = async (
             },
         });
 
+        // Accessing .text property directly as per Guidelines
         const text = response.text;
         if (!text) return { isCorrect: false, feedback: "AI error" };
 
