@@ -262,7 +262,13 @@ const App: React.FC = () => {
             setDontKnowWords(new Map());
             setWordStats(new Map());
             if (sentenceMapFromFile) {
-                setSentences(prev => new Map([...prev, ...sentenceMapFromFile]));
+                // FIX: Existing sentences (which might be AI-generated and saved in state/DB)
+                // should have priority over static phrases from the file.
+                setSentences(prev => {
+                    const merged = new Map(sentenceMapFromFile!);
+                    prev.forEach((val, key) => merged.set(key, val));
+                    return merged;
+                });
             }
 
             const dictionary = await parseDictionaryFile(wordsFile);
@@ -390,22 +396,28 @@ const App: React.FC = () => {
                     if (docSnap.exists) {
                         const data = docSnap.data();
                         if (data && data.globalSentences) {
-                            setSentences(new Map(Object.entries(data.globalSentences)));
-                        } else {
-                            setSentences(new Map());
+                            // FIX: Merge remote sentences into state, giving remote priority for existing keys
+                            const remoteSentences = new Map(Object.entries(data.globalSentences as Record<string, string>));
+                            setSentences(prev => {
+                                const merged = new Map(prev);
+                                remoteSentences.forEach((val, key) => merged.set(key, val));
+                                return merged;
+                            });
                         }
                     }
                 } catch (error) {
                     console.error("Error loading sentences from Firestore:", error);
-                    setSentences(new Map());
                 }
             } else {
                 try {
                     const localSentences = await loadLocalSentences('local');
-                    setSentences(localSentences);
+                    setSentences(prev => {
+                        const merged = new Map(prev);
+                        localSentences.forEach((val, key) => merged.set(key, val));
+                        return merged;
+                    });
                 } catch (error) {
                     console.error("Error loading local sentences:", error);
-                    setSentences(new Map());
                 }
             }
             setHasLoadedSentences(true); // MARK AS LOADED
