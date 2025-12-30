@@ -146,7 +146,6 @@ const App: React.FC = () => {
                 const jsonObj = JSON.parse(text);
                 const sentenceMap = new Map<string, string>();
                 Object.entries(jsonObj).forEach(([k, v]) => sentenceMap.set(k.trim().toLowerCase(), String(v)));
-                // CRITICAL FIX: Merge phrases from file into current phrases state, instead of overwriting
                 setSentences(prev => {
                     const next = new Map(prev);
                     sentenceMap.forEach((v, k) => next.set(k, v));
@@ -165,6 +164,7 @@ const App: React.FC = () => {
             setLoadedDictionary(null);
         } finally {
             setIsLoading(false);
+            setIsProgressLoading(false);
         }
     }, [saveLastUsedDictionary]);
 
@@ -174,33 +174,42 @@ const App: React.FC = () => {
 
         const bootData = async () => {
             let lastUsed: string | null = null;
-            if (user) {
-                const doc = await db.collection('users').doc(user.uid).get();
-                lastUsed = doc.data()?.lastUsedDictionary || localStorage.getItem('lastUsedDictionary');
+            try {
+                if (user) {
+                    const doc = await db.collection('users').doc(user.uid).get();
+                    lastUsed = doc.data()?.lastUsedDictionary || localStorage.getItem('lastUsedDictionary');
 
-                // Load global phrases from cloud
-                const userData = doc.data();
-                if (userData?.globalSentences) {
-                    // Fix: Explicitly map values to strings to satisfy Map<string, string> type
-                    const globalSentences = userData.globalSentences as Record<string, unknown>;
-                    setSentences(prev => {
-                        const next = new Map(prev);
-                        Object.entries(globalSentences).forEach(([k, v]) => next.set(k, String(v)));
-                        return next;
-                    });
+                    const userData = doc.data();
+                    if (userData?.globalSentences) {
+                        const globalSentences = userData.globalSentences as Record<string, unknown>;
+                        setSentences(prev => {
+                            const next = new Map(prev);
+                            Object.entries(globalSentences).forEach(([k, v]) => next.set(k, String(v)));
+                            return next;
+                        });
+                    }
+                } else {
+                    lastUsed = localStorage.getItem('lastUsedDictionary');
+                    const localSentences = await loadLocalSentences('local');
+                    setSentences(prev => new Map([...prev, ...localSentences]));
                 }
-            } else {
-                lastUsed = localStorage.getItem('lastUsedDictionary');
-                // Load local phrases
-                const localSentences = await loadLocalSentences('local');
-                setSentences(prev => new Map([...prev, ...localSentences]));
-            }
 
-            if (lastUsed) {
-                const saved = await getDictionary(lastUsed, user?.uid);
-                if (saved) await loadAndSetDictionary(saved.name, saved.file);
+                if (lastUsed) {
+                    const saved = await getDictionary(lastUsed, user?.uid);
+                    if (saved) {
+                        await loadAndSetDictionary(saved.name, saved.file);
+                    } else {
+                        setIsProgressLoading(false);
+                    }
+                } else {
+                    setIsProgressLoading(false);
+                }
+            } catch (err) {
+                console.error("Boot error:", err);
+                setIsProgressLoading(false);
+            } finally {
+                setIsInitialLoading(false);
             }
-            setIsInitialLoading(false);
         };
 
         bootData();
@@ -217,7 +226,6 @@ const App: React.FC = () => {
             } else {
                 await saveLocalSentences('local', sentences);
             }
-            console.log("Phrases auto-saved successfully.");
         }, 2000);
 
         return () => clearTimeout(handler);
@@ -342,7 +350,6 @@ const App: React.FC = () => {
             const nativeLang = translationMode === 'standard' ? currentSet.lang1 : currentSet.lang2;
             const res = await generateExampleSentence(currentWord.lang2, targetLang, nativeLang);
             if (res) {
-                // Key should be consistent regardless of mode
                 const key = currentWord.lang2.trim().toLowerCase();
                 setSentences(prev => new Map(prev).set(key, res));
                 sounds.play('success');
