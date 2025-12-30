@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useAuthState } from 'react-firebase-hooks/auth';
 // FIX: Switched to Firebase v9 compat API for Firestore to resolve module errors.
@@ -140,6 +141,7 @@ const App: React.FC = () => {
     const [dontKnowWords, setDontKnowWords] = useState<Map<number, Word[]>>(new Map());
     const [wordStats, setWordStats] = useState<Map<string, WordStats>>(new Map());
     const [sentences, setSentences] = useState<Map<string, string>>(new Map());
+    const [hasLoadedSentences, setHasLoadedSentences] = useState(false); // Synchronization gate
 
     const [isLoading, setIsLoading] = useState(false); // For file parsing and dictionary loading
     const [isInitialLoading, setIsInitialLoading] = useState(true); // For loading the last used dictionary on startup
@@ -406,13 +408,14 @@ const App: React.FC = () => {
                     setSentences(new Map());
                 }
             }
+            setHasLoadedSentences(true); // MARK AS LOADED
         };
         loadUserSentences();
     }, [user, authLoading]);
 
     // Save sentences to Firestore or IndexedDB, with debouncing
     useEffect(() => {
-        if (authLoading) return;
+        if (authLoading || !hasLoadedSentences) return; // WAIT FOR INITIAL LOAD
 
         const handler = setTimeout(async () => {
             if (user) {
@@ -434,7 +437,7 @@ const App: React.FC = () => {
         }, 1500);
 
         return () => clearTimeout(handler);
-    }, [sentences, user, authLoading]);
+    }, [sentences, user, authLoading, hasLoadedSentences]);
 
     // Effect to handle merging local progress to remote on login
     useEffect(() => {
