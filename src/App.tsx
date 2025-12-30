@@ -484,7 +484,9 @@ const App: React.FC = () => {
                             <div className="flex items-center gap-3 py-10"><Loader2 className="animate-spin text-indigo-500" /> Syncing...</div>
                         ) : reviewWords.length > 0 && currentWord ? (
                             <div className="w-full">
-                                <div className="text-center text-xs text-slate-500 mb-2 uppercase tracking-widest">{isDontKnowMode ? 'Mistake Review' : 'Learning Session'}</div>
+                                <div className="text-center text-xs text-slate-500 mb-2 font-mono uppercase tracking-widest">
+                                    {isDontKnowMode ? 'Mistake Review' : 'Word'} {sessionProgress} / {sessionTotal}
+                                </div>
                                 <ProgressBar current={sessionProgress} total={sessionTotal} />
                                 <div className={isChangingWord ? 'opacity-0 scale-95 transition-all' : 'opacity-100 scale-100 transition-all'}>
                                     <Flashcard
@@ -524,6 +526,17 @@ const App: React.FC = () => {
                                 <div className="text-5xl mb-4">🎉</div>
                                 <h2 className="text-2xl font-bold mb-2">Set Completed!</h2>
                                 <button onClick={() => startReviewSession(selectedSetIndex || 0)} className="px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold">Practice Again</button>
+                            </div>
+                        )}
+
+                        {!isZenMode && currentSet && (
+                            <div className="w-full mt-12 mb-10 animate-fade-in">
+                                <WordList
+                                    words={currentSet.words}
+                                    isVisible={true}
+                                    lang1={currentSet.lang1}
+                                    lang2={currentSet.lang2}
+                                />
                             </div>
                         )}
                     </>
