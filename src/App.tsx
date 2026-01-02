@@ -10,9 +10,7 @@ import { FileSourceModal } from './components/FileSourceModal';
 import { InstructionsModal } from './components/InstructionsModal';
 import { LearnedWordsModal } from './components/LearnedWordsModal';
 import { ProfileModal } from './components/ProfileModal';
-// Removed ChatModal import
 import { WordList } from './components/WordList';
-import { SentenceUpload } from './components/SentenceUpload';
 import { Auth } from './components/Auth';
 import { Tooltip } from './components/Tooltip';
 import { Word, LoadedDictionary, WordProgress, TranslationMode, Theme, WordStats } from './types';
@@ -236,40 +234,16 @@ const App: React.FC = () => {
         }
     }, [user]);
 
-    // Helper to parse sentences from file
-    const parseSentencesFile = async (sentencesFile: File): Promise<Map<string, string>> => {
-        const text = await sentencesFile.text();
-        const jsonObj = JSON.parse(text);
-        const sentenceMap = new Map<string, string>();
-        for (const key in jsonObj) {
-            if (typeof jsonObj[key] === 'string') {
-                sentenceMap.set(key.trim().toLowerCase(), jsonObj[key]);
-            }
-        }
-        return sentenceMap;
-    }
 
-    const loadAndSetDictionary = useCallback(async (name: string, wordsFile: File, sentencesFile?: File) => {
+    const loadAndSetDictionary = useCallback(async (name: string, wordsFile: File) => {
         setIsLoading(true);
         setIsProgressLoading(true);
         try {
-            let sentenceMapFromFile: Map<string, string> | null = null;
-            if (sentencesFile) {
-                sentenceMapFromFile = await parseSentencesFile(sentencesFile);
-            }
-
             setLearnedWords(new Map());
             setDontKnowWords(new Map());
             setWordStats(new Map());
-            if (sentenceMapFromFile) {
-                // FIX: Existing sentences (which might be AI-generated and saved in state/DB)
-                // should have priority over static phrases from the file.
-                setSentences(prev => {
-                    const merged = new Map(sentenceMapFromFile!);
-                    prev.forEach((val, key) => merged.set(key, val));
-                    return merged;
-                });
-            }
+            // We no longer clear 'sentences' here as they are loaded globally from DB/Cloud
+            // and act as a repository for all AI-generated content.
 
             const dictionary = await parseDictionaryFile(wordsFile);
             dictionary.name = name;
@@ -396,7 +370,6 @@ const App: React.FC = () => {
                     if (docSnap.exists) {
                         const data = docSnap.data();
                         if (data && data.globalSentences) {
-                            // FIX: Merge remote sentences into state, giving remote priority for existing keys
                             const remoteSentences = new Map(Object.entries(data.globalSentences as Record<string, string>));
                             setSentences(prev => {
                                 const merged = new Map(prev);
@@ -808,8 +781,8 @@ const App: React.FC = () => {
         }
     }, [trainingMode, isDontKnowMode, currentWord, guessOptions, generateGuessOptions, translationMode]);
 
-    const handleFilesSelect = async (name: string, wordsFile: File, sentencesFile?: File) => {
-        await loadAndSetDictionary(name, wordsFile, sentencesFile);
+    const handleFilesSelect = async (name: string, wordsFile: File) => {
+        await loadAndSetDictionary(name, wordsFile);
     };
 
     const exampleSentence = useMemo(() => currentWord ? sentences.get(currentWord.lang2.toLowerCase()) : undefined, [currentWord, sentences]);
@@ -1491,13 +1464,6 @@ const App: React.FC = () => {
                                 </button>
                             )}
                         </div>
-                    </div>
-                )}
-
-                {/* Sentence Upload - Hidden in Zen Mode */}
-                {!isZenMode && (
-                    <div className="w-full mt-8 p-3 bg-white/50 dark:bg-slate-800/50 rounded-lg shadow-sm dark:shadow-none border border-slate-200 dark:border-slate-700 animate-fade-in">
-                        <SentenceUpload onSentencesLoaded={(newMap) => setSentences(prev => new Map([...prev, ...newMap]))} onClearSentences={() => setSentences(new Map())} hasSentences={sentences.size > 0}/>
                     </div>
                 )}
 
