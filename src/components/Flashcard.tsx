@@ -211,6 +211,35 @@ export const Flashcard: React.FC<FlashcardProps> = ({
         opacity: isChanging ? 0 : 1 - Math.abs(dragOffset.x) / 500
     };
 
+    // Helper to format the AI generated content
+    const renderFormattedContent = (text: string) => {
+        return text.split('\n').map((line, idx) => {
+            // Regex to detect **Label:** patterns
+            const labelMatch = line.match(/^\s*(.*)\s*\*\*(.*):\*\*(.*)$/);
+
+            if (labelMatch) {
+                const emoji = labelMatch[1];
+                const label = labelMatch[2];
+                const content = labelMatch[3];
+
+                let labelColor = 'text-indigo-600 dark:text-indigo-300';
+                if (label.toLowerCase().includes('link')) labelColor = 'text-emerald-600 dark:text-emerald-400';
+                if (label.toLowerCase().includes('example')) labelColor = 'text-amber-600 dark:text-amber-400';
+
+                return (
+                    <div key={idx} className="mb-1 leading-relaxed">
+                        <span className="mr-1">{emoji}</span>
+                        <span className={`font-bold uppercase text-[10px] tracking-wider ${labelColor}`}>
+              {label}:
+            </span>
+                        <span className="ml-1">{content}</span>
+                    </div>
+                );
+            }
+            return <div key={idx} className="mb-1">{line}</div>;
+        });
+    };
+
     const ExpandedOverlay = isExpanded && exampleSentence ? createPortal(
         <div
             className="fixed inset-0 z-[100] bg-slate-900/90 backdrop-blur-md flex items-center justify-center p-6 animate-fade-in"
@@ -227,8 +256,8 @@ export const Flashcard: React.FC<FlashcardProps> = ({
                     <X size={24} />
                 </button>
                 <div className="text-indigo-600 dark:text-indigo-400 font-bold mb-4 text-xl">{backWord}</div>
-                <div className="text-slate-700 dark:text-slate-200 text-lg leading-relaxed whitespace-pre-line">
-                    {exampleSentence}
+                <div className="text-slate-700 dark:text-slate-200 text-lg leading-relaxed">
+                    {renderFormattedContent(exampleSentence)}
                 </div>
                 <div className="mt-8 flex justify-center">
                     <button
@@ -303,8 +332,8 @@ export const Flashcard: React.FC<FlashcardProps> = ({
                             ref={textRef}
                             className={`relative w-full max-h-[65%] transition-all overflow-hidden flex flex-col items-start ${isStandardMode ? 'text-indigo-50' : 'text-slate-600 dark:text-slate-300'}`}
                         >
-                            <div ref={innerContentRef} className="p-4 text-left text-sm whitespace-pre-line leading-relaxed flex flex-col gap-2 w-full">
-                                {exampleSentence}
+                            <div ref={innerContentRef} className="p-4 text-left text-sm flex flex-col w-full">
+                                {renderFormattedContent(exampleSentence)}
                             </div>
                             {hasOverflow && (
                                 <button
