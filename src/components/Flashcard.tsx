@@ -44,13 +44,32 @@ export const Flashcard: React.FC<FlashcardProps> = ({
     const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
     const [selectedVoiceURI, setSelectedVoiceURI] = useState<string>('');
     const [showSettings, setShowSettings] = useState(false);
-    const [isExpanded, setIsExpanded] = useState(false); // New state for full-screen text
+    const [isExpanded, setIsExpanded] = useState(false);
+    const [hasOverflow, setHasOverflow] = useState(false);
+    const [isMobile, setIsMobile] = useState(false);
+
+    const textRef = useRef<HTMLDivElement>(null);
+    const innerTextRef = useRef<HTMLDivElement>(null);
 
     // Swipe Logic States
     const [dragStart, setDragStart] = useState<{ x: number; y: number } | null>(null);
     const [dragOffset, setDragOffset] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
     const [isDragging, setIsDragging] = useState(false);
     const cardRef = useRef<HTMLDivElement>(null);
+
+    // Check for overflow and mobile resolution
+    useEffect(() => {
+        const checkState = () => {
+            setIsMobile(globalThis.innerWidth < 640);
+            if (innerTextRef.current && textRef.current) {
+                setHasOverflow(innerTextRef.current.scrollHeight > textRef.current.clientHeight);
+            }
+        };
+
+        checkState();
+        globalThis.addEventListener('resize', checkState);
+        return () => globalThis.removeEventListener('resize', checkState);
+    }, [exampleSentence, isFlipped]);
 
     // Initial setup: Load saved preferences
     useEffect(() => {
@@ -136,7 +155,7 @@ export const Flashcard: React.FC<FlashcardProps> = ({
         if (onGenerateContext) onGenerateContext();
     };
 
-    // --- Touch / Swipe Handlers (Simplified) ---
+    // --- Touch / Swipe Handlers ---
     const handleTouchStart = (e: React.TouchEvent | React.MouseEvent) => {
         const target = e.target as HTMLElement;
         if (target.closest('button') || target.closest('select')) return;
@@ -152,7 +171,6 @@ export const Flashcard: React.FC<FlashcardProps> = ({
         const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
         const deltaX = clientX - dragStart.x;
         const deltaY = clientY - dragStart.y;
-        // We only prevent default if movement is primarily horizontal to allow page scroll
         if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 10) {
             if (e.cancelable) e.preventDefault();
             setDragOffset({ x: deltaX, y: deltaY * 0.2 });
@@ -179,8 +197,10 @@ export const Flashcard: React.FC<FlashcardProps> = ({
     };
 
     const openFullText = (e: React.MouseEvent) => {
-        e.stopPropagation();
-        setIsExpanded(true);
+        if (isMobile && hasOverflow) {
+            e.stopPropagation();
+            setIsExpanded(true);
+        }
     };
 
     const isStandardMode = translationMode === 'standard';
@@ -193,7 +213,6 @@ export const Flashcard: React.FC<FlashcardProps> = ({
         opacity: isChanging ? 0 : 1 - Math.abs(dragOffset.x) / 500
     };
 
-    // --- Expanded Text Modal ---
     const ExpandedOverlay = isExpanded && exampleSentence ? createPortal(
         <div
             className="fixed inset-0 z-[100] bg-slate-900/90 backdrop-blur-md flex items-center justify-center p-6 animate-fade-in"
@@ -281,15 +300,18 @@ export const Flashcard: React.FC<FlashcardProps> = ({
                     <span className={`text-4xl sm:text-5xl font-bold mb-4 ${isStandardMode ? 'text-white' : 'text-slate-900 dark:text-white'}`}>{backWord}</span>
                     {exampleSentence && (
                         <div
+                            ref={textRef}
                             onClick={openFullText}
-                            className={`group relative max-h-[40%] text-left w-full px-6 py-3 rounded-xl cursor-zoom-in transition-all ${isStandardMode ? 'bg-indigo-600/50 hover:bg-indigo-600/70 text-indigo-50' : 'bg-slate-100 dark:bg-slate-700/50 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300'} overflow-hidden`}
+                            className={`group relative max-h-[40%] text-left w-full px-6 py-3 rounded-xl transition-all ${isStandardMode ? 'bg-indigo-600/50 text-indigo-50' : 'bg-slate-100 dark:bg-slate-700/50 text-slate-600 dark:text-slate-300'} ${isMobile && hasOverflow ? 'cursor-zoom-in hover:bg-opacity-70' : 'cursor-default'} overflow-hidden`}
                         >
-                            <div className="text-sm line-clamp-3">
+                            <div ref={innerTextRef} className="text-sm line-clamp-3">
                                 {exampleSentence}
                             </div>
-                            <div className="absolute bottom-1 right-2 opacity-40 group-hover:opacity-100 transition-opacity">
-                                <Maximize2 size={12} />
-                            </div>
+                            {isMobile && hasOverflow && (
+                                <div className="absolute bottom-1 right-2 opacity-40 group-hover:opacity-100 transition-opacity">
+                                    <Maximize2 size={12} />
+                                </div>
+                            )}
                         </div>
                     )}
                     {generationError && <div className="mt-2 text-xs text-rose-500 bg-rose-100 dark:bg-rose-900/30 px-3 py-1 rounded-lg">{generationError}</div>}
