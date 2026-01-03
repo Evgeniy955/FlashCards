@@ -209,13 +209,11 @@ export const Flashcard: React.FC<FlashcardProps> = ({
       return;
     }
 
-    // Always record dragStart for potential swipe detection
     const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
     const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
     setDragStart({ x: clientX, y: clientY });
     setIsDragging(true);
 
-    // Store the exact element where touch started
     touchStartTargetRef.current = e.target;
   };
 
@@ -227,29 +225,31 @@ export const Flashcard: React.FC<FlashcardProps> = ({
     const deltaX = clientX - dragStart.x;
     const deltaY = clientY - dragStart.y;
 
-    const isTouchInScrollableArea = (touchStartTargetRef.current as HTMLElement)?.closest('.flashcard-scrollable-content');
-    const minMoveThreshold = 5; // Minimum movement for any gesture detection
+    const dragThreshold = 10; // Minimum movement for any gesture detection
 
-    if (isTouchInScrollableArea && Math.abs(deltaY) > Math.abs(deltaX) && Math.abs(deltaY) > minMoveThreshold) {
+    // If there's not enough movement, don't do anything yet.
+    if (Math.abs(deltaX) < dragThreshold && Math.abs(deltaY) < dragThreshold) {
+      return;
+    }
+
+    const isTouchInScrollableArea = (touchStartTargetRef.current as HTMLElement)?.closest('.flashcard-scrollable-content');
+
+    if (isTouchInScrollableArea && Math.abs(deltaY) > Math.abs(deltaX) && Math.abs(deltaY) > dragThreshold) {
         // This is a clear vertical scroll intent within the scrollable content.
-        // Don't preventDefault, let native scrolling happen.
-        // Don't update dragOffset, so the card doesn't move.
-        setDragOffset({ x: 0, y: 0 }); // Snap card back if it moved slightly horizontally
+        // DO NOT call e.preventDefault(), let native scrolling happen.
+        // Cancel our swipe handling by resetting state.
+        setIsDragging(false);
+        setDragStart(null);
+        setDragOffset({ x: 0, y: 0 }); 
         return; 
     }
 
     // If we reached here, it's either:
     // 1. Touch started outside scrollable area.
     // 2. Touch started inside scrollable area, but movement is primarily horizontal.
-    // 3. Not enough movement for a clear vertical scroll intent.
+    // 3. Not enough movement for a clear vertical scroll intent was detected.
     // In these cases, we want to handle card swiping.
-    
-    // Prevent default browser behavior (e.g., page scrolling) if we are handling a card swipe.
-    // Only prevent default if there's significant horizontal or vertical movement, to avoid preventing default for minor taps.
-    if (Math.abs(deltaX) > minMoveThreshold || Math.abs(deltaY) > minMoveThreshold) {
-      e.preventDefault(); 
-    }
-    
+    e.preventDefault(); // Prevent default browser behavior (e.g., page scrolling)
     setDragOffset({ x: deltaX, y: deltaY * 0.3 });
   };
 
@@ -447,7 +447,7 @@ export const Flashcard: React.FC<FlashcardProps> = ({
             <div className="mt-4 flex flex-col items-center w-full px-4 flex-grow overflow-hidden justify-center">
             {exampleSentence && (
                 <div 
-                    className={`flashcard-scrollable-content text-left w-full overflow-y-auto scrollbar scrollbar-thumb-slate-400 dark:scrollbar-thumb-slate-600 scrollbar-track-slate-200 dark:scrollbar-track-slate-700 ${isStandardMode ? 'text-indigo-100 dark:text-indigo-200' : 'text-slate-600 dark:text-slate-300'} text-sm whitespace-pre-line flex-grow`}
+                    className={`flashcard-scrollable-content text-left w-full overflow-y-auto scrollbar scrollbar-thumb-slate-400 dark:scrollbar-thumb-slate-600 scrollbar-track-slate-200 dark:scrollbar-track-slate-700 ${isStandardMode ? 'text-indigo-100 dark:text-indigo-200' : 'text-slate-600 dark:text-slate-300'} text-sm whitespace-pre-line flex-grow touch-pan-y`}
                     // ARIA for scrollable content
                     tabIndex={0}
                     role="region"
@@ -475,7 +475,7 @@ export const Flashcard: React.FC<FlashcardProps> = ({
       style={{ perspective: '1000px' }}
     >
       <div 
-        className="w-full h-full relative"
+        className="w-full h-full relative touch-pan-x"
         style={cardStyle}
         onClick={handleFlipDuringChange}
         onTouchStart={handleTouchStart}
