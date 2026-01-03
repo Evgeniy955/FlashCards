@@ -228,7 +228,6 @@ export const Flashcard: React.FC<FlashcardProps> = ({
 
                 if (isStandardMode) {
                     // Blue background (Back side in standard mode)
-                    // Use lighter colors or white for contrast on blue background
                     labelColor = isLink ? 'text-emerald-300' : isExample ? 'text-amber-300' : 'text-white';
                 } else {
                     // White background (Back side in reverse mode)
@@ -303,6 +302,8 @@ export const Flashcard: React.FC<FlashcardProps> = ({
     const backContent = (
         <div className={`absolute w-full h-full ${isStandardMode ? 'bg-indigo-500 dark:bg-indigo-700' : 'bg-white dark:bg-slate-800'} rounded-2xl shadow-xl flex flex-col justify-center items-center px-6 pb-6 pt-14 text-center overflow-hidden`} style={{ backfaceVisibility: 'hidden', WebkitBackfaceVisibility: 'hidden', transform: 'rotateY(180deg)' }}>
             {swipeOverlay}
+
+            {/* Action Buttons Top Right */}
             <div className="absolute top-4 right-4 flex items-center gap-1 z-10">
                 {onGenerateContext && (
                     <button onClick={handleGenerateClick} disabled={isGeneratingContext} className={`p-2 transition-colors rounded-full ${isStandardMode ? 'text-indigo-200 hover:text-white' : 'text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300'}`}>
@@ -344,19 +345,21 @@ export const Flashcard: React.FC<FlashcardProps> = ({
                             <div ref={innerContentRef} className="p-4 text-left text-sm flex flex-col w-full">
                                 {renderFormattedContent(exampleSentence)}
                             </div>
-                            {hasOverflow && (
-                                <button
-                                    onClick={toggleExpand}
-                                    className={`absolute bottom-2 right-2 p-1.5 rounded-lg transition-all shadow-lg backdrop-blur-sm ${isStandardMode ? 'bg-white/20 hover:bg-white/40 text-white' : 'bg-black/10 hover:bg-black/30 text-slate-600 dark:text-white'}`}
-                                    title="Expand Text"
-                                >
-                                    <Maximize2 size={16} />
-                                </button>
-                            )}
                         </div>
                     )}
                     {generationError && <div className="mt-2 text-xs text-rose-500 bg-rose-100 dark:bg-rose-900/30 px-3 py-1 rounded-lg">{generationError}</div>}
                 </div>
+            )}
+
+            {/* Maximize Button - Fixed Bottom Right Corner of the Card */}
+            {exampleSentence && hasOverflow && !showSettings && (
+                <button
+                    onClick={toggleExpand}
+                    className={`absolute bottom-4 right-4 z-20 p-2 rounded-xl transition-all shadow-lg backdrop-blur-md ${isStandardMode ? 'bg-white/20 hover:bg-white/40 text-white' : 'bg-slate-200/80 hover:bg-slate-300/80 dark:bg-slate-700/80 dark:hover:bg-slate-600/80 text-slate-700 dark:text-white'}`}
+                    title="Expand Text"
+                >
+                    <Maximize2 size={18} />
+                </button>
             )}
         </div>
     );
