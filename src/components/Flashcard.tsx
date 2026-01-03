@@ -56,7 +56,7 @@ export const Flashcard: React.FC<FlashcardProps> = ({
     const [isDragging, setIsDragging] = useState(false);
     const cardRef = useRef<HTMLDivElement>(null);
 
-    // Check for overflow when card is flipped or sentence changes
+    // Check for overflow when card is flipped or content changes
     useEffect(() => {
         const checkOverflow = () => {
             if (innerContentRef.current && textRef.current) {
@@ -295,13 +295,13 @@ export const Flashcard: React.FC<FlashcardProps> = ({
                 </div>
             ) : (
                 <div className="flex flex-col items-center w-full h-full justify-center px-4 overflow-hidden">
-                    <div className={`w-full text-3xl sm:text-4xl font-bold mb-4 ${isStandardMode ? 'text-white' : 'text-slate-900 dark:text-white'} text-center leading-tight`}>
+                    <div className={`w-full text-2xl sm:text-3xl font-bold mb-4 ${isStandardMode ? 'text-white' : 'text-slate-900 dark:text-white'} text-center leading-tight`}>
                         {backWord}
                     </div>
                     {exampleSentence && (
                         <div
                             ref={textRef}
-                            className={`relative w-full max-h-[40%] rounded-xl transition-all overflow-hidden flex flex-col items-start ${isStandardMode ? 'bg-indigo-600/40 text-indigo-50' : 'bg-slate-100 dark:bg-slate-700/50 text-slate-600 dark:text-slate-300'}`}
+                            className={`relative w-full max-h-[55%] rounded-xl transition-all overflow-hidden flex flex-col items-start ${isStandardMode ? 'bg-indigo-600/40 text-indigo-50' : 'bg-slate-100 dark:bg-slate-700/50 text-slate-600 dark:text-slate-300'}`}
                         >
                             <div ref={innerContentRef} className="p-4 text-left text-sm whitespace-pre-line leading-relaxed flex flex-col gap-2 w-full">
                                 {exampleSentence}
