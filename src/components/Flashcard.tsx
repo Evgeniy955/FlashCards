@@ -222,21 +222,30 @@ export const Flashcard: React.FC<FlashcardProps> = ({
                 const label = labelMatch[2];
                 const content = labelMatch[3];
 
-                let labelColor = 'text-indigo-600 dark:text-indigo-300';
-                if (label.toLowerCase().includes('link')) labelColor = 'text-emerald-600 dark:text-emerald-400';
-                if (label.toLowerCase().includes('example')) labelColor = 'text-amber-600 dark:text-amber-400';
+                let labelColor = '';
+                const isLink = label.toLowerCase().includes('link');
+                const isExample = label.toLowerCase().includes('example');
+
+                if (isStandardMode) {
+                    // Blue background (Back side in standard mode)
+                    // Use lighter colors or white for contrast on blue background
+                    labelColor = isLink ? 'text-emerald-300' : isExample ? 'text-amber-300' : 'text-white';
+                } else {
+                    // White background (Back side in reverse mode)
+                    labelColor = isLink ? 'text-emerald-600 dark:text-emerald-400' : isExample ? 'text-amber-600 dark:text-amber-400' : 'text-indigo-600 dark:text-indigo-300';
+                }
 
                 return (
-                    <div key={idx} className="mb-1 leading-relaxed">
-                        <span className="mr-1">{emoji}</span>
-                        <span className={`font-bold uppercase text-[10px] tracking-wider ${labelColor}`}>
+                    <div key={idx} className="mb-2 leading-relaxed">
+                        <span className="mr-1.5">{emoji}</span>
+                        <span className={`font-bold uppercase text-[12px] sm:text-xs tracking-wider ${labelColor}`}>
               {label}:
             </span>
-                        <span className="ml-1">{content}</span>
+                        <span className="ml-1.5">{content}</span>
                     </div>
                 );
             }
-            return <div key={idx} className="mb-1">{line}</div>;
+            return <div key={idx} className="mb-2">{line}</div>;
         });
     };
 
