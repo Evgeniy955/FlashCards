@@ -301,7 +301,7 @@ export const Flashcard: React.FC<FlashcardProps> = ({
                     {exampleSentence && (
                         <div
                             ref={textRef}
-                            className={`relative w-full max-h-[55%] rounded-xl transition-all overflow-hidden flex flex-col items-start ${isStandardMode ? 'bg-indigo-600/40 text-indigo-50' : 'bg-slate-100 dark:bg-slate-700/50 text-slate-600 dark:text-slate-300'}`}
+                            className={`relative w-full max-h-[65%] transition-all overflow-hidden flex flex-col items-start ${isStandardMode ? 'text-indigo-50' : 'text-slate-600 dark:text-slate-300'}`}
                         >
                             <div ref={innerContentRef} className="p-4 text-left text-sm whitespace-pre-line leading-relaxed flex flex-col gap-2 w-full">
                                 {exampleSentence}
@@ -309,7 +309,7 @@ export const Flashcard: React.FC<FlashcardProps> = ({
                             {hasOverflow && (
                                 <button
                                     onClick={toggleExpand}
-                                    className="absolute bottom-2 right-2 p-1.5 bg-black/20 hover:bg-black/40 rounded-lg text-white transition-all shadow-lg backdrop-blur-sm"
+                                    className={`absolute bottom-2 right-2 p-1.5 rounded-lg transition-all shadow-lg backdrop-blur-sm ${isStandardMode ? 'bg-white/20 hover:bg-white/40 text-white' : 'bg-black/10 hover:bg-black/30 text-slate-600 dark:text-white'}`}
                                     title="Expand Text"
                                 >
                                     <Maximize2 size={16} />
