@@ -288,34 +288,34 @@ export const Flashcard: React.FC<FlashcardProps> = ({
     );
 
     const frontContent = (
-        <div className={`absolute w-full h-full ${isStandardMode ? 'bg-white dark:bg-slate-800' : 'bg-indigo-500 dark:bg-indigo-700'} rounded-2xl shadow-xl flex flex-col justify-center items-center px-6 pb-6 pt-14 text-center overflow-hidden`} style={{ backfaceVisibility: 'hidden', WebkitBackfaceVisibility: 'hidden' }}>
+        <div className={`absolute w-full h-full ${isStandardMode ? 'bg-white dark:bg-slate-800' : 'bg-indigo-500 dark:bg-indigo-700'} rounded-2xl shadow-xl flex flex-col justify-start items-center px-6 pb-6 pt-16 text-center overflow-hidden`} style={{ backfaceVisibility: 'hidden', WebkitBackfaceVisibility: 'hidden' }}>
             {swipeOverlay}
             {totalAttempts > 0 && (
                 <div className={`absolute top-4 left-4 flex items-center gap-1 text-xs font-mono px-2 py-1 rounded-full ${isStandardMode ? 'bg-emerald-100 dark:bg-emerald-900/50 text-emerald-600 dark:text-emerald-400' : 'bg-emerald-400/50 text-white'}`}>
                     <Check size={14} /> <span>{knowAttempts}/{totalAttempts}</span>
                 </div>
             )}
-            <span className={`text-4xl sm:text-5xl font-bold ${isStandardMode ? 'text-slate-900 dark:text-white' : 'text-white'} line-clamp-3`}>{frontWord}</span>
+            <span className={`text-4xl sm:text-5xl font-extrabold ${isStandardMode ? 'text-slate-900 dark:text-white' : 'text-white'} line-clamp-3 leading-tight`}>{frontWord}</span>
         </div>
     );
 
     const backContent = (
-        <div className={`absolute w-full h-full ${isStandardMode ? 'bg-indigo-500 dark:bg-indigo-700' : 'bg-white dark:bg-slate-800'} rounded-2xl shadow-xl flex flex-col justify-center items-center px-6 pb-6 pt-14 text-center overflow-hidden`} style={{ backfaceVisibility: 'hidden', WebkitBackfaceVisibility: 'hidden', transform: 'rotateY(180deg)' }}>
+        <div className={`absolute w-full h-full ${isStandardMode ? 'bg-indigo-500 dark:bg-indigo-700' : 'bg-white dark:bg-slate-800'} rounded-2xl shadow-xl flex flex-col justify-start items-center px-6 pb-6 pt-6 text-center overflow-hidden`} style={{ backfaceVisibility: 'hidden', WebkitBackfaceVisibility: 'hidden', transform: 'rotateY(180deg)' }}>
             {swipeOverlay}
 
-            {/* Action Buttons Top Right */}
-            <div className="absolute top-4 right-4 flex items-center gap-1 z-10">
+            {/* Action Buttons Top Right Grouped */}
+            <div className="absolute top-4 right-4 flex items-center gap-0.5 z-10">
                 {onGenerateContext && (
-                    <button onClick={handleGenerateClick} disabled={isGeneratingContext} className={`p-2 transition-colors rounded-full ${isStandardMode ? 'text-indigo-200 hover:text-white' : 'text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300'}`}>
-                        {isGeneratingContext ? <Loader2 size={20} className="animate-spin" /> : exampleSentence ? <RefreshCw size={20} /> : <Sparkles size={20} />}
+                    <button onClick={handleGenerateClick} disabled={isGeneratingContext} className={`p-2 transition-colors rounded-full ${isStandardMode ? 'text-indigo-100 hover:text-white' : 'text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300'}`}>
+                        {isGeneratingContext ? <Loader2 size={18} className="animate-spin" /> : exampleSentence ? <RefreshCw size={18} /> : <Sparkles size={18} />}
                     </button>
                 )}
-                <button onClick={e => { e.stopPropagation(); setShowSettings(!showSettings); }} className={`p-2 transition-colors rounded-full ${isStandardMode ? 'text-indigo-200 hover:text-white' : 'text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300'}`}>
-                    {showSettings ? <X size={20} /> : <Settings size={20} />}
+                <button onClick={e => { e.stopPropagation(); setShowSettings(!showSettings); }} className={`p-2 transition-colors rounded-full ${isStandardMode ? 'text-indigo-100 hover:text-white' : 'text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300'}`}>
+                    {showSettings ? <X size={18} /> : <Settings size={18} />}
                 </button>
                 {!showSettings && (
                     <button onClick={handlePlayAudioSequence} className={`p-2 ${isStandardMode ? 'text-indigo-100 hover:text-white' : 'text-slate-600 dark:text-slate-300 hover:text-slate-800 dark:hover:text-white'} transition-colors rounded-full`}>
-                        <Volume2 size={24} />
+                        <Volume2 size={20} />
                     </button>
                 )}
             </div>
@@ -333,21 +333,21 @@ export const Flashcard: React.FC<FlashcardProps> = ({
                     </div>
                 </div>
             ) : (
-                <div className="flex flex-col items-center w-full h-full justify-center px-4 overflow-hidden">
-                    <div className={`w-full text-2xl sm:text-3xl font-bold mb-4 ${isStandardMode ? 'text-white' : 'text-slate-900 dark:text-white'} text-center leading-tight`}>
+                <div className="flex flex-col items-center w-full h-full justify-start pt-8 px-4 overflow-hidden">
+                    <div className={`w-full text-2xl sm:text-3xl font-extrabold mb-4 ${isStandardMode ? 'text-white' : 'text-slate-900 dark:text-white'} text-center leading-tight pr-24 sm:pr-0`}>
                         {backWord}
                     </div>
                     {exampleSentence && (
                         <div
                             ref={textRef}
-                            className={`relative w-full max-h-[65%] transition-all overflow-hidden flex flex-col items-start ${isStandardMode ? 'text-indigo-50' : 'text-slate-600 dark:text-slate-300'}`}
+                            className={`relative w-full flex-1 transition-all overflow-hidden flex flex-col items-start ${isStandardMode ? 'text-indigo-50' : 'text-slate-600 dark:text-slate-300'}`}
                         >
-                            <div ref={innerContentRef} className="p-4 text-left text-sm flex flex-col w-full">
+                            <div ref={innerContentRef} className="pb-10 text-left text-sm flex flex-col w-full">
                                 {renderFormattedContent(exampleSentence)}
                             </div>
                         </div>
                     )}
-                    {generationError && <div className="mt-2 text-xs text-rose-500 bg-rose-100 dark:bg-rose-900/30 px-3 py-1 rounded-lg">{generationError}</div>}
+                    {generationError && <div className="mt-1 text-xs text-rose-500 bg-rose-100 dark:bg-rose-900/30 px-3 py-1 rounded-lg">{generationError}</div>}
                 </div>
             )}
 
