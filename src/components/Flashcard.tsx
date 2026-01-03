@@ -288,19 +288,19 @@ export const Flashcard: React.FC<FlashcardProps> = ({
     );
 
     const frontContent = (
-        <div className={`absolute w-full h-full ${isStandardMode ? 'bg-white dark:bg-slate-800' : 'bg-indigo-500 dark:bg-indigo-700'} rounded-2xl shadow-xl flex flex-col justify-center items-center px-6 pb-6 pt-14 text-center overflow-hidden`} style={{ backfaceVisibility: 'hidden', WebkitBackfaceVisibility: 'hidden' }}>
+        <div className={`absolute w-full h-full ${isStandardMode ? 'bg-white dark:bg-slate-800' : 'bg-indigo-500 dark:bg-indigo-700'} rounded-2xl shadow-xl flex flex-col justify-center items-center px-6 pb-6 pt-10 text-center overflow-hidden`} style={{ backfaceVisibility: 'hidden', WebkitBackfaceVisibility: 'hidden' }}>
             {swipeOverlay}
             {totalAttempts > 0 && (
                 <div className={`absolute top-4 left-4 flex items-center gap-1 text-xs font-mono px-2 py-1 rounded-full ${isStandardMode ? 'bg-emerald-100 dark:bg-emerald-900/50 text-emerald-600 dark:text-emerald-400' : 'bg-emerald-400/50 text-white'}`}>
                     <Check size={14} /> <span>{knowAttempts}/{totalAttempts}</span>
                 </div>
             )}
-            <span className={`text-4xl sm:text-5xl font-bold ${isStandardMode ? 'text-slate-900 dark:text-white' : 'text-white'} line-clamp-3`}>{frontWord}</span>
+            <span className={`text-4xl sm:text-6xl font-extrabold ${isStandardMode ? 'text-slate-900 dark:text-white' : 'text-white'} line-clamp-3 leading-tight`}>{frontWord}</span>
         </div>
     );
 
     const backContent = (
-        <div className={`absolute w-full h-full ${isStandardMode ? 'bg-indigo-500 dark:bg-indigo-700' : 'bg-white dark:bg-slate-800'} rounded-2xl shadow-xl flex flex-col justify-center items-center px-6 pb-6 pt-14 text-center overflow-hidden`} style={{ backfaceVisibility: 'hidden', WebkitBackfaceVisibility: 'hidden', transform: 'rotateY(180deg)' }}>
+        <div className={`absolute w-full h-full ${isStandardMode ? 'bg-indigo-500 dark:bg-indigo-700' : 'bg-white dark:bg-slate-800'} rounded-2xl shadow-xl flex flex-col justify-start items-center px-6 pb-6 pt-12 text-center overflow-hidden`} style={{ backfaceVisibility: 'hidden', WebkitBackfaceVisibility: 'hidden', transform: 'rotateY(180deg)' }}>
             {swipeOverlay}
 
             {/* Action Buttons Top Right */}
@@ -333,16 +333,16 @@ export const Flashcard: React.FC<FlashcardProps> = ({
                     </div>
                 </div>
             ) : (
-                <div className="flex flex-col items-center w-full h-full justify-center px-4 overflow-hidden">
-                    <div className={`w-full text-2xl sm:text-3xl font-bold mb-4 ${isStandardMode ? 'text-white' : 'text-slate-900 dark:text-white'} text-center leading-tight`}>
+                <div className="flex flex-col items-center w-full h-full justify-start pt-4 px-4 overflow-hidden">
+                    <div className={`w-full text-3xl sm:text-4xl font-extrabold mb-6 ${isStandardMode ? 'text-white' : 'text-slate-900 dark:text-white'} text-center leading-tight tracking-tight`}>
                         {backWord}
                     </div>
                     {exampleSentence && (
                         <div
                             ref={textRef}
-                            className={`relative w-full max-h-[65%] transition-all overflow-hidden flex flex-col items-start ${isStandardMode ? 'text-indigo-50' : 'text-slate-600 dark:text-slate-300'}`}
+                            className={`relative w-full flex-1 transition-all overflow-hidden flex flex-col items-start ${isStandardMode ? 'text-indigo-50' : 'text-slate-600 dark:text-slate-300'}`}
                         >
-                            <div ref={innerContentRef} className="p-4 text-left text-sm flex flex-col w-full">
+                            <div ref={innerContentRef} className="pb-8 text-left text-sm sm:text-base flex flex-col w-full">
                                 {renderFormattedContent(exampleSentence)}
                             </div>
                         </div>
