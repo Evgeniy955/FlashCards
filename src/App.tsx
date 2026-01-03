@@ -1,5 +1,4 @@
 
-
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useAuthState } from 'react-firebase-hooks/auth';
 // FIX: Switched to Firebase v9 compat API for Firestore to resolve module errors.
@@ -137,7 +136,6 @@ const App: React.FC = () => {
     const [sessionTotal, setSessionTotal] = useState(0);
     const [sessionActive, setSessionActive] = useState(false);
 
-    // FIX: Removed 'new' keyword before useState. useState is a function, not a constructor.
     const [learnedWords, setLearnedWords] = useState<Map<string, WordProgress>>(new Map());
     const [dontKnowWords, setDontKnowWords] = useState<Map<number, Word[]>>(new Map());
     const [wordStats, setWordStats] = useState<Map<string, WordStats>>(new Map());
@@ -192,6 +190,7 @@ const App: React.FC = () => {
     // Gemini Model Selection
     const geminiModels = useMemo(() => [
         { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash (Default)' },
+        { id: 'gemini-flash-lite-latest', name: 'Gemini 2.5 Flash Lite (Lite)' }, // Added gemini-2.5-flash-lite
         { id: 'gemini-3-flash-preview', name: 'Gemini 3 Flash (Advanced)' },
         { id: 'gemini-3-pro-preview', name: 'Gemini 3 Pro (Most Capable)' },
     ], []);
@@ -881,7 +880,7 @@ const App: React.FC = () => {
             });
         } else {
             setIsChangingWord(true);
-            
+
             // Conditional Delay Logic
             if (isFlipped) {
                 // SLOW / SAFE: Hide back side before swap
@@ -918,7 +917,7 @@ const App: React.FC = () => {
             setWordStats(prev => {
                 const newMap = new Map<string, WordStats>(prev);
                 const stats = newMap.get(wordId) || { knowCount: 0, totalAttempts: 0 };
-                newMap.set(wordId, { 
+                newMap.set(wordId, {
                     knowCount: stats.knowCount + 1,
                     totalAttempts: stats.totalAttempts + 1,
                 });
@@ -931,7 +930,7 @@ const App: React.FC = () => {
             const nextReviewDate = new Date();
             nextReviewDate.setDate(nextReviewDate.getDate() + SRS_INTERVALS[nextStage]);
             setLearnedWords(prev => new Map(prev).set(wordId, { srsStage: nextStage, nextReviewDate: nextReviewDate.toISOString() }));
-    
+
             if (isDontKnowMode && selectedSetIndex !== null) {
                 setDontKnowWords((prev: Map<number, Word[]>) => {
                     const newMap = new Map(prev);
@@ -964,7 +963,7 @@ const App: React.FC = () => {
             setWordStats(prev => {
                 const newMap = new Map<string, WordStats>(prev);
                 const stats = newMap.get(wordId) || { knowCount: 0, totalAttempts: 0 };
-                newMap.set(wordId, { 
+                newMap.set(wordId, {
                     knowCount: stats.knowCount,
                     totalAttempts: stats.totalAttempts + 1,
                 });
@@ -995,7 +994,7 @@ const App: React.FC = () => {
     const handleFlip = useCallback(() => {
         if (isDontKnowMode && answerState !== 'idle' && trainingMode === 'write') return;
         if (isDontKnowMode && trainingMode === 'guess' && isFlipped) return;
-        
+
         sounds.play('flip');
         setIsFlipped(prev => !prev);
     }, [isDontKnowMode, answerState, trainingMode, isFlipped]);
@@ -1088,7 +1087,7 @@ const App: React.FC = () => {
 
         const correctAnswer = translationMode === 'standard' ? currentWord.lang2 : currentWord.lang1;
         const simpleIsCorrect = userAnswer.trim().toLowerCase() === correctAnswer.toLowerCase();
-        
+
         let finalIsCorrect = simpleIsCorrect;
         let finalFeedback = '';
 
@@ -1108,15 +1107,15 @@ const App: React.FC = () => {
                 setIsValidatingAnswer(false);
             }
         }
-        
+
         recordStudyActivity(finalIsCorrect && !learnedWords.has(getWordId(currentWord)));
-        
+
         // ENHANCEMENT: If corrected by AI (was typo/synonym), show correct spelling explicitly
         if (finalIsCorrect && !simpleIsCorrect) {
-             const correctionText = `Correct answer: "${correctAnswer}"`;
-             finalFeedback = finalFeedback ? `${finalFeedback} (${correctionText})` : correctionText;
+            const correctionText = `Correct answer: "${correctAnswer}"`;
+            finalFeedback = finalFeedback ? `${finalFeedback} (${correctionText})` : correctionText;
         }
-        
+
         setAiFeedback(finalFeedback);
 
         if (finalIsCorrect) {
@@ -1132,7 +1131,7 @@ const App: React.FC = () => {
                 setAnswerState('idle');
                 setUserAnswer('');
                 setAiFeedback('');
-            }, delay); 
+            }, delay);
         } else {
             setAnswerState('incorrect');
             sounds.play('incorrect');
@@ -1192,7 +1191,7 @@ const App: React.FC = () => {
             setIsFlipped(true);
         }
     };
-    
+
     const handleGenerateSentence = async () => {
         if (!currentWord || !currentSet) return;
         setIsGeneratingSentence(true);
@@ -1201,7 +1200,7 @@ const App: React.FC = () => {
             // Pass language context and selected model to AI
             const targetLang = currentSet.lang2;
             const nativeLang = currentSet.lang1;
-            
+
             const sentence = await generateExampleSentence(selectedGeminiModel, currentWord.lang2, targetLang, nativeLang);
             if (sentence) {
                 setSentences(prev => new Map(prev).set(currentWord.lang2.toLowerCase(), sentence));
@@ -1231,7 +1230,7 @@ const App: React.FC = () => {
             setLearnedWords(new Map());
             setDontKnowWords(new Map());
             setWordStats(new Map());
-            setSessionActive(false); 
+            setSessionActive(false);
         }
     };
 
@@ -1254,7 +1253,7 @@ const App: React.FC = () => {
 
     const renderFlashcardSection = () => {
         if (reviewWords.length === 0 || !currentWord || !currentSet) {
-             return null;
+            return null;
         }
 
         const counterText = getCounterText();
@@ -1306,16 +1305,16 @@ const App: React.FC = () => {
                 <div className="w-full text-center text-sm text-slate-500 dark:text-slate-400 mb-1">{counterText}</div>
                 <ProgressBar current={sessionProgress} total={sessionTotal} />
                 <div className={`w-full transition-all duration-300 ease-in-out transform ${isChangingWord ? 'opacity-0 -translate-x-12 scale-95 rotate-[-2deg]' : 'opacity-100 translate-x-0 scale-100 rotate-0'}`}>
-                    <Flashcard 
-                        word={currentWord} 
-                        isFlipped={isFlipped} 
-                        onFlip={handleFlip} 
-                        exampleSentence={exampleSentence} 
-                        isChanging={isChangingWord} 
-                        isInstantChange={isInstantChange} 
-                        translationMode={translationMode} 
-                        lang1={currentSet.lang1} 
-                        knowAttempts={knowAttempts} 
+                    <Flashcard
+                        word={currentWord}
+                        isFlipped={isFlipped}
+                        onFlip={handleFlip}
+                        exampleSentence={exampleSentence}
+                        isChanging={isChangingWord}
+                        isInstantChange={isInstantChange}
+                        translationMode={translationMode}
+                        lang1={currentSet.lang1}
+                        knowAttempts={knowAttempts}
                         totalAttempts={totalAttempts}
                         onGenerateContext={handleGenerateSentence}
                         isGeneratingContext={isGeneratingSentence}
@@ -1372,7 +1371,7 @@ const App: React.FC = () => {
     if (!loadedDictionary) {
         return (
             <div className="min-h-screen flex flex-col">
-                 <header className="relative z-10 w-full p-4 sm:p-6 flex justify-end">
+                <header className="relative z-10 w-full p-4 sm:p-6 flex justify-end">
                     <div className="flex items-center gap-2">
                         <Tooltip content="Toggle Dark Mode">
                             <ThemeToggle theme={theme} setTheme={setTheme} />
@@ -1432,16 +1431,16 @@ const App: React.FC = () => {
                     <div className="flex items-center gap-3">
                         {/* Gamification: Daily Streak */}
                         <Tooltip content="Your daily study streak" position="left">
-                            <div 
+                            <div
                                 className={`hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full font-semibold text-sm transition-colors ${
-                                    currentStreak > 0 
-                                    ? "bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400" 
-                                    : "bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500"
-                                }`} 
+                                    currentStreak > 0
+                                        ? "bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400"
+                                        : "bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500"
+                                }`}
                             >
-                                <Flame 
-                                    size={18} 
-                                    className={currentStreak > 0 ? "fill-orange-500 text-orange-600" : "text-slate-400 dark:text-slate-500"} 
+                                <Flame
+                                    size={18}
+                                    className={currentStreak > 0 ? "fill-orange-500 text-orange-600" : "text-slate-400 dark:text-slate-500"}
                                 />
                                 <span>{currentStreak}</span>
                             </div>
@@ -1483,9 +1482,9 @@ const App: React.FC = () => {
 
                 {/* Set Selector - Hidden in Zen Mode */}
                 {!isZenMode && (
-                    <SetSelector 
-                        sets={loadedDictionary.sets} 
-                        selectedSetIndex={selectedSetIndex} 
+                    <SetSelector
+                        sets={loadedDictionary.sets}
+                        selectedSetIndex={selectedSetIndex}
                         onSelectSet={handleSelectSet}
                         learnedWords={learnedWords}
                     />
@@ -1566,7 +1565,7 @@ const App: React.FC = () => {
                 dictionaryName={loadedDictionary.name}
                 onResetAllStats={handleResetAllStats}
             />
-            <ModelSelectorModal 
+            <ModelSelectorModal
                 isOpen={isModelSelectorOpen}
                 onClose={() => setIsModelSelectorOpen(false)}
                 currentModel={selectedGeminiModel}
