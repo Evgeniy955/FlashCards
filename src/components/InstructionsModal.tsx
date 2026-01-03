@@ -75,11 +75,11 @@ const RussianContent: React.FC = () => (
         <p className="mb-3">
           Для создания собственного словаря используйте Excel (.xlsx). Структура файла должна быть следующей:
         </p>
-        
+
         <div className="flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-300 mt-4 mb-2">
             <Table size={16} /> Схема Excel файла:
         </div>
-        
+
         <ExcelSchema lang1="English" lang2="Russian" example1="Apple" example2="Яблоко" />
 
         <ul className="list-disc list-inside space-y-2 mt-3 text-sm">
@@ -156,10 +156,10 @@ const UkrainianContent: React.FC = () => (
             <Table size={16} /> Схема Excel файлу:
         </div>
 
-        <ExcelSchema lang1="English" lang2="Ukrainian" example1="Apple" example2="Яблуко" />
+        <ExcelSchema lang1="English" lang2="Українська" example1="Apple" example2="Яблуко" />
 
         <ul className="list-disc list-inside space-y-2 mt-3 text-sm">
-            <li><strong>Рядок 1 (Заголовок):</strong> Назви мов (наприклад, English, Ukrainian).</li>
+            <li><strong>Рядок 1 (Заголовок):</strong> Назви мов (наприклад, English, Українська).</li>
             <li><strong>Стовпець A:</strong> Слова мовою, яку вивчаєте.</li>
             <li><strong>Стовпець C:</strong> Переклад.</li>
             <li><strong>Стовпці B та D:</strong> Мають залишатися порожніми (для розділення).</li>
