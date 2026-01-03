@@ -46,10 +46,9 @@ export const Flashcard: React.FC<FlashcardProps> = ({
     const [showSettings, setShowSettings] = useState(false);
     const [isExpanded, setIsExpanded] = useState(false);
     const [hasOverflow, setHasOverflow] = useState(false);
-    const [isMobile, setIsMobile] = useState(false);
 
     const textRef = useRef<HTMLDivElement>(null);
-    const innerTextRef = useRef<HTMLDivElement>(null);
+    const innerContentRef = useRef<HTMLDivElement>(null);
 
     // Swipe Logic States
     const [dragStart, setDragStart] = useState<{ x: number; y: number } | null>(null);
@@ -57,18 +56,19 @@ export const Flashcard: React.FC<FlashcardProps> = ({
     const [isDragging, setIsDragging] = useState(false);
     const cardRef = useRef<HTMLDivElement>(null);
 
-    // Check for overflow and mobile resolution
+    // Check for overflow when card is flipped or sentence changes
     useEffect(() => {
-        const checkState = () => {
-            setIsMobile(globalThis.innerWidth < 640);
-            if (innerTextRef.current && textRef.current) {
-                setHasOverflow(innerTextRef.current.scrollHeight > textRef.current.clientHeight);
+        const checkOverflow = () => {
+            if (innerContentRef.current && textRef.current) {
+                const overflow = innerContentRef.current.scrollHeight > textRef.current.clientHeight;
+                setHasOverflow(overflow);
             }
         };
 
-        checkState();
-        globalThis.addEventListener('resize', checkState);
-        return () => globalThis.removeEventListener('resize', checkState);
+        if (isFlipped) {
+            const timeout = setTimeout(checkOverflow, 150);
+            return () => clearTimeout(timeout);
+        }
     }, [exampleSentence, isFlipped]);
 
     // Initial setup: Load saved preferences
@@ -120,12 +120,13 @@ export const Flashcard: React.FC<FlashcardProps> = ({
         localStorage.setItem('fwt_speech_rate', rate.toString());
     }
 
-    // Reset drag state when word changes
+    // Reset states when word changes
     useEffect(() => {
         setDragOffset({ x: 0, y: 0 });
         setIsDragging(false);
         setShowSettings(false);
         setIsExpanded(false);
+        setHasOverflow(false);
     }, [word]);
 
     const handlePlayAudioSequence = (e: React.MouseEvent) => {
@@ -155,7 +156,6 @@ export const Flashcard: React.FC<FlashcardProps> = ({
         if (onGenerateContext) onGenerateContext();
     };
 
-    // --- Touch / Swipe Handlers ---
     const handleTouchStart = (e: React.TouchEvent | React.MouseEvent) => {
         const target = e.target as HTMLElement;
         if (target.closest('button') || target.closest('select')) return;
@@ -196,11 +196,9 @@ export const Flashcard: React.FC<FlashcardProps> = ({
         onFlip();
     };
 
-    const openFullText = (e: React.MouseEvent) => {
-        if (isMobile && hasOverflow) {
-            e.stopPropagation();
-            setIsExpanded(true);
-        }
+    const toggleExpand = (e: React.MouseEvent) => {
+        e.stopPropagation();
+        setIsExpanded(!isExpanded);
     };
 
     const isStandardMode = translationMode === 'standard';
@@ -219,7 +217,7 @@ export const Flashcard: React.FC<FlashcardProps> = ({
             onClick={() => setIsExpanded(false)}
         >
             <div
-                className="bg-white dark:bg-slate-800 rounded-2xl p-8 max-w-lg w-full shadow-2xl relative overflow-y-auto max-h-[80vh]"
+                className="bg-white dark:bg-slate-800 rounded-2xl p-8 max-w-lg w-full shadow-2xl relative overflow-y-auto max-h-[85vh]"
                 onClick={e => e.stopPropagation()}
             >
                 <button
@@ -235,7 +233,7 @@ export const Flashcard: React.FC<FlashcardProps> = ({
                 <div className="mt-8 flex justify-center">
                     <button
                         onClick={() => setIsExpanded(false)}
-                        className="px-6 py-2 bg-indigo-600 text-white rounded-full font-semibold hover:bg-indigo-700 transition-colors"
+                        className="px-6 py-2 bg-indigo-600 text-white rounded-full font-semibold hover:bg-indigo-700 transition-colors shadow-lg"
                     >
                         Close
                     </button>
@@ -260,7 +258,7 @@ export const Flashcard: React.FC<FlashcardProps> = ({
                     <Check size={14} /> <span>{knowAttempts}/{totalAttempts}</span>
                 </div>
             )}
-            <span className={`text-4xl sm:text-5xl font-bold ${isStandardMode ? 'text-slate-900 dark:text-white' : 'text-white'}`}>{frontWord}</span>
+            <span className={`text-4xl sm:text-5xl font-bold ${isStandardMode ? 'text-slate-900 dark:text-white' : 'text-white'} line-clamp-3`}>{frontWord}</span>
         </div>
     );
 
@@ -286,31 +284,36 @@ export const Flashcard: React.FC<FlashcardProps> = ({
             {showSettings ? (
                 <div className="flex flex-col items-center w-full h-full justify-center p-4 animate-fade-in" onClick={e => e.stopPropagation()}>
                     <h3 className={`text-lg font-semibold mb-4 ${isStandardMode ? 'text-white' : 'text-slate-800 dark:text-white'}`}>Voice Settings</h3>
-                    <div className="w-full max-w-xs space-y-4">
+                    <div className="w-full max-w-xs space-y-4 text-left">
                         <select value={selectedVoiceURI} onChange={handleVoiceChange} className="w-full p-2 text-sm rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white">
                             {voices.map(v => <option key={v.voiceURI} value={v.voiceURI}>{v.name.replace(/Google |English /g, '')}</option>)}
                         </select>
                         <div className="flex items-center justify-between bg-black/10 dark:bg-white/10 rounded-full p-1">
-                            {[0.8, 1, 1.2].map(rate => <button key={rate} onClick={() => handleRateChange(rate)} className={`px-4 py-1 rounded-full text-xs font-bold ${speechRate === rate ? 'bg-white text-indigo-600' : 'text-slate-500'}`}>{rate}x</button>)}
+                            {[0.8, 1, 1.2].map(rate => <button key={rate} onClick={() => handleRateChange(rate)} className={`px-4 py-1 rounded-full text-xs font-bold ${speechRate === rate ? 'bg-white text-indigo-600' : 'text-slate-500 dark:text-slate-300'}`}>{rate}x</button>)}
                         </div>
                     </div>
                 </div>
             ) : (
-                <div className="flex flex-col items-center w-full h-full justify-center">
-                    <span className={`text-4xl sm:text-5xl font-bold mb-4 ${isStandardMode ? 'text-white' : 'text-slate-900 dark:text-white'}`}>{backWord}</span>
+                <div className="flex flex-col items-center w-full h-full justify-center px-4 overflow-hidden">
+                    <div className={`w-full text-3xl sm:text-4xl font-bold mb-4 ${isStandardMode ? 'text-white' : 'text-slate-900 dark:text-white'} text-center leading-tight`}>
+                        {backWord}
+                    </div>
                     {exampleSentence && (
                         <div
                             ref={textRef}
-                            onClick={openFullText}
-                            className={`group relative max-h-[40%] text-left w-full px-6 py-3 rounded-xl transition-all ${isStandardMode ? 'bg-indigo-600/50 text-indigo-50' : 'bg-slate-100 dark:bg-slate-700/50 text-slate-600 dark:text-slate-300'} ${isMobile && hasOverflow ? 'cursor-zoom-in hover:bg-opacity-70' : 'cursor-default'} overflow-hidden`}
+                            className={`relative w-full max-h-[40%] rounded-xl transition-all overflow-hidden flex flex-col items-start ${isStandardMode ? 'bg-indigo-600/40 text-indigo-50' : 'bg-slate-100 dark:bg-slate-700/50 text-slate-600 dark:text-slate-300'}`}
                         >
-                            <div ref={innerTextRef} className="text-sm line-clamp-3">
+                            <div ref={innerContentRef} className="p-4 text-left text-sm whitespace-pre-line leading-relaxed flex flex-col gap-2 w-full">
                                 {exampleSentence}
                             </div>
-                            {isMobile && hasOverflow && (
-                                <div className="absolute bottom-1 right-2 opacity-40 group-hover:opacity-100 transition-opacity">
-                                    <Maximize2 size={12} />
-                                </div>
+                            {hasOverflow && (
+                                <button
+                                    onClick={toggleExpand}
+                                    className="absolute bottom-2 right-2 p-1.5 bg-black/20 hover:bg-black/40 rounded-lg text-white transition-all shadow-lg backdrop-blur-sm"
+                                    title="Expand Text"
+                                >
+                                    <Maximize2 size={16} />
+                                </button>
                             )}
                         </div>
                     )}
