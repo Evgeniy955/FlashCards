@@ -295,7 +295,7 @@ export const Flashcard: React.FC<FlashcardProps> = ({
                     <Check size={14} /> <span>{knowAttempts}/{totalAttempts}</span>
                 </div>
             )}
-            <span className={`text-4xl sm:text-5xl font-extrabold ${isStandardMode ? 'text-slate-900 dark:text-white' : 'text-white'} line-clamp-3 leading-tight`}>{frontWord}</span>
+            <span className={`text-3xl sm:text-4xl font-bold ${isStandardMode ? 'text-slate-900 dark:text-white' : 'text-white'} line-clamp-3 leading-tight`}>{frontWord}</span>
         </div>
     );
 
@@ -334,7 +334,7 @@ export const Flashcard: React.FC<FlashcardProps> = ({
                 </div>
             ) : (
                 <div className="flex flex-col items-center w-full h-full justify-start pt-8 px-4 overflow-hidden">
-                    <div className={`w-full text-2xl sm:text-3xl font-extrabold mb-4 ${isStandardMode ? 'text-white' : 'text-slate-900 dark:text-white'} text-center leading-tight pr-24 sm:pr-0`}>
+                    <div className={`w-full text-xl sm:text-2xl font-bold mb-4 ${isStandardMode ? 'text-white' : 'text-slate-900 dark:text-white'} text-center leading-tight pr-24 sm:pr-0`}>
                         {backWord}
                     </div>
                     {exampleSentence && (
