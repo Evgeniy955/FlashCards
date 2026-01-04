@@ -20,15 +20,25 @@ export const generateExampleSentence = async (modelName: string, word: string, t
         const response = await ai.models.generateContent({
             model: modelName, // Use the selected modelName
             contents: `
-            Analyze the word "${word}" (Target Language: ${targetLang}). 
-            Create a concise "Flashcard Content" for a student whose native language is ${nativeLang}.
+            Analyze the input: "${word}" (Target Language: ${targetLang}). 
+            Create "Flashcard Content" for a student whose native language is ${nativeLang}.
             
-            Output format must be exactly like this (keep the emojis):
-            📖 **Meaning:** [A very simple definition in ${targetLang}]
-            🔗 **Link:** [A common collocation or 2-3 word phrase with this word in ${targetLang}]
-            ✍️ **Example:** [A vivid, memorable sentence using the word in ${targetLang}]
+            ADAPTIVE INSTRUCTIONS:
+            1. If the input is a SINGLE WORD or SHORT PHRASE:
+               - 📖 **Meaning:** A simple definition in ${targetLang}.
+               - 🔗 **Link:** A common 2-3 word collocation or phrase.
+               - ✍️ **Example:** A single vivid and memorable sentence.
+
+            2. If the input is a FULL SENTENCE or LONG EXPRESSION:
+               - 📖 **Context:** Explain the nuance, tone, or specific situation where this sentence is used.
+               - 🔗 **Variations Link:** Provide 1-2 alternative ways to say the same thing.
+               - ✍️ **Dialogue Example:** Provide a short, natural dialogue (2-4 lines) where this sentence is used in a real conversation.
             
-            Do not include the translation to ${nativeLang} unless strictly necessary for clarity. Keep it simple (A2-B1 level).
+            CONSTRAINTS:
+            - Output format MUST strictly follow the emojis and bold labels above.
+            - Do not include translations unless essential for rare idioms.
+            - Keep language complexity at A2-B1 level.
+            - Use the labels "Meaning/Context", "Link", and "Example" (or "Dialogue Example") to ensure UI highlighting.
             `,
         });
         return response.text?.trim() || '';
@@ -129,8 +139,8 @@ export const chatWithAI = async (
 
     const nameInstruction = userName ? `The student's name is ${userName}. Use their name naturally in the conversation, especially when greeting.` : '';
 
-    const roleInstruction = mode === 'roleplay' 
-        ? `Scenario: ${scenario}. Stay strictly in character.` 
+    const roleInstruction = mode === 'roleplay'
+        ? `Scenario: ${scenario}. Stay strictly in character.`
         : `Topic: ${scenario}. Be a friendly conversational partner.`;
 
     const systemPrompt = `
@@ -165,11 +175,11 @@ export const chatWithAI = async (
     } catch (error: any) {
         console.error("Gemini chat error:", error);
         const errString = error.toString();
-        
+
         const projectError = getProjectError(errString);
         if (projectError) throw new Error(projectError);
         if (error.status === 403 || errString.includes('403')) throw new Error("Access Denied (403). Check API Key.");
-        
+
         throw new Error("Failed to connect to AI.");
     }
 };
