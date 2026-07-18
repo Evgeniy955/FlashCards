@@ -1,20 +1,58 @@
-import React from 'react';
-import { Loader2, MessageSquarePlus, Send } from 'lucide-react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { Loader2, MessageSquarePlus, Mic, MicOff } from 'lucide-react';
 import { Modal } from './Modal';
 import type { ChatMessage } from '../lib/gemini';
+
+interface SpeechRecognitionAlternativeLike {
+  transcript: string;
+}
+
+interface SpeechRecognitionResultLike {
+  isFinal: boolean;
+  length: number;
+  [index: number]: SpeechRecognitionAlternativeLike;
+}
+
+interface SpeechRecognitionEventLike extends Event {
+  resultIndex: number;
+  results: ArrayLike<SpeechRecognitionResultLike>;
+}
+
+interface SpeechRecognitionErrorEventLike extends Event {
+  error?: string;
+}
+
+interface SpeechRecognitionLike extends EventTarget {
+  continuous: boolean;
+  interimResults: boolean;
+  lang: string;
+  maxAlternatives: number;
+  onresult: ((event: SpeechRecognitionEventLike) => void) | null;
+  onend: (() => void) | null;
+  onerror: ((event: SpeechRecognitionErrorEventLike) => void) | null;
+  start: () => void;
+  stop: () => void;
+}
+
+type SpeechRecognitionConstructor = new () => SpeechRecognitionLike;
+
+declare global {
+  interface Window {
+    SpeechRecognition?: SpeechRecognitionConstructor;
+    webkitSpeechRecognition?: SpeechRecognitionConstructor;
+  }
+}
 
 interface TopicPracticeModalProps {
   isOpen: boolean;
   onClose: () => void;
   topic: string;
   onTopicChange: (value: string) => void;
-  draftMessage: string;
-  onDraftMessageChange: (value: string) => void;
   messages: ChatMessage[];
   isLoading: boolean;
   error: string | null;
   onStart: () => void;
-  onSend: () => void;
+  onSendTranscript: (transcript: string) => void;
 }
 
 export const TopicPracticeModal: React.FC<TopicPracticeModalProps> = ({
@@ -22,14 +60,102 @@ export const TopicPracticeModal: React.FC<TopicPracticeModalProps> = ({
   onClose,
   topic,
   onTopicChange,
-  draftMessage,
-  onDraftMessageChange,
   messages,
   isLoading,
   error,
   onStart,
-  onSend,
+  onSendTranscript,
 }) => {
+  const [isListening, setIsListening] = useState(false);
+  const [heardText, setHeardText] = useState('');
+  const [speechError, setSpeechError] = useState<string | null>(null);
+  const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
+  const transcriptRef = useRef('');
+
+  const speechRecognitionCtor = useMemo(
+    () => globalThis.window?.SpeechRecognition || globalThis.window?.webkitSpeechRecognition,
+    []
+  );
+
+  useEffect(() => {
+    if (!isOpen) {
+      recognitionRef.current?.stop();
+      setIsListening(false);
+      transcriptRef.current = '';
+      setHeardText('');
+      setSpeechError(null);
+    }
+  }, [isOpen]);
+
+  const startListening = () => {
+    if (!speechRecognitionCtor) {
+      setSpeechError('Speech recognition is not available in this browser.');
+      return;
+    }
+
+    if (!topic.trim()) {
+      setSpeechError('Choose a topic first.');
+      return;
+    }
+
+    if ('speechSynthesis' in globalThis) {
+      globalThis.speechSynthesis.cancel();
+    }
+
+    const recognition = new speechRecognitionCtor();
+    recognition.continuous = false;
+    recognition.interimResults = true;
+    recognition.lang = 'en-US';
+    recognition.maxAlternatives = 1;
+
+    transcriptRef.current = '';
+    setHeardText('');
+    setSpeechError(null);
+    setIsListening(true);
+
+    recognition.onresult = (event) => {
+      let combinedTranscript = '';
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const result = event.results[i];
+        combinedTranscript += result[0]?.transcript || '';
+      }
+      transcriptRef.current = combinedTranscript.trim();
+      setHeardText(transcriptRef.current);
+    };
+
+    recognition.onerror = (event) => {
+      const message = event.error === 'not-allowed'
+        ? 'Microphone access was denied.'
+        : event.error === 'no-speech'
+          ? 'No speech was detected. Please try again.'
+          : 'Voice input failed. Please try again.';
+      setSpeechError(message);
+    };
+
+    recognition.onend = () => {
+      setIsListening(false);
+      const finalTranscript = transcriptRef.current.trim();
+      if (finalTranscript) {
+        onSendTranscript(finalTranscript);
+      }
+    };
+
+    recognitionRef.current = recognition;
+    recognition.start();
+  };
+
+  const stopListening = () => {
+    recognitionRef.current?.stop();
+  };
+
+  const toggleListening = () => {
+    if (isListening) {
+      stopListening();
+    } else {
+      startListening();
+    }
+  };
+
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="Topic Practice">
       <div className="flex max-h-[75vh] flex-col gap-4 text-slate-700 dark:text-slate-200">
@@ -80,24 +206,17 @@ export const TopicPracticeModal: React.FC<TopicPracticeModalProps> = ({
           )}
         </div>
 
-        {error && (
+        {(error || speechError) && (
           <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700 dark:border-rose-800 dark:bg-rose-900/20 dark:text-rose-300">
-            {error}
+            {error || speechError}
           </div>
         )}
 
-        <div className="space-y-2">
-          <label htmlFor="topic-practice-message" className="text-sm font-medium">
-            Your message
-          </label>
-          <textarea
-            id="topic-practice-message"
-            value={draftMessage}
-            onChange={(e) => onDraftMessageChange(e.target.value)}
-            placeholder="Write your answer in English..."
-            rows={4}
-            className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none transition focus:border-indigo-500 dark:border-slate-600 dark:bg-slate-900"
-          />
+        <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-700 dark:bg-slate-900/60">
+          <div className="mb-1 text-sm font-medium">Voice Input</div>
+          <div className="text-sm text-slate-600 dark:text-slate-300">
+            {heardText || (isListening ? 'Listening...' : 'Tap the microphone and speak in English.')}
+          </div>
         </div>
 
         <div className="flex items-center justify-between gap-3">
@@ -109,12 +228,14 @@ export const TopicPracticeModal: React.FC<TopicPracticeModalProps> = ({
             Start Topic
           </button>
           <button
-            onClick={onSend}
-            disabled={isLoading || !topic.trim() || !draftMessage.trim()}
-            className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
+            onClick={toggleListening}
+            disabled={isLoading || !topic.trim()}
+            className={`inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold text-white transition disabled:cursor-not-allowed disabled:opacity-50 ${
+              isListening ? 'bg-rose-600 hover:bg-rose-700' : 'bg-indigo-600 hover:bg-indigo-700'
+            }`}
           >
-            <Send size={16} />
-            Send
+            {isListening ? <MicOff size={16} /> : <Mic size={16} />}
+            {isListening ? 'Stop' : 'Speak'}
           </button>
         </div>
       </div>

@@ -208,7 +208,6 @@ const App: React.FC = () => {
     const [allTimeStats, setAllTimeStats] = useState<ProfileStats | null>(null);
     const [topicPracticeTopic, setTopicPracticeTopic] = useState('');
     const [topicPracticeMessages, setTopicPracticeMessages] = useState<ChatMessage[]>([]);
-    const [topicPracticeDraft, setTopicPracticeDraft] = useState('');
     const [isTopicPracticeLoading, setIsTopicPracticeLoading] = useState(false);
     const [topicPracticeError, setTopicPracticeError] = useState<string | null>(null);
 
@@ -1275,6 +1274,28 @@ const App: React.FC = () => {
         }
     };
 
+    const speakTopicPracticeReply = useCallback((text: string) => {
+        if (!('speechSynthesis' in globalThis)) return;
+
+        globalThis.speechSynthesis.cancel();
+
+        const utterance = new SpeechSynthesisUtterance(text);
+        const availableVoices = globalThis.speechSynthesis.getVoices();
+        const savedVoiceURI = localStorage.getItem('fwt_voice_uri');
+        const savedRate = parseFloat(localStorage.getItem('fwt_speech_rate') || '1');
+        const voice = availableVoices.find(v => v.voiceURI === savedVoiceURI) || availableVoices.find(v => v.lang.startsWith('en'));
+
+        if (voice) {
+            utterance.voice = voice;
+            utterance.lang = voice.lang;
+        } else {
+            utterance.lang = 'en-US';
+        }
+
+        utterance.rate = Number.isFinite(savedRate) ? savedRate : 1;
+        globalThis.speechSynthesis.speak(utterance);
+    }, []);
+
     const sendTopicPracticePrompt = useCallback(async (userText?: string) => {
         if (!topicPracticeTopic.trim()) {
             setTopicPracticeError('Choose a topic first.');
@@ -1285,27 +1306,29 @@ const App: React.FC = () => {
         const nextMessages = trimmedUserText
             ? [...topicPracticeMessages, { role: 'user', text: trimmedUserText } as ChatMessage]
             : topicPracticeMessages;
+        const modelHistory = nextMessages.length === 0
+            ? [{ role: 'user', text: `Let's practice the topic "${topicPracticeTopic}". Ask me one short opening question.` } as ChatMessage]
+            : nextMessages;
 
         if (trimmedUserText) {
             setTopicPracticeMessages(nextMessages);
-            setTopicPracticeDraft('');
         }
 
         setIsTopicPracticeLoading(true);
         setTopicPracticeError(null);
 
         try {
-            const starterTopic = `The student wants to practice the topic: ${topicPracticeTopic}. Start with a friendly question and keep the conversation easy to follow.`;
             const result = await chatWithAI(
                 selectedGeminiModel,
-                nextMessages,
-                trimmedUserText ? topicPracticeTopic : starterTopic,
+                modelHistory,
+                topicPracticeTopic,
                 'topic-practice',
                 user?.displayName || undefined
             );
 
             const switchedModel = syncGeminiModelAfterFallback(result.usedModel, selectedGeminiModel);
             setTopicPracticeMessages(prev => [...prev, { role: 'model', text: result.text }]);
+            speakTopicPracticeReply(result.text);
 
             if (switchedModel) {
                 setTopicPracticeError(`Rate limit reached for ${selectedGeminiModel}. Switched to ${result.usedModel} automatically.`);
@@ -1316,17 +1339,17 @@ const App: React.FC = () => {
         } finally {
             setIsTopicPracticeLoading(false);
         }
-    }, [topicPracticeMessages, topicPracticeTopic, selectedGeminiModel, user, syncGeminiModelAfterFallback]);
+    }, [topicPracticeMessages, topicPracticeTopic, selectedGeminiModel, user, syncGeminiModelAfterFallback, speakTopicPracticeReply]);
 
     const handleStartTopicPractice = useCallback(() => {
         if (topicPracticeMessages.length > 0) return;
         void sendTopicPracticePrompt();
     }, [sendTopicPracticePrompt, topicPracticeMessages.length]);
 
-    const handleSendTopicPracticeMessage = useCallback(() => {
-        if (!topicPracticeDraft.trim()) return;
-        void sendTopicPracticePrompt(topicPracticeDraft);
-    }, [sendTopicPracticePrompt, topicPracticeDraft]);
+    const handleSendTopicPracticeMessage = useCallback((transcript: string) => {
+        if (!transcript.trim()) return;
+        void sendTopicPracticePrompt(transcript);
+    }, [sendTopicPracticePrompt]);
 
 
     const handleResetProgress = async () => {
@@ -1696,20 +1719,26 @@ const App: React.FC = () => {
             />
             <TopicPracticeModal
                 isOpen={isTopicPracticeOpen}
-                onClose={() => setIsTopicPracticeOpen(false)}
+                onClose={() => {
+                    if ('speechSynthesis' in globalThis) {
+                        globalThis.speechSynthesis.cancel();
+                    }
+                    setIsTopicPracticeOpen(false);
+                }}
                 topic={topicPracticeTopic}
                 onTopicChange={(value) => {
                     setTopicPracticeTopic(value);
                     setTopicPracticeMessages([]);
                     setTopicPracticeError(null);
+                    if ('speechSynthesis' in globalThis) {
+                        globalThis.speechSynthesis.cancel();
+                    }
                 }}
-                draftMessage={topicPracticeDraft}
-                onDraftMessageChange={setTopicPracticeDraft}
                 messages={topicPracticeMessages}
                 isLoading={isTopicPracticeLoading}
                 error={topicPracticeError}
                 onStart={handleStartTopicPractice}
-                onSend={handleSendTopicPracticeMessage}
+                onSendTranscript={handleSendTopicPracticeMessage}
             />
         </main>
     );
