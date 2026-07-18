@@ -15,11 +15,86 @@ const getProjectError = (errorString: string): string | null => {
     return null;
 };
 
-export const generateExampleSentence = async (modelName: string, word: string, targetLang: string = 'English', nativeLang: string = 'English'): Promise<string> => {
+const AVAILABLE_GEMINI_MODELS = [
+    'gemini-2.5-flash-lite',
+    'gemini-2.5-flash',
+    'gemini-3.5-flash',
+] as const;
+
+export interface GeminiExecutionMetadata {
+    usedModel: string;
+    requestedModel: string;
+    fellBack: boolean;
+}
+
+export interface GeminiTextResult extends GeminiExecutionMetadata {
+    text: string;
+}
+
+export interface GeminiValidationResult extends GeminiExecutionMetadata {
+    isCorrect: boolean;
+    feedback: string;
+}
+
+const isRateLimitError = (error: any): boolean => {
+    const errString = String(error);
+    return (
+        error?.status === 429 ||
+        errString.includes('429') ||
+        errString.includes('RESOURCE_EXHAUSTED') ||
+        errString.toLowerCase().includes('rate limit') ||
+        errString.toLowerCase().includes('quota')
+    );
+};
+
+const getFallbackModelOrder = (requestedModel: string): string[] => {
+    const normalizedRequestedModel = AVAILABLE_GEMINI_MODELS.includes(requestedModel as any)
+        ? requestedModel
+        : AVAILABLE_GEMINI_MODELS[0];
+    const remainingModels = AVAILABLE_GEMINI_MODELS.filter(model => model !== normalizedRequestedModel);
+    return [normalizedRequestedModel, ...remainingModels];
+};
+
+const withModelFallback = async <T>(
+    requestedModel: string,
+    runner: (modelName: string) => Promise<T>
+): Promise<{ result: T; metadata: GeminiExecutionMetadata }> => {
+    const orderedModels = getFallbackModelOrder(requestedModel);
+    let lastError: any = null;
+
+    for (const modelName of orderedModels) {
+        try {
+            const result = await runner(modelName);
+            return {
+                result,
+                metadata: {
+                    usedModel: modelName,
+                    requestedModel,
+                    fellBack: modelName !== requestedModel,
+                },
+            };
+        } catch (error: any) {
+            lastError = error;
+            if (!isRateLimitError(error)) {
+                throw error;
+            }
+        }
+    }
+
+    throw lastError;
+};
+
+export const generateExampleSentence = async (
+    modelName: string,
+    word: string,
+    targetLang: string = 'English',
+    nativeLang: string = 'English'
+): Promise<GeminiTextResult> => {
     try {
-        const response = await ai.models.generateContent({
-            model: modelName, // Use the selected modelName
-            contents: `
+        const { result, metadata } = await withModelFallback(modelName, async (activeModel) => {
+            const response = await ai.models.generateContent({
+                model: activeModel,
+                contents: `
             Analyze the input: "${word}" (Target Language: ${targetLang}). 
             Create "Flashcard Content" for a student whose native language is ${nativeLang}.
             
@@ -40,8 +115,14 @@ export const generateExampleSentence = async (modelName: string, word: string, t
             - Keep language complexity at A2-B1 level.
             - Use the labels "Meaning/Context", "Link", and "Example" (or "Dialogue Example") to ensure UI highlighting.
             `,
+            });
+            return response.text?.trim() || '';
         });
-        return response.text?.trim() || '';
+
+        return {
+            text: result,
+            ...metadata,
+        };
     } catch (error: any) {
         console.error("Gemini generation error:", error);
         const errString = error.toString();
@@ -64,7 +145,7 @@ export const validateAnswerWithAI = async (
     userAnswer: string,
     correctAnswer: string,
     targetLanguage: string = 'English'
-): Promise<{ isCorrect: boolean; feedback: string }> => {
+): Promise<GeminiValidationResult> => {
 
     const schema = {
         type: Type.OBJECT,
@@ -82,9 +163,10 @@ export const validateAnswerWithAI = async (
     };
 
     try {
-        const response = await ai.models.generateContent({
-            model: modelName, // Use the selected modelName
-            contents: `
+        const { result, metadata } = await withModelFallback(modelName, async (activeModel) => {
+            const response = await ai.models.generateContent({
+                model: activeModel,
+                contents: `
         Task: Validate a vocabulary flashcard answer.
         Target Language: ${targetLanguage}
         Target Word (Correct Answer): "${correctAnswer}"
@@ -98,28 +180,52 @@ export const validateAnswerWithAI = async (
         
         Respond in JSON.
       `,
-            config: {
-                responseMimeType: "application/json",
-                responseSchema: schema,
-            },
+                config: {
+                    responseMimeType: "application/json",
+                    responseSchema: schema,
+                },
+            });
+
+            const text = response.text;
+            if (!text) return { isCorrect: false, feedback: "AI error" };
+
+            return JSON.parse(text) as { isCorrect: boolean; feedback: string };
         });
 
-        const text = response.text;
-        if (!text) return { isCorrect: false, feedback: "AI error" };
-
-        return JSON.parse(text);
+        return {
+            ...result,
+            ...metadata,
+        };
     } catch (error: any) {
         console.error("Gemini validation error:", error);
         const errString = error.toString();
 
         if (getProjectError(errString)) {
-            return { isCorrect: false, feedback: "Wrong Project ID (Check Console)" };
+            return {
+                isCorrect: false,
+                feedback: "Wrong Project ID (Check Console)",
+                usedModel: modelName,
+                requestedModel: modelName,
+                fellBack: false,
+            };
         }
 
         if (error.status === 403 || errString.includes('403')) {
-            return { isCorrect: false, feedback: "API Key 403 Forbidden" };
+            return {
+                isCorrect: false,
+                feedback: "API Key 403 Forbidden",
+                usedModel: modelName,
+                requestedModel: modelName,
+                fellBack: false,
+            };
         }
-        return { isCorrect: false, feedback: "" };
+        return {
+            isCorrect: false,
+            feedback: "",
+            usedModel: modelName,
+            requestedModel: modelName,
+            fellBack: false,
+        };
     }
 };
 
@@ -131,11 +237,12 @@ export interface ChatMessage {
 }
 
 export const chatWithAI = async (
+    modelName: string,
     history: ChatMessage[],
     scenario: string,
     mode: 'free' | 'roleplay',
     userName?: string
-): Promise<string> => {
+): Promise<GeminiTextResult> => {
 
     const nameInstruction = userName ? `The student's name is ${userName}. Use their name naturally in the conversation, especially when greeting.` : '';
 
@@ -166,12 +273,19 @@ export const chatWithAI = async (
             }))
         ];
 
-        const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash', // Chat model is fixed for this feature
-            contents: contents,
+        const { result, metadata } = await withModelFallback(modelName, async (activeModel) => {
+            const response = await ai.models.generateContent({
+                model: activeModel,
+                contents: contents,
+            });
+
+            return response.text?.trim() || "I'm listening...";
         });
 
-        return response.text?.trim() || "I'm listening...";
+        return {
+            text: result,
+            ...metadata,
+        };
     } catch (error: any) {
         console.error("Gemini chat error:", error);
         const errString = error.toString();
