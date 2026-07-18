@@ -54,7 +54,7 @@ export const ModelSelectorModal: React.FC<ModelSelectorModalProps> = ({
         </ul>
         <div className="mt-6 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-100 dark:border-blue-800">
             <p className="text-xs text-blue-800 dark:text-blue-300">
-                <strong>Tip for Free Users:</strong> Start with <strong>Gemini 2.5 Flash-Lite</strong>. It keeps the same 1,048,576 input-token window and 65,536 output-token limit as Flash/Pro, while staying the most economical stable option.
+                <strong>Tip for Free Users:</strong> Start with <strong>Gemini 3.1 Flash-Lite</strong> if you want a newer Lite model with the same large context window.
             </p>
         </div>
         <p className="mt-3 text-[11px] text-slate-500 dark:text-slate-400">

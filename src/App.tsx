@@ -46,10 +46,10 @@ interface ProfileStats {
 
 const GEMINI_MODELS = [
     {
-        id: 'gemini-2.5-flash-lite',
-        name: 'Gemini 2.5 Flash-Lite (Best for Free Tier)',
+        id: 'gemini-3.1-flash-lite',
+        name: 'Gemini 3.1 Flash-Lite (Best for Free Tier)',
         shortLabel: 'Economical',
-        description: 'Fastest and cheapest stable choice for frequent study requests.',
+        description: 'Newer Lite model for high-volume study requests.',
     },
     {
         id: 'gemini-2.5-flash',
@@ -66,7 +66,8 @@ const GEMINI_MODELS = [
 ] as const;
 
 const LEGACY_GEMINI_MODEL_MAP: Record<string, string> = {
-    'gemini-flash-lite-latest': 'gemini-2.5-flash-lite',
+    'gemini-flash-lite-latest': 'gemini-3.1-flash-lite',
+    'gemini-2.5-flash-lite': 'gemini-3.1-flash-lite',
     'gemini-3-flash-preview': 'gemini-3.5-flash',
 };
 
