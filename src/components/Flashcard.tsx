@@ -4,6 +4,7 @@ import { Volume2, Check, Sparkles, Loader2, RefreshCw, AlertCircle, Settings, X,
 import type { Word, TranslationMode } from '../types';
 import { Tooltip } from './Tooltip';
 import { createPortal } from 'react-dom';
+import { applySpeechPreferences, getSortedVoices, getPreferredEnglishVoice, getSpeechRate } from '../lib/speech';
 
 interface FlashcardProps {
   word: Word;
@@ -74,7 +75,7 @@ export const Flashcard: React.FC<FlashcardProps> = ({
   // Initial setup: Load saved preferences
   useEffect(() => {
       const savedRate = localStorage.getItem('fwt_speech_rate');
-      if (savedRate) setSpeechRate(parseFloat(savedRate));
+      setSpeechRate(getSpeechRate(savedRate));
       const savedVoice = localStorage.getItem('fwt_voice_uri');
       if (savedVoice) setSelectedVoiceURI(savedVoice);
   }, []);
@@ -88,19 +89,13 @@ export const Flashcard: React.FC<FlashcardProps> = ({
             setTimeout(loadVoices, 100);
             return;
         }
-        const sortedVoices = allVoices.sort((a, b) => {
-            const aEn = a.lang.startsWith('en');
-            const bEn = b.lang.startsWith('en');
-            if (aEn && !bEn) return -1;
-            if (!aEn && bEn) return 1;
-            return a.name.localeCompare(b.name);
-        });
+        const sortedVoices = getSortedVoices(allVoices);
         setVoices(sortedVoices);
         const savedVoice = localStorage.getItem('fwt_voice_uri');
         if (savedVoice && sortedVoices.some(v => v.voiceURI === savedVoice)) {
             setSelectedVoiceURI(savedVoice);
         } else if (!selectedVoiceURI && sortedVoices.length > 0) {
-             const preferred = sortedVoices.find(v => v.lang === 'en-US') || sortedVoices.find(v => v.lang.startsWith('en')) || sortedVoices[0];
+             const preferred = getPreferredEnglishVoice(sortedVoices);
             if (preferred) setSelectedVoiceURI(preferred.voiceURI);
         }
     };
@@ -134,16 +129,22 @@ export const Flashcard: React.FC<FlashcardProps> = ({
     if (!('speechSynthesis' in globalThis)) return;
     globalThis.speechSynthesis.cancel();
     const currentVoices = globalThis.speechSynthesis.getVoices();
-    const voice = currentVoices.find(v => v.voiceURI === selectedVoiceURI) || currentVoices.find(v => v.lang.startsWith('en'));
     const wordUtterance = new SpeechSynthesisUtterance(word.lang2);
-    if (voice) { wordUtterance.voice = voice; wordUtterance.lang = voice.lang; }
+    wordUtterance.rate = speechRate;
+    const voice = applySpeechPreferences(wordUtterance, currentVoices, selectedVoiceURI);
     wordUtterance.rate = speechRate;
     if (exampleSentence) {
       wordUtterance.onend = () => {
         setTimeout(() => {
           const sentenceUtterance = new SpeechSynthesisUtterance(exampleSentence.replace(/[*📖🔗✍️]/g, ''));
-          if (voice) { sentenceUtterance.voice = voice; sentenceUtterance.lang = voice.lang; }
+          if (voice) {
+            sentenceUtterance.voice = voice;
+            sentenceUtterance.lang = voice.lang;
+          } else {
+            sentenceUtterance.lang = 'en-US';
+          }
           sentenceUtterance.rate = speechRate;
+          sentenceUtterance.pitch = 1;
           globalThis.speechSynthesis.speak(sentenceUtterance);
         }, 300);
       };

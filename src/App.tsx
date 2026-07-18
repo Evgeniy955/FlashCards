@@ -29,6 +29,7 @@ import { ChatMessage, chatWithAI, generateExampleSentence, validateAnswerWithAI 
 import { sounds } from './lib/soundEffects';
 import { ModelSelectorModal } from './components/ModelSelectorModal';
 import { TopicPracticeModal } from './components/TopicPracticeModal';
+import { applySpeechPreferences } from './lib/speech';
 
 
 // --- Constants ---
@@ -1282,17 +1283,7 @@ const App: React.FC = () => {
         const utterance = new SpeechSynthesisUtterance(text);
         const availableVoices = globalThis.speechSynthesis.getVoices();
         const savedVoiceURI = localStorage.getItem('fwt_voice_uri');
-        const savedRate = parseFloat(localStorage.getItem('fwt_speech_rate') || '1');
-        const voice = availableVoices.find(v => v.voiceURI === savedVoiceURI) || availableVoices.find(v => v.lang.startsWith('en'));
-
-        if (voice) {
-            utterance.voice = voice;
-            utterance.lang = voice.lang;
-        } else {
-            utterance.lang = 'en-US';
-        }
-
-        utterance.rate = Number.isFinite(savedRate) ? savedRate : 1;
+        applySpeechPreferences(utterance, availableVoices, savedVoiceURI);
         globalThis.speechSynthesis.speak(utterance);
     }, []);
 
