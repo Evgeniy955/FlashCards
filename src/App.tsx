@@ -25,9 +25,10 @@ import { ThemeToggle } from './components/ThemeToggle';
 import { getDictionary } from './lib/indexedDB';
 import { StudyStatsToast } from './components/StudyStatsToast';
 import { loadSentences as loadLocalSentences, saveSentences as saveLocalSentences } from './lib/sentenceDB';
-import { generateExampleSentence, validateAnswerWithAI } from './lib/gemini';
+import { ChatMessage, chatWithAI, generateExampleSentence, validateAnswerWithAI } from './lib/gemini';
 import { sounds } from './lib/soundEffects';
 import { ModelSelectorModal } from './components/ModelSelectorModal';
+import { TopicPracticeModal } from './components/TopicPracticeModal';
 
 
 // --- Constants ---
@@ -202,8 +203,14 @@ const App: React.FC = () => {
     const [isLearnedWordsModalOpen, setLearnedWordsModalOpen] = useState(false);
     const [isProfileModalOpen, setProfileModalOpen] = useState(false);
     const [isModelSelectorOpen, setIsModelSelectorOpen] = useState(false);
+    const [isTopicPracticeOpen, setIsTopicPracticeOpen] = useState(false);
     const [theme, setTheme] = useState<Theme>('dark');
     const [allTimeStats, setAllTimeStats] = useState<ProfileStats | null>(null);
+    const [topicPracticeTopic, setTopicPracticeTopic] = useState('');
+    const [topicPracticeMessages, setTopicPracticeMessages] = useState<ChatMessage[]>([]);
+    const [topicPracticeDraft, setTopicPracticeDraft] = useState('');
+    const [isTopicPracticeLoading, setIsTopicPracticeLoading] = useState(false);
+    const [topicPracticeError, setTopicPracticeError] = useState<string | null>(null);
 
     // State for welcome toast & streak
     const [currentStreak, setCurrentStreak] = useState(0);
@@ -1268,6 +1275,59 @@ const App: React.FC = () => {
         }
     };
 
+    const sendTopicPracticePrompt = useCallback(async (userText?: string) => {
+        if (!topicPracticeTopic.trim()) {
+            setTopicPracticeError('Choose a topic first.');
+            return;
+        }
+
+        const trimmedUserText = userText?.trim() || '';
+        const nextMessages = trimmedUserText
+            ? [...topicPracticeMessages, { role: 'user', text: trimmedUserText } as ChatMessage]
+            : topicPracticeMessages;
+
+        if (trimmedUserText) {
+            setTopicPracticeMessages(nextMessages);
+            setTopicPracticeDraft('');
+        }
+
+        setIsTopicPracticeLoading(true);
+        setTopicPracticeError(null);
+
+        try {
+            const starterTopic = `The student wants to practice the topic: ${topicPracticeTopic}. Start with a friendly question and keep the conversation easy to follow.`;
+            const result = await chatWithAI(
+                selectedGeminiModel,
+                nextMessages,
+                trimmedUserText ? topicPracticeTopic : starterTopic,
+                'topic-practice',
+                user?.displayName || undefined
+            );
+
+            const switchedModel = syncGeminiModelAfterFallback(result.usedModel, selectedGeminiModel);
+            setTopicPracticeMessages(prev => [...prev, { role: 'model', text: result.text }]);
+
+            if (switchedModel) {
+                setTopicPracticeError(`Rate limit reached for ${selectedGeminiModel}. Switched to ${result.usedModel} automatically.`);
+            }
+        } catch (e: any) {
+            console.error('Topic practice failed', e);
+            setTopicPracticeError(e.message || 'Failed to continue the conversation.');
+        } finally {
+            setIsTopicPracticeLoading(false);
+        }
+    }, [topicPracticeMessages, topicPracticeTopic, selectedGeminiModel, user, syncGeminiModelAfterFallback]);
+
+    const handleStartTopicPractice = useCallback(() => {
+        if (topicPracticeMessages.length > 0) return;
+        void sendTopicPracticePrompt();
+    }, [sendTopicPracticePrompt, topicPracticeMessages.length]);
+
+    const handleSendTopicPracticeMessage = useCallback(() => {
+        if (!topicPracticeDraft.trim()) return;
+        void sendTopicPracticePrompt(topicPracticeDraft);
+    }, [sendTopicPracticePrompt, topicPracticeDraft]);
+
 
     const handleResetProgress = async () => {
         if (globalThis.confirm('Are you sure you want to reset learning progress for this dictionary? This action cannot be undone.')) {
@@ -1586,6 +1646,11 @@ const App: React.FC = () => {
                                 <Cpu size={18} /> Model
                             </button>
                         </Tooltip>
+                        <Tooltip content="Practice a topic with AI">
+                            <button onClick={() => setIsTopicPracticeOpen(true)} className="flex items-center gap-2 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors">
+                                <BookUser size={18} /> Practice
+                            </button>
+                        </Tooltip>
                         <Tooltip content="Show list of words in this set">
                             <button onClick={() => setIsWordListVisible(v => !v)} className="flex items-center gap-2 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors">
                                 <ChevronsUpDown size={18} /> List
@@ -1628,6 +1693,23 @@ const App: React.FC = () => {
                     shortLabel: model.shortLabel,
                     description: model.description,
                 }))}
+            />
+            <TopicPracticeModal
+                isOpen={isTopicPracticeOpen}
+                onClose={() => setIsTopicPracticeOpen(false)}
+                topic={topicPracticeTopic}
+                onTopicChange={(value) => {
+                    setTopicPracticeTopic(value);
+                    setTopicPracticeMessages([]);
+                    setTopicPracticeError(null);
+                }}
+                draftMessage={topicPracticeDraft}
+                onDraftMessageChange={setTopicPracticeDraft}
+                messages={topicPracticeMessages}
+                isLoading={isTopicPracticeLoading}
+                error={topicPracticeError}
+                onStart={handleStartTopicPractice}
+                onSend={handleSendTopicPracticeMessage}
             />
         </main>
     );

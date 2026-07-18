@@ -236,19 +236,36 @@ export interface ChatMessage {
     text: string;
 }
 
+export type ChatMode = 'free' | 'roleplay' | 'topic-practice';
+
 export const chatWithAI = async (
     modelName: string,
     history: ChatMessage[],
     scenario: string,
-    mode: 'free' | 'roleplay',
+    mode: ChatMode,
     userName?: string
 ): Promise<GeminiTextResult> => {
 
     const nameInstruction = userName ? `The student's name is ${userName}. Use their name naturally in the conversation, especially when greeting.` : '';
 
-    const roleInstruction = mode === 'roleplay' 
-        ? `Scenario: ${scenario}. Stay strictly in character.` 
-        : `Topic: ${scenario}. Be a friendly conversational partner.`;
+    const roleInstruction = mode === 'roleplay'
+        ? `Scenario: ${scenario}. Stay strictly in character.`
+        : mode === 'topic-practice'
+            ? `Practice Topic: ${scenario}. Help the student actively practice this exact topic and stay on it unless they clearly change topics.`
+            : `Topic: ${scenario}. Be a friendly conversational partner.`;
+
+    const correctionRules = mode === 'topic-practice'
+        ? `
+    2. **Tense Corrections Are Required**: If the student uses the wrong tense, you must correct it at the end of your reply in parentheses.
+    3. **Other Mistakes**: For non-tense mistakes, prioritize understanding. Correct only when the mistake makes the sentence unnatural or hard to understand.
+    4. **Topic Practice**: Keep the conversation focused on the chosen topic and help the student reuse related vocabulary and phrases.
+    5. **Supportive Rephrasing**: If the student expresses an idea awkwardly, answer their meaning first and then offer a more natural version.
+    6. **Engagement**: Always end with a short, relevant follow-up question to keep the practice going.
+    `
+        : `
+    2. **Corrections**: If the user makes a grammar or vocabulary mistake, reply naturally first, and then add a correction at the very end in parentheses. Example: "I agree with you. (Correction: You said 'I goed', but it should be 'I went')".
+    3. **Engagement**: Always end with a relevant question to keep the conversation going.
+    `;
 
     const systemPrompt = `
     You are a helpful English language tutor helping a student practice speaking.
@@ -257,8 +274,7 @@ export const chatWithAI = async (
     
     IMPORTANT RULES:
     1. **Conciseness**: Keep your responses short (1-3 sentences max) to simulate natural spoken dialogue.
-    2. **Corrections**: If the user makes a grammar or vocabulary mistake, reply naturally first, and then add a correction at the very end in parentheses. Example: "I agree with you. (Correction: You said 'I goed', but it should be 'I went')".
-    3. **Engagement**: Always end with a relevant question to keep the conversation going.
+    ${correctionRules}
     `;
 
     try {
