@@ -44,6 +44,38 @@ interface ProfileStats {
     dictionaryCount?: number;
 }
 
+const GEMINI_MODELS = [
+    {
+        id: 'gemini-3.1-flash-lite',
+        name: 'Gemini 3.1 Flash-Lite (Best for Free Tier)',
+        shortLabel: 'Economical',
+        description: 'Newer Lite model for high-volume study requests.',
+    },
+    {
+        id: 'gemini-2.5-flash',
+        name: 'Gemini 2.5 Flash (Balanced)',
+        shortLabel: 'Balanced',
+        description: 'A good middle ground for speed, quality, and quota usage.',
+    },
+    {
+        id: 'gemini-3.5-flash',
+        name: 'Gemini 3.5 Flash (Smartest)',
+        shortLabel: 'Smartest',
+        description: 'The strongest reasoning option when you want higher-quality AI help.',
+    },
+] as const;
+
+const LEGACY_GEMINI_MODEL_MAP: Record<string, string> = {
+    'gemini-flash-lite-latest': 'gemini-3.1-flash-lite',
+    'gemini-2.5-flash-lite': 'gemini-3.1-flash-lite',
+    'gemini-3-flash-preview': 'gemini-3.5-flash',
+};
+
+const normalizeGeminiModelId = (modelId: string | null | undefined): string | null => {
+    if (!modelId) return null;
+    return LEGACY_GEMINI_MODEL_MAP[modelId] || modelId;
+};
+
 // Custom hook to get the previous value of a prop or state.
 function usePrevious<T>(value: T): T | undefined {
     const ref = useRef<T | undefined>(undefined);
@@ -187,12 +219,7 @@ const App: React.FC = () => {
     const [isSyncing, setIsSyncing] = useState(false);
     const prevUser = usePrevious(user);
 
-    // Gemini Model Selection - Reordered to prefer Lite for free tier/high volume
-    const geminiModels = useMemo(() => [
-        { id: 'gemini-flash-lite-latest', name: 'Gemini 2.5 Flash Lite (Best for Free Tier)' },
-        { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash (Balanced)' },
-        { id: 'gemini-3-flash-preview', name: 'Gemini 3 Flash (Smartest)' },
-    ], []);
+    const geminiModels = useMemo(() => [...GEMINI_MODELS], []);
     const [selectedGeminiModel, setSelectedGeminiModel] = useState(geminiModels[0].id);
 
     // Effect to set initial theme from localStorage or system preference
@@ -222,11 +249,13 @@ const App: React.FC = () => {
 
     // Effect to load/save selected Gemini model from/to localStorage
     useEffect(() => {
-        const savedModel = localStorage.getItem('selectedGeminiModel');
+        const savedModel = normalizeGeminiModelId(localStorage.getItem('selectedGeminiModel'));
         if (savedModel && geminiModels.some(m => m.id === savedModel)) {
             setSelectedGeminiModel(savedModel);
+            localStorage.setItem('selectedGeminiModel', savedModel);
         } else {
-            setSelectedGeminiModel(geminiModels[0].id); // Default to the first model (Lite)
+            setSelectedGeminiModel(geminiModels[0].id);
+            localStorage.setItem('selectedGeminiModel', geminiModels[0].id);
         }
     }, [geminiModels]);
 
@@ -241,6 +270,20 @@ const App: React.FC = () => {
         }
     }, [user]);
 
+    const syncGeminiModelAfterFallback = useCallback((usedModel: string, requestedModel: string) => {
+        if (usedModel === requestedModel) return false;
+
+        setSelectedGeminiModel(usedModel);
+        localStorage.setItem('selectedGeminiModel', usedModel);
+
+        if (user) {
+            db.collection('users').doc(user.uid).set({ geminiModel: usedModel }, { merge: true })
+                .catch(e => console.error("Error saving fallback Gemini model to Firestore:", e));
+        }
+
+        return true;
+    }, [user]);
+
     // Effect to load Gemini model from Firestore on login
     useEffect(() => {
         const loadGeminiModelFromFirestore = async () => {
@@ -249,9 +292,10 @@ const App: React.FC = () => {
                     const userDocRef = db.collection('users').doc(user.uid);
                     const docSnap = await userDocRef.get();
                     if (docSnap.exists) {
-                        const savedModel = docSnap.data()?.geminiModel;
+                        const savedModel = normalizeGeminiModelId(docSnap.data()?.geminiModel);
                         if (savedModel && geminiModels.some(m => m.id === savedModel)) {
                             setSelectedGeminiModel(savedModel);
+                            localStorage.setItem('selectedGeminiModel', savedModel);
                         }
                     }
                 } catch (e) {
@@ -1097,8 +1141,13 @@ const App: React.FC = () => {
                 // Pass target language to AI validation
                 const targetLang = translationMode === 'standard' ? (currentSet?.lang2 || 'English') : (currentSet?.lang1 || 'English');
                 const aiResult = await validateAnswerWithAI(selectedGeminiModel, userAnswer, correctAnswer, targetLang);
+                const switchedModel = syncGeminiModelAfterFallback(aiResult.usedModel, selectedGeminiModel);
                 finalIsCorrect = aiResult.isCorrect;
                 finalFeedback = aiResult.feedback;
+                if (switchedModel) {
+                    const switchMessage = `Switched AI model to ${aiResult.usedModel} after a quota limit.`;
+                    finalFeedback = finalFeedback ? `${finalFeedback} (${switchMessage})` : switchMessage;
+                }
             } catch (e) {
                 console.error("AI Validation Failed", e);
                 // Fallback to incorrect if AI fails
@@ -1200,10 +1249,14 @@ const App: React.FC = () => {
             const targetLang = currentSet.lang2;
             const nativeLang = currentSet.lang1;
             
-            const sentence = await generateExampleSentence(selectedGeminiModel, currentWord.lang2, targetLang, nativeLang);
-            if (sentence) {
-                setSentences(prev => new Map(prev).set(currentWord.lang2.toLowerCase(), sentence));
+            const sentenceResult = await generateExampleSentence(selectedGeminiModel, currentWord.lang2, targetLang, nativeLang);
+            const switchedModel = syncGeminiModelAfterFallback(sentenceResult.usedModel, selectedGeminiModel);
+            if (sentenceResult.text) {
+                setSentences(prev => new Map(prev).set(currentWord.lang2.toLowerCase(), sentenceResult.text));
                 sounds.play('success');
+                if (switchedModel) {
+                    setGenerationError(`Rate limit reached for ${selectedGeminiModel}. Switched to ${sentenceResult.usedModel} automatically.`);
+                }
             } else {
                 setGenerationError("The AI returned an empty response.");
             }
@@ -1569,7 +1622,12 @@ const App: React.FC = () => {
                 onClose={() => setIsModelSelectorOpen(false)}
                 currentModel={selectedGeminiModel}
                 onSelectModel={handleSelectGeminiModel}
-                availableModels={geminiModels}
+                availableModels={geminiModels.map(model => ({
+                    id: model.id,
+                    name: model.name,
+                    shortLabel: model.shortLabel,
+                    description: model.description,
+                }))}
             />
         </main>
     );
