@@ -9,7 +9,15 @@ html, body, #root {
 }
 body {
     font-family: 'Poppins', sans-serif;
-    @apply bg-slate-100 text-slate-900;
+    @apply text-slate-900;
+    background-color: #dbe7f4;
+    background-image:
+        linear-gradient(180deg, rgba(248, 250, 252, 0.84), rgba(226, 232, 240, 0.9)),
+        url('/backgrounds/nyc-aerial.jpg');
+    background-position: center center;
+    background-repeat: no-repeat;
+    background-size: cover;
+    background-attachment: fixed;
     transition-property: color, background-color;
     transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
     transition-duration: 300ms;
@@ -17,8 +25,15 @@ body {
 }
 
 html.dark body {
-    background-color: #0f172a;
-    background-image: radial-gradient(circle at top, hsl(222, 47%, 18%) 0%, hsl(222, 47%, 11%) 100%);
+    background-color: #020617;
+    background-image:
+        linear-gradient(180deg, rgba(2, 6, 23, 0.72), rgba(15, 23, 42, 0.88)),
+        radial-gradient(circle at top, rgba(30, 41, 59, 0.52) 0%, rgba(2, 6, 23, 0.4) 48%, rgba(2, 6, 23, 0.12) 100%),
+        url('/backgrounds/nyc-aerial.jpg');
+    background-position: center center;
+    background-repeat: no-repeat;
+    background-size: cover;
+    background-attachment: fixed;
     @apply text-slate-200;
 }
 
